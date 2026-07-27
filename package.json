@@ -1,0 +1,16 @@
+{
+  "name": "molview-file",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A self-contained, self-editing molecular viewer document.",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "verify": "node scripts/verify.mjs",
+    "test:roundtrip": "node scripts/test-roundtrip.mjs",
+    "test:save-harness": "node scripts/test-save-harness.mjs"
+  },
+  "dependencies": {
+    "3dmol": "2.5.5"
+  }
+}

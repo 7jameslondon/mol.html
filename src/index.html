@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="generator" content="molview/file">
+  <meta name="molecular-renderer" content="3Dmol.js 2.5.5">
+  <title>Starter molecule — molview/file</title>
+  <style>__STYLES__</style>
+  <script type="application/molview+json" id="molview-doc">
+__DOCUMENT__
+  </script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand-block">
+        <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div>
+          <div class="eyebrow">MOLVIEW / SELF-CONTAINED SCENE</div>
+          <input id="document-title" class="document-title" value="Starter molecule" aria-label="Document title">
+        </div>
+      </div>
+      <div class="top-actions">
+        <span id="save-status" class="save-status">Saved in document</span>
+        <button id="undo-button" class="icon-button" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>↶</button>
+        <button id="redo-button" class="icon-button" title="Redo (Ctrl+Y)" aria-label="Redo" disabled>↷</button>
+        <button id="save-as-button" class="button secondary">Save as…</button>
+        <button id="save-button" class="button primary">Save</button>
+      </div>
+    </header>
+
+    <nav class="menu-tabs" aria-label="Molecular viewer command tabs">
+      <button class="menu-tab active" type="button" role="tab" aria-selected="true" aria-controls="home-ribbon">Home</button>
+    </nav>
+
+    <section id="home-ribbon" class="ribbon" role="tabpanel" aria-label="Home commands">
+      <div class="ribbon-group" aria-label="Structure commands">
+        <div class="ribbon-buttons">
+          <button id="open-file-button" class="ribbon-button" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5h6l2-2h9v13h-17zM3.5 9.5h17"/></svg>
+            <span>Open</span><small>Local PDB</small>
+          </button>
+          <button class="ribbon-button" type="button" data-inspector-target="fetch" aria-controls="inspector" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17.5H5.8a3.8 3.8 0 0 1-.4-7.6A6 6 0 0 1 17 8.5a4.5 4.5 0 0 1 1.2 8.9H17M12 10v9m-3-3 3 3 3-3"/></svg>
+            <span>Fetch</span><small>RCSB PDB</small>
+          </button>
+        </div>
+        <div class="ribbon-group-label">Structure</div>
+      </div>
+
+      <div class="ribbon-group" aria-label="Appearance commands">
+        <div class="ribbon-buttons">
+          <button class="ribbon-button" type="button" data-inspector-target="representation" aria-controls="inspector" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="7" r="2.4"/><circle cx="18" cy="17" r="2.4"/><path d="m8.2 11 7.5-3m-7.5 5 7.5 3"/></svg>
+            <span>Representation</span><small id="representation-ribbon-value">Ball &amp; stick</small>
+          </button>
+          <button class="ribbon-button" type="button" data-inspector-target="color" aria-controls="inspector" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5c3.4 4 5.2 6.8 5.2 9.2A5.2 5.2 0 0 1 6.8 12.7C6.8 10.3 8.6 7.5 12 3.5z"/><path d="M9.2 14.2c.4 1.4 1.4 2.1 2.8 2.1"/></svg>
+            <span>Color</span><small id="color-ribbon-value">By chain</small>
+          </button>
+          <button class="ribbon-button" type="button" data-inspector-target="show" aria-controls="inspector" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.8 12s3.4-5.5 9.2-5.5 9.2 5.5 9.2 5.5-3.4 5.5-9.2 5.5S2.8 12 2.8 12z"/><circle cx="12" cy="12" r="2.6"/></svg>
+            <span>Show</span><small id="show-ribbon-value">Standard</small>
+          </button>
+        </div>
+        <div class="ribbon-group-label">Appearance</div>
+      </div>
+
+      <div class="ribbon-group" aria-label="View commands">
+        <div class="ribbon-buttons">
+          <button id="fit-button" class="ribbon-button compact" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5m11-5h5v5M9 20H4v-5m11 5h5v-5"/></svg>
+            <span>Fit</span><small>Whole scene</small>
+          </button>
+        </div>
+        <div class="ribbon-group-label">View</div>
+      </div>
+
+      <div class="ribbon-group" aria-label="Selection commands">
+        <div class="ribbon-buttons">
+          <button id="inspect-button" class="ribbon-button" type="button" data-inspector-target="inspect" aria-controls="inspector" aria-pressed="false" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 5 5m-9.5-12v5m-2.5-2.5h5"/></svg>
+            <span>Inspect</span><small>Selection</small>
+          </button>
+          <button id="clear-selection" class="ribbon-button" type="button" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+            <span>Clear</span><small>Selection</small>
+          </button>
+        </div>
+        <div class="ribbon-group-label">Selection</div>
+      </div>
+    </section>
+
+    <main id="workspace" class="workspace">
+      <aside id="inspector" class="inspector" aria-label="Details sidebar" hidden>
+        <header class="inspector-header">
+          <div><div class="section-label">DETAILS</div><h2 id="inspector-title">Structure</h2></div>
+          <button id="close-inspector" class="inspector-close" type="button" aria-label="Close details sidebar">×</button>
+        </header>
+        <div class="inspector-scroll">
+          <section id="panel-fetch" class="inspector-panel" data-inspector-panel="fetch" hidden>
+            <div class="structure-row">
+              <div class="structure-icon" aria-hidden="true">⌬</div>
+              <div class="structure-meta">
+                <strong id="structure-name">Starter peptide</strong>
+                <span id="structure-stats">Loading atoms…</span>
+              </div>
+            </div>
+            <div class="pdb-mode-tabs" role="tablist" aria-label="RCSB lookup mode">
+              <button id="pdb-id-mode-button" class="pdb-mode-tab active" type="button" role="tab" aria-selected="true" aria-controls="pdb-id-pane">PDB ID</button>
+              <button id="pdb-search-mode-button" class="pdb-mode-tab" type="button" role="tab" aria-selected="false" aria-controls="pdb-search-pane">Search</button>
+            </div>
+
+            <div id="pdb-id-pane" class="pdb-mode-pane" role="tabpanel" aria-labelledby="pdb-id-mode-button">
+              <form id="pdb-fetch-form" class="pdb-fetch-form">
+                <label class="field-label" for="pdb-id">RCSB PDB identifier</label>
+                <div class="pdb-fetch-row">
+                  <input id="pdb-id" class="pdb-id-input" type="text" inputmode="text" maxlength="12" placeholder="e.g. 4HHB" autocomplete="off" spellcheck="false" aria-describedby="pdb-fetch-status">
+                  <button id="pdb-fetch-button" class="button primary" type="submit">Fetch</button>
+                </div>
+                <span id="pdb-fetch-status" class="pdb-fetch-status" aria-live="polite">Enter an exact four-character identifier.</span>
+              </form>
+            </div>
+
+            <div id="pdb-search-pane" class="pdb-mode-pane" role="tabpanel" aria-labelledby="pdb-search-mode-button" hidden>
+              <form id="pdb-search-form" class="pdb-search-form">
+                <label class="field-label" for="pdb-search-query">Search the Protein Data Bank</label>
+                <div class="pdb-fetch-row">
+                  <input id="pdb-search-query" class="pdb-search-input" type="search" maxlength="120" placeholder="e.g. human hemoglobin" autocomplete="off" spellcheck="false" aria-describedby="pdb-search-status">
+                  <button id="pdb-search-button" class="button primary" type="submit">Search</button>
+                </div>
+                <span id="pdb-search-status" class="pdb-fetch-status" aria-live="polite">Search by molecule, organism, author, ligand, or other terms.</span>
+              </form>
+              <div id="pdb-search-results" class="pdb-search-results" aria-label="PDB search results" hidden></div>
+            </div>
+          </section>
+
+          <section id="panel-representation" class="inspector-panel" data-inspector-panel="representation" hidden>
+            <p class="panel-intro">Choose how atoms and bonds are drawn in the WebGL scene.</p>
+            <label class="field-label" for="representation">Representation</label>
+            <select id="representation">
+              <option value="cartoon">Cartoon</option>
+              <option value="ball-and-stick">Ball and stick</option>
+              <option value="sticks">Sticks</option>
+              <option value="spacefill">Spacefill</option>
+              <option value="lines">Lines</option>
+              <option value="surface">Molecular surface</option>
+            </select>
+            <button id="reset-appearance" class="button secondary full-width panel-action">Reset all appearance</button>
+          </section>
+
+          <section id="panel-color" class="inspector-panel" data-inspector-panel="color" hidden>
+            <p class="panel-intro">Set the global coloring scheme and scene background.</p>
+            <label class="field-label" for="color-mode">Color molecule by</label>
+            <select id="color-mode">
+              <option value="element">Element</option>
+              <option value="chain">Chain</option>
+              <option value="residue">Residue</option>
+              <option value="uniform">Uniform blue</option>
+            </select>
+            <label class="field-label" for="background-color">Background</label>
+            <div class="color-row"><input id="background-color" type="color" value="#07111f"><code id="background-value">#07111f</code></div>
+            <p class="panel-note">To color one atom, residue, or chain, select an atom and open Inspect.</p>
+          </section>
+
+          <section id="panel-show" class="inspector-panel" data-inspector-panel="show" hidden>
+            <p class="panel-intro">Control optional parts of the molecular scene.</p>
+            <div class="visibility-list">
+              <label class="visibility-option"><span><strong>Hydrogens</strong><small>Show hydrogen atoms when present</small></span><span class="toggle"><input id="show-hydrogens" type="checkbox"><i></i></span></label>
+              <label class="visibility-option"><span><strong>Water</strong><small>Show crystallographic water molecules</small></span><span class="toggle"><input id="show-water" type="checkbox"><i></i></span></label>
+            </div>
+          </section>
+
+          <section id="panel-inspect" class="inspector-panel" data-inspector-panel="inspect" hidden>
+            <div class="selection-panel-heading"><span>ACTIVE SELECTION</span><button id="clear-selection-panel" class="text-button" type="button" disabled>Clear</button></div>
+            <div id="empty-selection" class="empty-selection">
+              <div class="selection-orbit" aria-hidden="true"><i></i></div>
+              <strong>Click an atom</strong>
+              <span>Its exact molecular identity will be written into this HTML file.</span>
+            </div>
+            <div id="selection-details" class="selection-details" hidden>
+              <div class="selected-atom-heading"><span id="selected-element" class="element-badge">C</span><div><strong id="selected-name">CA</strong><span id="selected-path">Chain A · GLY 1</span></div></div>
+              <dl class="atom-data">
+                <div><dt>Serial</dt><dd id="selected-serial">1</dd></div>
+                <div><dt>Coordinates</dt><dd id="selected-coordinates">0, 0, 0</dd></div>
+              </dl>
+              <label class="field-label" for="selection-scope">Apply color to</label>
+              <div class="inline-fields">
+                <select id="selection-scope"><option value="atom">This atom</option><option value="residue">This residue</option><option value="chain">This chain</option></select>
+                <input id="selection-color" type="color" value="#ff3b5c" aria-label="Selection color">
+              </div>
+              <button id="apply-color" class="button accent full-width">Apply color</button>
+              <button id="copy-selection" class="button secondary full-width">Copy selection JSON</button>
+            </div>
+          </section>
+        </div>
+      </aside>
+
+      <section class="viewer-stage" aria-label="Interactive molecular viewer">
+        <div id="molecule-viewer" tabindex="0" aria-label="3D molecule viewer. Drag to rotate, scroll to zoom, and click atoms to select them."></div>
+        <div class="viewer-topline">
+          <div class="viewer-badges">
+            <div id="structure-chip" class="structure-chip">STARTER · PDB</div>
+            <div class="engine-chip" title="Bundled molecular renderer">3DMOL.JS 2.5.5 · WEBGL</div>
+          </div>
+        </div>
+        <div id="external-banner" class="external-banner" hidden>
+          <span><strong>File changed on disk.</strong> Reload to use the agent's changes.</span>
+          <button id="reload-button" class="button primary">Reload</button>
+        </div>
+        <div class="controls-hint"><span>Drag</span> rotate <span>Shift + drag</span> pan <span>Scroll</span> zoom <span>Click</span> select</div>
+        <div id="canvas-message" class="canvas-message" hidden></div>
+      </section>
+    </main>
+  </div>
+
+  <input id="file-input" type="file" accept=".pdb,.ent,.txt" hidden>
+  <div id="toast-region" class="toast-region" aria-live="polite"></div>
+  <script type="text/plain" id="third-party-notices">__THIRD_PARTY_NOTICES__</script>
+  <script>__THREEDMOL_JS__</script>
+  <script>__MODEL_JS__</script>
+  <script>__RENDERER_JS__</script>
+  <script>__PERSISTENCE_JS__</script>
+  <script data-role="molview-app">__APP_JS__</script>
+</body>
+</html>
