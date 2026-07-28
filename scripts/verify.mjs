@@ -17,6 +17,7 @@ assert(!/<script[^>]+src=/i.test(html), 'artifact has no external script depende
 assert(!/<link[^>]+href=/i.test(html), 'artifact has no external stylesheet dependencies');
 assert(!/__[A-Z_]+__/.test(html), 'artifact has no unreplaced build markers');
 assert(html.includes('3Dmol.js 2.5.5') && html.includes('["3Dmol"]'), '3Dmol.js 2.5.5 is bundled inline');
+assert(!html.includes('class="engine-chip"') && !html.includes('3DMOL.JS 2.5.5 · WEBGL'), 'artifact omits the renderer engine badge');
 assert(validateBuiltLicenseNotices(html, legal), 'artifact passes the build-time canonical license validation');
 assert((html.match(/id="molhtml-license-notices"/g) || []).length === 1, 'artifact has exactly one canonical license block');
 const licenseMatch = html.match(/<script type="text\/plain" id="molhtml-license-notices" data-notice-sha256="([a-f0-9]{64})">\n([\s\S]*?)\n<\/script>/);

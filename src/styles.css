@@ -366,9 +366,8 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
 #molecule-viewer canvas { display: block; width: 100% !important; height: 100% !important; }
 .viewer-topline { position: absolute; top: 14px; left: 15px; right: 15px; display: flex; justify-content: space-between; pointer-events: none; }
 .viewer-badges { display: flex; align-items: center; gap: 7px; }
-.structure-chip, .engine-chip, .controls-hint { border: 1px solid rgba(170, 204, 237, .17); background: rgba(7, 17, 31, .76); backdrop-filter: blur(12px); box-shadow: var(--shadow); }
+.structure-chip, .controls-hint { border: 1px solid rgba(170, 204, 237, .17); background: rgba(7, 17, 31, .76); backdrop-filter: blur(12px); box-shadow: var(--shadow); }
 .structure-chip { padding: 8px 11px; border-radius: 8px; color: #aac7e4; font-size: 9px; font-weight: 800; letter-spacing: .13em; }
-.engine-chip { padding: 8px 10px; border-radius: 8px; color: #6e91b2; font-size: 8px; font-weight: 800; letter-spacing: .1em; }
 .controls-hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); padding: 8px 12px; border-radius: 8px; color: var(--muted); font-size: 9px; white-space: nowrap; }
 .controls-hint span { margin-left: 9px; color: #d9e9f8; font-weight: 700; }
 .controls-hint span:first-child { margin-left: 0; }
@@ -406,7 +405,6 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
   .ribbon { padding-left: 8px; }
   .ribbon-group { padding: 0 7px; }
   .ribbon-button { min-width: 78px; padding-inline: 7px; }
-  .engine-chip { display: none; }
   .controls-hint { display: none; }
   .story-overlay { left: 10px; bottom: 10px; width: calc(100% - 20px); padding: 13px; }
 }

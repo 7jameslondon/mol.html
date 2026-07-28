@@ -5,4 +5,4 @@ This file is the project’s running to-do list. Agents should only edit it when
 
 ----
 
-- Remove the 3DMOL badge from the UI
+-
