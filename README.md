@@ -1,5 +1,7 @@
 # mol.html
 
+[![Validate](https://github.com/7jameslondon/mol.html/actions/workflows/ci.yml/badge.svg)](https://github.com/7jameslondon/mol.html/actions/workflows/ci.yml)
+
 `mol.html` is a molecular viewer whose final document is one self-contained,
 self-editing HTML file. The HTML carries the viewer, editor, PDB coordinates,
 selection, colors, camera, and agent-readable JSON state.
