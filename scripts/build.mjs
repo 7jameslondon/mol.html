@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { loadLegalNotices, validateBuiltLicenseNotices } from './legal-notices.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const read = path => readFile(resolve(root, path), 'utf8');
+const normalizeLf = text => text.replace(/\r\n?/g, '\n');
+const read = async path => normalizeLf(await readFile(resolve(root, path), 'utf8'));
 const legal = await loadLegalNotices(root);
 
 const [template, styles, model, renderer, persistence, app] = await Promise.all([
@@ -30,7 +31,8 @@ const document = {
   documentId: 'document-starter-molecular-scene',
   title: 'Protein and DNA starter scene',
   revision: 1,
-  modified: new Date().toISOString(),
+  // This describes the generated starter template, not a user's last edit.
+  modified: '2026-07-27T00:00:00.000Z',
   modifiedBy: 'build',
   structure: {
     id: 'structure-starter-complex',

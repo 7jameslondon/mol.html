@@ -32,7 +32,7 @@ doc.title = '</title><script>license attack</script>';
 doc.structure.data += '\nREMARK </script><script>license attack</script>\n';
 doc.revision += 1;
 const editedJson = JSON.stringify(doc, null, 2).replace(/</g, '\\u003c');
-const edited = html.replace(documentPattern, `$1${editedJson}$3`);
+const edited = html.replace(documentPattern, (_whole, opening, _document, closing) => `${opening}${editedJson}${closing}`);
 const editedLicense = edited.match(licensePattern);
 
 assert.ok(editedLicense, 'hostile document data cannot remove the license block');
@@ -40,8 +40,8 @@ assert.equal(editedLicense[0], licenseMatch[0], 'hostile document data cannot al
 assert.equal((edited.match(/id="molhtml-license-notices"/g) || []).length, 1, 'hostile document data cannot duplicate the license block');
 assert.ok(!edited.includes('<script>license attack</script>'), 'hostile document data is escaped before entering the HTML shell');
 assert.equal(
-  edited.replace(documentPattern, '$1__MOLHTML_EDITABLE_DOCUMENT__$3'),
-  html.replace(documentPattern, '$1__MOLHTML_EDITABLE_DOCUMENT__$3'),
+  edited.replace(documentPattern, (_whole, opening, _document, closing) => `${opening}__MOLHTML_EDITABLE_DOCUMENT__${closing}`),
+  html.replace(documentPattern, (_whole, opening, _document, closing) => `${opening}__MOLHTML_EDITABLE_DOCUMENT__${closing}`),
   'agent-style document editing leaves the immutable shell unchanged'
 );
 

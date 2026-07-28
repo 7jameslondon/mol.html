@@ -58,6 +58,7 @@
   let fetchController = null;
   let searchController = null;
   let activeInspector = null;
+  let inspectorReturnFocus = null;
   let measurementDraft = null;
   let activeMeasurementId = null;
   let activeSavedSelectionId = null;
@@ -1443,6 +1444,9 @@
     if (!inspectorTitles[name]) return;
     if (storyState.active) exitStory(false);
     if (measurementDraft && name !== 'measurements') cancelMeasurement();
+    if (elements['inspector'].hidden && document.activeElement instanceof HTMLElement) {
+      inspectorReturnFocus = document.activeElement;
+    }
     activeInspector = name;
     elements['inspector-title'].textContent = inspectorTitles[name];
     elements['inspector'].hidden = false;
@@ -1462,6 +1466,9 @@
     elements['workspace'].classList.remove('inspector-open');
     for (const panel of inspectorPanels) panel.hidden = true;
     for (const button of inspectorButtons) button.setAttribute('aria-pressed', 'false');
+    const returnFocus = inspectorReturnFocus;
+    inspectorReturnFocus = null;
+    if (returnFocus?.isConnected) returnFocus.focus();
   }
 
   function applySelectionColor(color, scope) {

@@ -1,0 +1,5 @@
+* text=auto eol=lf
+
+*.pdb text eol=lf
+*.mol.html text eol=lf
+*.png binary

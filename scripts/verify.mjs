@@ -54,6 +54,7 @@ const match = html.match(/<script type="application\/molhtml\+json" id="molhtml-
 assert(Boolean(match), 'document JSON can be extracted with a simple splice contract');
 const doc = JSON.parse(match[1]);
 assert(doc.format === 'molhtml/document' && doc.version === 1, 'document format is molhtml/document version 1');
+assert(doc.modified === '2026-07-27T00:00:00.000Z' && doc.modifiedBy === 'build', 'starter template metadata is deterministic');
 assert(doc.structure?.format === 'pdb' && doc.structure.data.includes('\nATOM'), 'PDB coordinates are embedded in the file');
 assert(doc.structure?.metadata?.provenance?.kind === 'generated-demo' && doc.structure.metadata.flags?.syntheticDemo, 'source metadata and the starter-data caveat are embedded');
 assert(doc.scene?.camera && 'view' in doc.scene.camera && Array.isArray(doc.scene.customColors)
@@ -65,6 +66,7 @@ const legacyProductStem = ['mol', 'view'].join('');
 const legacySuffix = ['.molecule', '.html'].join('');
 assert(!html.toLowerCase().includes(legacyProductStem), 'artifact contains no legacy product-name references');
 assert(!html.toLowerCase().includes(legacySuffix), 'artifact contains no legacy filename suffixes');
+assert(!html.includes('@playwright/test') && !html.includes('@axe-core/playwright'), 'development-only browser tooling is absent from the artifact');
 
 const info = await stat(file);
 console.log(`Verified ${checks.length} invariants in ${file} (${(info.size / 1024).toFixed(1)} KB)`);

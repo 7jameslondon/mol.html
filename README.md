@@ -6,13 +6,13 @@ selection, colors, camera, and agent-readable JSON state.
 
 ## Build
 
-Install the pinned dependency, then build and verify the standalone artifact:
+Install the pinned dependencies and required Chromium binary once, then run the
+complete local quality gate:
 
 ```powershell
 pnpm install --frozen-lockfile
-node scripts/build.mjs
-node scripts/verify.mjs
-node scripts/test-license-integrity.mjs
+pnpm setup:e2e
+pnpm check
 ```
 
 The result is `dist/example.mol.html`. Open that file in a modern browser.
@@ -21,6 +21,43 @@ The build embeds the project's MIT license and the complete notices for
 finished viewer does not need a network connection. The build is pinned to the
 audited renderer bundle and fails if its code or dependency set changes without
 a corresponding license review.
+
+`pnpm check` builds once, verifies a second byte-identical build, runs the pure
+model and adversarial single-file tests, enforces the artifact budget, and then
+exercises the built `file://` artifact in pinned Chromium. It never downloads a
+browser implicitly; `pnpm setup:e2e` is the explicit local setup step.
+
+Focused commands are also available:
+
+```powershell
+pnpm test:model
+pnpm test:artifact
+pnpm build
+pnpm test:e2e
+pnpm test:performance
+```
+
+Model and artifact checks require no network. Browser tests abort unexpected
+HTTP(S) traffic and mock exact RCSB coordinate, Search API, and Data API
+requests. Test output is isolated under Playwright's per-test output directory.
+CI retains failure traces, screenshots, video, and console diagnostics; local
+runs keep screenshots and an HTML report without the trace/video overhead.
+
+## Continuous integration
+
+GitHub Actions runs the same required `pnpm check` gate for pull requests and
+every commit to `master`. It uses read-only repository permission, immutable
+action SHAs, a frozen lockfile, and no release credentials. A weekly and manual
+job adds Firefox/WebKit smoke coverage, timing observations, and a masked
+Chromium UI snapshot.
+
+After the `validate` job is stable on the repository, configure branch
+protection to require it and require the branch to be current before merge (or
+use a merge queue). Dependency update automation is defined for npm packages
+and pinned GitHub Actions.
+
+Native file permissions and real-GPU behavior remain release checks; see
+[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 
 ## Use
 

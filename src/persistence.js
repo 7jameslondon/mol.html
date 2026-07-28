@@ -165,7 +165,8 @@
           });
         } catch (error) {
           if (error?.name === 'AbortError') return 'cancelled';
-          throw error;
+          this.callbacks.onStatus?.(`Save failed: ${error.message}`, 'error');
+          return 'failed';
         }
         this.externalChange = false;
         this.callbacks.onHandle?.(this.fileHandle.name);

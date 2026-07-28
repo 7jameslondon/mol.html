@@ -1,0 +1,33 @@
+{
+  "data": {
+    "entries": [
+      {
+        "rcsb_id": "1ABC",
+        "struct": { "title": "Deterministic RCSB test structure" },
+        "exptl": [{ "method": "X-RAY DIFFRACTION" }],
+        "rcsb_accession_info": {
+          "deposit_date": "2024-01-15T00:00:00Z",
+          "initial_release_date": "2024-03-20T00:00:00Z",
+          "revision_date": "2025-02-01T00:00:00Z"
+        },
+        "rcsb_entry_info": { "resolution_combined": [1.8] },
+        "audit_author": [{ "name": "A. TESTER" }],
+        "rcsb_primary_citation": {
+          "id": "primary",
+          "title": "A deterministic structure for browser tests",
+          "year": 2024,
+          "journal_abbrev": "TEST J",
+          "pdbx_database_id_DOI": "10.0000/molhtml.test",
+          "pdbx_database_id_PubMed": "12345678",
+          "rcsb_authors": ["A. Tester"]
+        },
+        "polymer_entities": [
+          {
+            "rcsb_polymer_entity": { "pdbx_description": "Test peptide" },
+            "rcsb_entity_source_organism": [{ "ncbi_scientific_name": "Synthetic construct" }]
+          }
+        ]
+      }
+    ]
+  }
+}

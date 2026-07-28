@@ -29,12 +29,12 @@ __DOCUMENT__
       </div>
     </header>
 
-    <nav class="menu-tabs" aria-label="Molecular viewer command tabs">
+    <nav class="menu-tabs" role="tablist" aria-label="Molecular viewer command tabs">
       <button class="menu-tab active" type="button" role="tab" aria-selected="true" aria-controls="home-ribbon">Home</button>
     </nav>
 
     <section id="home-ribbon" class="ribbon" role="tabpanel" aria-label="Home commands">
-      <div class="ribbon-group" aria-label="Structure commands">
+      <div class="ribbon-group" role="group" aria-label="Structure commands">
         <div class="ribbon-buttons">
           <button id="open-file-button" class="ribbon-button" type="button">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5h6l2-2h9v13h-17zM3.5 9.5h17"/></svg>
@@ -52,7 +52,7 @@ __DOCUMENT__
         <div class="ribbon-group-label">Structure</div>
       </div>
 
-      <div class="ribbon-group" aria-label="Appearance commands">
+      <div class="ribbon-group" role="group" aria-label="Appearance commands">
         <div class="ribbon-buttons">
           <button class="ribbon-button" type="button" data-inspector-target="representation" aria-controls="inspector" aria-pressed="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="7" r="2.4"/><circle cx="18" cy="17" r="2.4"/><path d="m8.2 11 7.5-3m-7.5 5 7.5 3"/></svg>
@@ -70,7 +70,7 @@ __DOCUMENT__
         <div class="ribbon-group-label">Appearance</div>
       </div>
 
-      <div class="ribbon-group" aria-label="View commands">
+      <div class="ribbon-group" role="group" aria-label="View commands">
         <div class="ribbon-buttons">
           <button id="fit-button" class="ribbon-button compact" type="button">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5m11-5h5v5M9 20H4v-5m11 5h5v-5"/></svg>
@@ -84,7 +84,7 @@ __DOCUMENT__
         <div class="ribbon-group-label">View</div>
       </div>
 
-      <div class="ribbon-group" aria-label="Analysis commands">
+      <div class="ribbon-group" role="group" aria-label="Analysis commands">
         <div class="ribbon-buttons">
           <button id="metadata-button" class="ribbon-button" type="button" data-inspector-target="metadata" aria-controls="inspector" aria-pressed="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3.5h14v17H5zM8 7h8M8 11h8M8 15h3"/><circle cx="16" cy="16" r="2.2"/></svg>
@@ -102,7 +102,7 @@ __DOCUMENT__
         <div class="ribbon-group-label">Analyze</div>
       </div>
 
-      <div class="ribbon-group" aria-label="Selection commands">
+      <div class="ribbon-group" role="group" aria-label="Selection commands">
         <div class="ribbon-buttons">
           <button id="saved-selections-button" class="ribbon-button" type="button" data-inspector-target="saved-selections" aria-controls="inspector" aria-pressed="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v14H5zM8 9h8m-8 3h8m-8 3h5"/><path d="m15.5 16.5 1.5 1.5 3-3"/></svg>
@@ -127,7 +127,7 @@ __DOCUMENT__
           <div><div class="section-label">DETAILS</div><h2 id="inspector-title">Structure</h2></div>
           <button id="close-inspector" class="inspector-close" type="button" aria-label="Close details sidebar">×</button>
         </header>
-        <div class="inspector-scroll">
+        <div class="inspector-scroll" tabindex="0">
           <section id="panel-fetch" class="inspector-panel" data-inspector-panel="fetch" hidden>
             <div class="structure-row">
               <div class="structure-icon" aria-hidden="true">⌬</div>
@@ -161,7 +161,7 @@ __DOCUMENT__
                 </div>
                 <span id="pdb-search-status" class="pdb-fetch-status" aria-live="polite">Search by molecule, organism, author, ligand, or other terms.</span>
               </form>
-              <div id="pdb-search-results" class="pdb-search-results" aria-label="PDB search results" hidden></div>
+              <div id="pdb-search-results" class="pdb-search-results" role="region" aria-label="PDB search results" hidden></div>
             </div>
           </section>
 
@@ -188,7 +188,7 @@ __DOCUMENT__
               <button id="navigator-clear-search" class="text-button" type="button" hidden>Clear</button>
             </div>
             <div class="navigator-section-heading"><span>SEQUENCE</span><small>Choose a residue to select and focus it</small></div>
-            <div id="navigator-sequences" class="navigator-sequences" aria-label="Per-chain residue sequences"></div>
+            <div id="navigator-sequences" class="navigator-sequences" role="region" aria-label="Per-chain residue sequences"></div>
             <div class="navigator-section-heading"><span>STRUCTURE</span><small>Chain → residue → atom</small></div>
             <div id="navigator-tree" class="navigator-tree" role="tree" aria-label="Structure navigator"></div>
             <p id="navigator-status" class="navigator-status" aria-live="polite"></p>
@@ -208,7 +208,7 @@ __DOCUMENT__
               <strong>No saved views yet</strong>
               <span>Set up the molecule, then capture its camera and presentation state.</span>
             </div>
-            <div id="saved-view-list" class="saved-view-list" aria-label="Saved story views"></div>
+            <div id="saved-view-list" class="saved-view-list" role="region" aria-label="Saved story views"></div>
           </section>
 
           <section id="panel-color" class="inspector-panel" data-inspector-panel="color" hidden>
@@ -277,7 +277,7 @@ __DOCUMENT__
               <strong>No measurements yet</strong>
               <span>Start a distance, angle, or dihedral and pick atoms in the viewer.</span>
             </div>
-            <div id="measurement-list" class="measurement-list" aria-label="Saved measurements"></div>
+            <div id="measurement-list" class="measurement-list" role="region" aria-label="Saved measurements"></div>
           </section>
 
           <section id="panel-saved-selections" class="inspector-panel" data-inspector-panel="saved-selections" hidden>
@@ -338,7 +338,7 @@ __DOCUMENT__
               <strong>No named selections</strong>
               <span>Save an atom, residue, chain, range, ligand set, or proximity query.</span>
             </div>
-            <div id="saved-selection-list" class="saved-selection-list" aria-label="Named selections"></div>
+            <div id="saved-selection-list" class="saved-selection-list" role="region" aria-label="Named selections"></div>
           </section>
 
           <section id="panel-ligands" class="inspector-panel" data-inspector-panel="ligands" hidden>
@@ -368,7 +368,7 @@ __DOCUMENT__
                 <strong>No polymer residues nearby</strong>
                 <span>Increase the cutoff to search a larger neighborhood.</span>
               </div>
-              <div id="ligand-residue-list" class="ligand-residue-list" aria-label="Nearby ligand pocket residues"></div>
+              <div id="ligand-residue-list" class="ligand-residue-list" role="region" aria-label="Nearby ligand pocket residues"></div>
             </div>
           </section>
 
@@ -398,7 +398,7 @@ __DOCUMENT__
       </aside>
 
       <section class="viewer-stage" aria-label="Interactive molecular viewer">
-        <div id="molecule-viewer" tabindex="0" aria-label="3D molecule viewer. Drag to rotate, scroll to zoom, and click atoms to select them."></div>
+        <div id="molecule-viewer" role="application" tabindex="0" aria-label="3D molecule viewer. Drag to rotate, scroll to zoom, and click atoms to select them."></div>
         <div class="viewer-topline">
           <div class="viewer-badges">
             <div id="structure-chip" class="structure-chip">STARTER · PDB</div>
@@ -429,6 +429,7 @@ __DOCUMENT__
   <script type="text/plain" id="molhtml-license-notices" data-notice-sha256="__LICENSE_NOTICES_SHA256__">
 __LICENSE_NOTICES__
 </script>
+  <script data-role="renderer-compatibility">if (typeof globalThis.OffscreenCanvas === 'undefined') globalThis.OffscreenCanvas = null;</script>
   <script>__THREEDMOL_JS__</script>
   <script>__MODEL_JS__</script>
   <script>__RENDERER_JS__</script>

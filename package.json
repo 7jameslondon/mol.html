@@ -5,8 +5,13 @@
   "private": true,
   "description": "A self-contained, self-editing molecular viewer document.",
   "type": "module",
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
   "scripts": {
     "build": "node scripts/build.mjs",
+    "check": "node scripts/check.mjs",
     "verify": "node scripts/verify.mjs",
     "test:licenses": "node scripts/test-license-integrity.mjs",
     "test:measurements": "node scripts/test-measurements.mjs",
@@ -16,9 +21,17 @@
     "test:metadata": "node scripts/test-metadata-quality.mjs",
     "test:saved-views": "node scripts/test-saved-views.mjs",
     "test:roundtrip": "node scripts/test-roundtrip.mjs",
-    "test:save-harness": "node scripts/test-save-harness.mjs"
+    "test:model": "node scripts/check.mjs model",
+    "test:artifact": "node scripts/check.mjs artifact",
+    "test:e2e": "node scripts/check.mjs e2e",
+    "test:performance": "node scripts/run-playwright.mjs --scheduled test e2e/performance.spec.mjs",
+    "setup:e2e": "node scripts/run-playwright.mjs install chromium"
   },
   "dependencies": {
     "3dmol": "2.5.5"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.12.1",
+    "@playwright/test": "1.62.0"
   }
 }
