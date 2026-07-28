@@ -1,0 +1,11 @@
+HEADER    LIGAND POCKET TEST FIXTURE
+ATOM      1  CA  ALA A   1      -1.000   0.000   0.000  1.00 20.00           C
+ATOM      2  O   ALA A   1       0.000   0.000   0.000  1.00 20.00           O
+ATOM      3  CA  GLY A   2       4.700   0.000   3.000  1.00 20.00           C
+ATOM      4  N1   DA C   1       0.000   4.000   3.000  1.00 20.00           N
+HETATM    5  C1  LIG B 101       0.000   0.000   2.800  1.00 20.00           C
+HETATM    6  O1  LIG B 101       0.000   1.000   3.000  1.00 20.00           O
+HETATM    7  C1  DRG B 102      20.000  20.000  20.000  1.00 20.00           C
+HETATM    8  O   HOH W   1       0.000   0.000   3.500  1.00 20.00           O
+CONECT    5    6
+END

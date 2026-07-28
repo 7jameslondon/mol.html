@@ -43,6 +43,14 @@ const document = {
     customColors: [],
     measurements: [],
     savedSelections: [],
+    ligandAnalysis: {
+      selectedLigand: null,
+      cutoff: 4,
+      showLigand: true,
+      showPocket: true,
+      showContacts: true,
+      polarOnly: false
+    },
     camera: { view: null }
   }
 };

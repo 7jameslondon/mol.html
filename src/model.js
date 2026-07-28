@@ -10,6 +10,10 @@
   const COVALENT_RADII = { H: .31, C: .76, N: .71, O: .66, F: .57, P: 1.07, S: 1.05, CL: 1.02, BR: 1.2, I: 1.39, FE: 1.24, MG: 1.3, ZN: 1.22, CA: 1.76 };
   const VDW_RADII = { H: 1.2, C: 1.7, N: 1.55, O: 1.52, F: 1.47, P: 1.8, S: 1.8, CL: 1.75, BR: 1.85, I: 1.98, FE: 1.8, MG: 1.73, ZN: 1.39, CA: 2.31 };
   const WATER_NAMES = new Set(['HOH', 'WAT', 'H2O', 'DOD']);
+  const POLAR_ELEMENTS = new Set(['N', 'O', 'S']);
+  const LIGAND_ANALYSIS_DEFAULTS = Object.freeze({
+    cutoff: 4, showLigand: true, showPocket: true, showContacts: true, polarOnly: false
+  });
   const MEASUREMENT_ATOM_COUNTS = Object.freeze({ distance: 2, angle: 3, dihedral: 4 });
   const AMINO_ACID_CODES = Object.freeze({
     ALA: 'A', ARG: 'R', ASN: 'N', ASP: 'D', CYS: 'C', GLN: 'Q', GLU: 'E',
@@ -221,6 +225,7 @@
       customColors: Array.isArray(doc.scene.customColors) ? doc.scene.customColors : [],
       measurements: normalizeMeasurements(doc.scene.measurements),
       savedSelections: normalizeSavedSelections(doc.scene.savedSelections),
+      ligandAnalysis: normalizeLigandAnalysis(doc.scene.ligandAnalysis, doc.structure.id),
       camera: validCamera(doc.scene.camera) ? { view: doc.scene.camera.view.map(Number) } : { view: null }
     });
     return doc;
@@ -412,6 +417,149 @@
     return 'Invalid or unsupported selector';
   }
 
+  function normalizeLigandAnalysis(value, structureId) {
+    const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const analysis = { ...source };
+    const selected = source.selectedLigand;
+    analysis.selectedLigand = selected && typeof selected === 'object' && !Array.isArray(selected)
+      && (!selected.structureId || selected.structureId === structureId)
+      ? { ...selected, structureId }
+      : null;
+    analysis.cutoff = clamp(Number(source.cutoff) || LIGAND_ANALYSIS_DEFAULTS.cutoff, 2.5, 8);
+    for (const key of ['showLigand', 'showPocket', 'showContacts', 'polarOnly']) {
+      analysis[key] = key in source ? Boolean(source[key]) : LIGAND_ANALYSIS_DEFAULTS[key];
+    }
+    return analysis;
+  }
+
+  function ligandSelector(atom, structureId) {
+    return {
+      structureId, model: atom.model, chain: atom.chain, resi: atom.resi,
+      icode: atom.icode, resn: atom.resn
+    };
+  }
+
+  function ligandKey(selector) {
+    if (!selector) return '';
+    return `${selector.structureId || ''}|${Number(selector.model) || 1}|${selector.chain || '_'}|${Number(selector.resi) || 0}|${selector.icode || ''}|${selector.resn || 'UNK'}`;
+  }
+
+  function groupLigands(value, structureId = '') {
+    const atoms = Array.isArray(value) ? value : value?.atoms;
+    if (!Array.isArray(atoms)) return [];
+    const ligands = [];
+    const byKey = new Map();
+    for (const atom of atoms) {
+      if (!atom.het || isWater(atom)) continue;
+      const selector = ligandSelector(atom, structureId);
+      const key = ligandKey(selector);
+      let ligand = byKey.get(key);
+      if (!ligand) {
+        ligand = {
+          key, selector, model: atom.model, chain: atom.chain, resi: atom.resi,
+          icode: atom.icode, resn: atom.resn, label: ligandLabel(selector), atoms: []
+        };
+        byKey.set(key, ligand);
+        ligands.push(ligand);
+      }
+      ligand.atoms.push(atom);
+    }
+    for (const ligand of ligands) {
+      ligand.atomCount = ligand.atoms.length;
+      ligand.heavyAtomCount = ligand.atoms.filter(atom => atom.element !== 'H').length;
+    }
+    return ligands;
+  }
+
+  function ligandLabel(selector) {
+    const chain = selector.chain === '_' ? 'no chain' : `chain ${selector.chain}`;
+    return `${selector.resn || 'UNK'} ${Number(selector.resi) || 0}${selector.icode || ''} · ${chain}${Number(selector.model) > 1 ? ` · model ${selector.model}` : ''}`;
+  }
+
+  function findLigand(ligands, selector, structureId) {
+    if (!selector) return null;
+    if (selector.structureId && selector.structureId !== structureId) return null;
+    return ligands.find(ligand => ligand.selector.model === Number(selector.model)
+      && ligand.selector.chain === selector.chain
+      && ligand.selector.resi === Number(selector.resi)
+      && ligand.selector.icode === (selector.icode || '')
+      && ligand.selector.resn === selector.resn) || null;
+  }
+
+  function analyzeLigandPocket(value, selectedLigand, cutoffValue = LIGAND_ANALYSIS_DEFAULTS.cutoff, structureId = '') {
+    const atoms = Array.isArray(value) ? value : value?.atoms;
+    const cutoff = clamp(Number(cutoffValue) || LIGAND_ANALYSIS_DEFAULTS.cutoff, 2.5, 8);
+    const ligands = groupLigands(atoms, structureId);
+    const ligand = findLigand(ligands, selectedLigand, structureId);
+    const empty = { cutoff, ligand, residues: [], contacts: [], candidatePairs: 0, indexedAtomCount: 0 };
+    if (!ligand || !Array.isArray(atoms)) return empty;
+
+    const eligible = atoms.filter(atom => atom.model === ligand.model && !atom.het && atom.element !== 'H'
+      && ['protein', 'nucleic'].includes(residueDescriptor(atom.resn).kind));
+    const cellSize = cutoff;
+    const cells = new Map();
+    const cellKey = (x, y, z) => `${x}|${y}|${z}`;
+    for (const atom of eligible) {
+      const cell = [Math.floor(atom.x / cellSize), Math.floor(atom.y / cellSize), Math.floor(atom.z / cellSize)];
+      const key = cellKey(...cell);
+      if (!cells.has(key)) cells.set(key, []);
+      cells.get(key).push(atom);
+    }
+
+    const contacts = [];
+    const seen = new Set();
+    let candidatePairs = 0;
+    for (const ligandAtom of ligand.atoms.filter(atom => atom.element !== 'H')) {
+      const cx = Math.floor(ligandAtom.x / cellSize);
+      const cy = Math.floor(ligandAtom.y / cellSize);
+      const cz = Math.floor(ligandAtom.z / cellSize);
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+        const nearby = cells.get(cellKey(cx + dx, cy + dy, cz + dz));
+        if (!nearby) continue;
+        for (const targetAtom of nearby) {
+          candidatePairs += 1;
+          const pairKey = `${ligandAtom.index}:${targetAtom.index}`;
+          if (seen.has(pairKey)) continue;
+          seen.add(pairKey);
+          const distance = magnitude(subtract(ligandAtom, targetAtom));
+          if (distance > cutoff || distance < .1) continue;
+          const vdwLimit = vdwRadius(ligandAtom.element) + vdwRadius(targetAtom.element) + .5;
+          const close = distance <= Math.min(cutoff, vdwLimit);
+          const polar = distance <= Math.min(cutoff, 3.5)
+            && POLAR_ELEMENTS.has(ligandAtom.element) && POLAR_ELEMENTS.has(targetAtom.element);
+          contacts.push({
+            ligandAtom, targetAtom, distance, close, polar,
+            classification: polar ? 'polar' : close ? 'close' : 'nearby'
+          });
+        }
+      }
+    }
+    contacts.sort((left, right) => left.distance - right.distance);
+
+    const residueMap = new Map();
+    for (const contact of contacts) {
+      const atom = contact.targetAtom;
+      const key = `${atom.model}|${atom.chain}|${atom.resi}|${atom.icode}|${atom.resn}`;
+      let residue = residueMap.get(key);
+      if (!residue) {
+        const descriptor = residueDescriptor(atom.resn);
+        residue = {
+          key, model: atom.model, chain: atom.chain, resi: atom.resi, icode: atom.icode,
+          resn: atom.resn, kind: descriptor.kind, atoms: [], contacts: [],
+          minimumDistance: contact.distance, hasClose: false, hasPolar: false
+        };
+        residueMap.set(key, residue);
+      }
+      if (!residue.atoms.some(candidate => candidate.index === atom.index)) residue.atoms.push(atom);
+      residue.contacts.push(contact);
+      residue.minimumDistance = Math.min(residue.minimumDistance, contact.distance);
+      residue.hasClose ||= contact.close;
+      residue.hasPolar ||= contact.polar;
+    }
+    const residues = [...residueMap.values()].sort((left, right) => left.minimumDistance - right.minimumDistance);
+    return { cutoff, ligand, residues, contacts, candidatePairs, indexedAtomCount: eligible.length };
+  }
+
   function validCamera(camera) {
     return Array.isArray(camera?.view) && camera.view.length === 8 && camera.view.every(Number.isFinite);
   }
@@ -524,6 +672,8 @@
     MEASUREMENT_ATOM_COUNTS, normalizeMeasurements, measurementAtoms, measurementValue,
     formatMeasurementValue,
     normalizeSavedSelections, normalizeCompoundSelector, matchSavedSelection, describeSavedSelector,
-    residueDescriptor, buildStructureHierarchy, representativeAtom
+    residueDescriptor, buildStructureHierarchy, representativeAtom,
+    LIGAND_ANALYSIS_DEFAULTS, normalizeLigandAnalysis, ligandSelector, ligandKey, ligandLabel,
+    groupLigands, findLigand, analyzeLigandPocket
   };
 })();

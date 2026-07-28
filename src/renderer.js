@@ -113,6 +113,7 @@
       }
 
       this.applySavedSelectionHighlight();
+      this.applyLigandAnalysis();
       this.applySelectionHighlight();
       this.applyMeasurements();
       this.applyMeasurementDraft();
@@ -162,6 +163,40 @@
         stick: { radius: .25, color: '#30e3d2' },
         sphere: { scale: .38, color: '#30e3d2', opacity: .72 }
       });
+    }
+
+    applyLigandAnalysis() {
+      const state = this.doc.scene.ligandAnalysis;
+      if (!state?.selectedLigand) return;
+      const result = Core.analyzeLigandPocket(
+        this.parsed, state.selectedLigand, state.cutoff, this.doc.structure.id
+      );
+      if (!result.ligand) return;
+
+      if (state.showLigand) {
+        const ligandSelection = this.andSelection(this.to3DSelection(result.ligand.selector), { hetflag: true });
+        this.viewer.addStyle(ligandSelection, {
+          stick: { radius: .3, color: '#ff5e83' }, sphere: { scale: .45, color: '#ff5e83' }
+        });
+      }
+      if (state.showPocket) {
+        for (const residue of result.residues) {
+          this.viewer.addStyle(this.to3DSelection(residue), {
+            stick: { radius: .22, color: residue.hasPolar ? '#71ddf8' : '#7ee2a8' },
+            sphere: { scale: .25, color: residue.hasPolar ? '#71ddf8' : '#7ee2a8' }
+          });
+        }
+      }
+      if (state.showContacts) {
+        const contacts = state.polarOnly ? result.contacts.filter(contact => contact.polar) : result.contacts;
+        for (const contact of contacts.slice(0, 500)) {
+          const color = contact.polar ? '#ffcf5a' : contact.close ? '#71ddf8' : '#7c91a7';
+          this.viewer.addLine({
+            start: point(contact.ligandAtom), end: point(contact.targetAtom),
+            color, dashed: true, linewidth: contact.polar ? 2.5 : 1.5, opacity: .82
+          });
+        }
+      }
     }
 
     applyMeasurements() {
@@ -313,6 +348,18 @@
       const selection = this.to3DSelection(selector);
       this.applyingDocument = true;
       this.viewer.zoomTo(selection);
+      this.viewer.render();
+      this.doc.scene.camera = { view: this.viewer.getView() };
+      this.lastReportedView = JSON.stringify(this.doc.scene.camera.view);
+      requestAnimationFrame(() => { this.applyingDocument = false; });
+      if (notify) this.callbacks.onCamera?.(structuredClone(this.doc.scene.camera));
+    }
+
+    focusSelectors(selectors, notify = true) {
+      if (!this.doc || !Array.isArray(selectors) || !selectors.length) return;
+      const selections = selectors.map(selector => this.to3DSelection(selector));
+      this.applyingDocument = true;
+      this.viewer.zoomTo(selections.length === 1 ? selections[0] : { or: selections });
       this.viewer.render();
       this.doc.scene.camera = { view: this.viewer.getView() };
       this.lastReportedView = JSON.stringify(this.doc.scene.camera.view);

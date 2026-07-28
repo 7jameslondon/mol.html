@@ -32,6 +32,11 @@ doc.scene.measurements.push({
   ],
   label: 'Backbone bond', note: 'Agent-authored annotation'
 });
+doc.scene.ligandAnalysis = {
+  selectedLigand: null, cutoff: 5.2, showLigand: true,
+  showPocket: false, showContacts: true, polarOnly: true,
+  futureAnalysisField: 'agent-preserved'
+};
 
 doc.scene.savedSelections.push({
   id: 'agent-selection-test', name: 'Backbone neighborhood', futureSelectionField: 'preserved',
@@ -52,4 +57,5 @@ if (roundtrip.modifiedBy !== 'agent' || roundtrip.scene.selection?.identity?.ser
 if (roundtrip.scene.customColors.at(-1)?.color !== '#ff0000') throw new Error('Agent color did not round-trip.');
 if (roundtrip.scene.measurements.at(-1)?.note !== 'Agent-authored annotation') throw new Error('Agent measurement did not round-trip.');
 if (roundtrip.scene.savedSelections.at(-1)?.futureSelectionField !== 'preserved') throw new Error('Agent named selection did not round-trip.');
+if (roundtrip.scene.ligandAnalysis?.cutoff !== 5.2 || roundtrip.scene.ligandAnalysis?.futureAnalysisField !== 'agent-preserved') throw new Error('Agent ligand analysis state did not round-trip.');
 console.log(`Agent edit round-trip passed: ${output}`);

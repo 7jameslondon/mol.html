@@ -87,6 +87,10 @@ __DOCUMENT__
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18 18 4m-2-1 5 5M3 16l5 5m2-8 2 2m1-5 2 2"/></svg>
             <span>Measurements</span><small id="measurements-ribbon-value">None</small>
           </button>
+          <button id="ligands-button" class="ribbon-button" type="button" data-inspector-target="ligands" aria-controls="inspector" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5.5 12 3l5 2.5v5L12 13l-5-2.5zM12 13v5.5m-5-8L4 15m13-4.5 3 4.5"/><circle cx="4" cy="17" r="2"/><circle cx="12" cy="20" r="2"/><circle cx="20" cy="17" r="2"/></svg>
+            <span>Ligands</span><small id="ligands-ribbon-value">Scanning</small>
+          </button>
         </div>
         <div class="ribbon-group-label">Analyze</div>
       </div>
@@ -291,6 +295,37 @@ __DOCUMENT__
               <span>Save an atom, residue, chain, range, ligand set, or proximity query.</span>
             </div>
             <div id="saved-selection-list" class="saved-selection-list" aria-label="Named selections"></div>
+          </section>
+
+          <section id="panel-ligands" class="inspector-panel" data-inspector-panel="ligands" hidden>
+            <p class="panel-intro">Explore non-water HETATM residue instances and nearby polymer residues using local geometric heuristics.</p>
+            <div id="empty-ligands" class="empty-measurements" hidden>
+              <strong>No ligands found</strong>
+              <span>This structure has no non-water HETATM residue instances.</span>
+            </div>
+            <div id="ligand-analysis-controls">
+              <label class="field-label" for="ligand-select">Ligand instance</label>
+              <select id="ligand-select"></select>
+              <div class="ligand-cutoff-heading">
+                <label class="field-label" for="ligand-cutoff">Contact cutoff</label>
+                <output id="ligand-cutoff-value" for="ligand-cutoff">4.0 Å</output>
+              </div>
+              <input id="ligand-cutoff" class="ligand-cutoff" type="range" min="2.5" max="8" step="0.1" value="4" aria-describedby="ligand-analysis-note">
+              <div class="visibility-list ligand-visibility-list">
+                <label class="visibility-option"><span><strong>Ligand emphasis</strong><small>Show the chosen HETATM residue</small></span><span class="toggle"><input id="ligand-show-ligand" type="checkbox"><i></i></span></label>
+                <label class="visibility-option"><span><strong>Pocket emphasis</strong><small>Show nearby protein and nucleic residues</small></span><span class="toggle"><input id="ligand-show-pocket" type="checkbox"><i></i></span></label>
+                <label class="visibility-option"><span><strong>Contact lines</strong><small>Draw atom pairs within the cutoff</small></span><span class="toggle"><input id="ligand-show-contacts" type="checkbox"><i></i></span></label>
+                <label class="visibility-option"><span><strong>Polar lines only</strong><small>Limit lines to N/O/S pairs at ≤ 3.5 Å</small></span><span class="toggle"><input id="ligand-polar-only" type="checkbox"><i></i></span></label>
+              </div>
+              <button id="ligand-focus" class="button secondary full-width panel-action" type="button">Focus ligand and pocket</button>
+              <p id="ligand-analysis-note" class="panel-note">Geometric heuristic only: “close” uses van der Waals radii plus 0.5 Å; “polar” means an N/O/S pair within 3.5 Å. These are not rigorous chemical or hydrogen-bond assignments. At most the nearest 500 contact lines are drawn.</p>
+              <div class="ligand-results-heading"><span>NEARBY RESIDUES</span><small id="ligand-analysis-summary"></small></div>
+              <div id="empty-pocket" class="empty-measurements" hidden>
+                <strong>No polymer residues nearby</strong>
+                <span>Increase the cutoff to search a larger neighborhood.</span>
+              </div>
+              <div id="ligand-residue-list" class="ligand-residue-list" aria-label="Nearby ligand pocket residues"></div>
+            </div>
           </section>
 
           <section id="panel-inspect" class="inspector-panel" data-inspector-panel="inspect" hidden>

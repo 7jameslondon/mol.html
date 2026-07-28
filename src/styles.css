@@ -292,6 +292,31 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
 .measurement-label-input::placeholder, .measurement-note-input::placeholder { color: var(--muted-2); }
 .measurement-atoms { margin: 0; color: var(--muted-2); font-size: 8px; line-height: 1.45; }
 
+.ligand-cutoff-heading { display: flex; align-items: end; justify-content: space-between; margin-top: 12px; }
+.ligand-cutoff-heading .field-label { margin: 0; }
+.ligand-cutoff-heading output { color: #71ddf8; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10px; font-weight: 750; }
+.ligand-cutoff { width: 100%; margin: 9px 0 5px; accent-color: var(--blue); }
+.ligand-visibility-list { margin-top: 10px; }
+.ligand-results-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 18px 0 9px; color: var(--muted-2); font-size: 9px; font-weight: 800; letter-spacing: .13em; }
+.ligand-results-heading small { color: var(--muted); font-size: 8px; font-weight: 600; letter-spacing: 0; text-align: right; }
+.ligand-residue-list { display: grid; gap: 7px; }
+.ligand-residue-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 9px; background: #0c1a2a; }
+.ligand-residue-focus { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 0; border: 0; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.ligand-residue-focus > span { min-width: 0; display: grid; gap: 2px; }
+.ligand-residue-focus strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.ligand-residue-focus small { color: var(--muted); font-size: 8px; }
+.ligand-residue-distance { color: #71ddf8; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10px; font-weight: 750; }
+.ligand-contact-badges { display: flex; align-items: center; gap: 4px; }
+.ligand-contact-badge { padding: 3px 5px; border-radius: 5px; background: rgba(124, 145, 167, .15); color: #a9bbcc; font-size: 7px; font-weight: 800; text-transform: uppercase; }
+.ligand-contact-badge.close { background: rgba(113, 221, 248, .12); color: #71ddf8; }
+.ligand-contact-badge.polar { background: rgba(255, 207, 90, .12); color: #ffcf5a; }
+.ligand-atom-contacts { grid-column: 1 / -1; display: grid; gap: 3px; padding-top: 6px; border-top: 1px solid var(--line); }
+.ligand-atom-contact { min-width: 0; padding: 4px 6px; overflow: hidden; border: 0; border-radius: 5px; background: rgba(124, 145, 167, .08); color: var(--muted); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 8px; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.ligand-atom-contact:hover { background: rgba(88, 168, 255, .12); color: var(--ink); }
+.ligand-atom-contact.polar { color: #ffcf5a; }
+.ligand-atom-contact.close { color: #71ddf8; }
+.ligand-atom-contacts > small { padding: 2px 6px; color: var(--muted-2); font-size: 7px; }
+
 .viewer-stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--canvas); }
 #molecule-viewer { position: absolute; inset: 0; cursor: grab; touch-action: none; }
 #molecule-viewer:active { cursor: grabbing; }

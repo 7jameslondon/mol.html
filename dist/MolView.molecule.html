@@ -300,6 +300,31 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
 .measurement-label-input::placeholder, .measurement-note-input::placeholder { color: var(--muted-2); }
 .measurement-atoms { margin: 0; color: var(--muted-2); font-size: 8px; line-height: 1.45; }
 
+.ligand-cutoff-heading { display: flex; align-items: end; justify-content: space-between; margin-top: 12px; }
+.ligand-cutoff-heading .field-label { margin: 0; }
+.ligand-cutoff-heading output { color: #71ddf8; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10px; font-weight: 750; }
+.ligand-cutoff { width: 100%; margin: 9px 0 5px; accent-color: var(--blue); }
+.ligand-visibility-list { margin-top: 10px; }
+.ligand-results-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 18px 0 9px; color: var(--muted-2); font-size: 9px; font-weight: 800; letter-spacing: .13em; }
+.ligand-results-heading small { color: var(--muted); font-size: 8px; font-weight: 600; letter-spacing: 0; text-align: right; }
+.ligand-residue-list { display: grid; gap: 7px; }
+.ligand-residue-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 9px; background: #0c1a2a; }
+.ligand-residue-focus { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 0; border: 0; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.ligand-residue-focus > span { min-width: 0; display: grid; gap: 2px; }
+.ligand-residue-focus strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.ligand-residue-focus small { color: var(--muted); font-size: 8px; }
+.ligand-residue-distance { color: #71ddf8; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10px; font-weight: 750; }
+.ligand-contact-badges { display: flex; align-items: center; gap: 4px; }
+.ligand-contact-badge { padding: 3px 5px; border-radius: 5px; background: rgba(124, 145, 167, .15); color: #a9bbcc; font-size: 7px; font-weight: 800; text-transform: uppercase; }
+.ligand-contact-badge.close { background: rgba(113, 221, 248, .12); color: #71ddf8; }
+.ligand-contact-badge.polar { background: rgba(255, 207, 90, .12); color: #ffcf5a; }
+.ligand-atom-contacts { grid-column: 1 / -1; display: grid; gap: 3px; padding-top: 6px; border-top: 1px solid var(--line); }
+.ligand-atom-contact { min-width: 0; padding: 4px 6px; overflow: hidden; border: 0; border-radius: 5px; background: rgba(124, 145, 167, .08); color: var(--muted); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 8px; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.ligand-atom-contact:hover { background: rgba(88, 168, 255, .12); color: var(--ink); }
+.ligand-atom-contact.polar { color: #ffcf5a; }
+.ligand-atom-contact.close { color: #71ddf8; }
+.ligand-atom-contacts > small { padding: 2px 6px; color: var(--muted-2); font-size: 7px; }
+
 .viewer-stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--canvas); }
 #molecule-viewer { position: absolute; inset: 0; cursor: grab; touch-action: none; }
 #molecule-viewer:active { cursor: grabbing; }
@@ -350,7 +375,7 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
   "documentId": "document-starter-molecular-scene",
   "title": "Protein and DNA starter scene",
   "revision": 1,
-  "modified": "2026-07-28T01:26:41.206Z",
+  "modified": "2026-07-28T01:34:26.338Z",
   "modifiedBy": "build",
   "structure": {
     "id": "structure-starter-complex",
@@ -368,6 +393,14 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
     "customColors": [],
     "measurements": [],
     "savedSelections": [],
+    "ligandAnalysis": {
+      "selectedLigand": null,
+      "cutoff": 4,
+      "showLigand": true,
+      "showPocket": true,
+      "showContacts": true,
+      "polarOnly": false
+    },
     "camera": {
       "view": null
     }
@@ -450,6 +483,10 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
           <button id="measurements-button" class="ribbon-button" type="button" data-inspector-target="measurements" aria-controls="inspector" aria-pressed="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18 18 4m-2-1 5 5M3 16l5 5m2-8 2 2m1-5 2 2"/></svg>
             <span>Measurements</span><small id="measurements-ribbon-value">None</small>
+          </button>
+          <button id="ligands-button" class="ribbon-button" type="button" data-inspector-target="ligands" aria-controls="inspector" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5.5 12 3l5 2.5v5L12 13l-5-2.5zM12 13v5.5m-5-8L4 15m13-4.5 3 4.5"/><circle cx="4" cy="17" r="2"/><circle cx="12" cy="20" r="2"/><circle cx="20" cy="17" r="2"/></svg>
+            <span>Ligands</span><small id="ligands-ribbon-value">Scanning</small>
           </button>
         </div>
         <div class="ribbon-group-label">Analyze</div>
@@ -657,6 +694,37 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
             <div id="saved-selection-list" class="saved-selection-list" aria-label="Named selections"></div>
           </section>
 
+          <section id="panel-ligands" class="inspector-panel" data-inspector-panel="ligands" hidden>
+            <p class="panel-intro">Explore non-water HETATM residue instances and nearby polymer residues using local geometric heuristics.</p>
+            <div id="empty-ligands" class="empty-measurements" hidden>
+              <strong>No ligands found</strong>
+              <span>This structure has no non-water HETATM residue instances.</span>
+            </div>
+            <div id="ligand-analysis-controls">
+              <label class="field-label" for="ligand-select">Ligand instance</label>
+              <select id="ligand-select"></select>
+              <div class="ligand-cutoff-heading">
+                <label class="field-label" for="ligand-cutoff">Contact cutoff</label>
+                <output id="ligand-cutoff-value" for="ligand-cutoff">4.0 Å</output>
+              </div>
+              <input id="ligand-cutoff" class="ligand-cutoff" type="range" min="2.5" max="8" step="0.1" value="4" aria-describedby="ligand-analysis-note">
+              <div class="visibility-list ligand-visibility-list">
+                <label class="visibility-option"><span><strong>Ligand emphasis</strong><small>Show the chosen HETATM residue</small></span><span class="toggle"><input id="ligand-show-ligand" type="checkbox"><i></i></span></label>
+                <label class="visibility-option"><span><strong>Pocket emphasis</strong><small>Show nearby protein and nucleic residues</small></span><span class="toggle"><input id="ligand-show-pocket" type="checkbox"><i></i></span></label>
+                <label class="visibility-option"><span><strong>Contact lines</strong><small>Draw atom pairs within the cutoff</small></span><span class="toggle"><input id="ligand-show-contacts" type="checkbox"><i></i></span></label>
+                <label class="visibility-option"><span><strong>Polar lines only</strong><small>Limit lines to N/O/S pairs at ≤ 3.5 Å</small></span><span class="toggle"><input id="ligand-polar-only" type="checkbox"><i></i></span></label>
+              </div>
+              <button id="ligand-focus" class="button secondary full-width panel-action" type="button">Focus ligand and pocket</button>
+              <p id="ligand-analysis-note" class="panel-note">Geometric heuristic only: “close” uses van der Waals radii plus 0.5 Å; “polar” means an N/O/S pair within 3.5 Å. These are not rigorous chemical or hydrogen-bond assignments. At most the nearest 500 contact lines are drawn.</p>
+              <div class="ligand-results-heading"><span>NEARBY RESIDUES</span><small id="ligand-analysis-summary"></small></div>
+              <div id="empty-pocket" class="empty-measurements" hidden>
+                <strong>No polymer residues nearby</strong>
+                <span>Increase the cutoff to search a larger neighborhood.</span>
+              </div>
+              <div id="ligand-residue-list" class="ligand-residue-list" aria-label="Nearby ligand pocket residues"></div>
+            </div>
+          </section>
+
           <section id="panel-inspect" class="inspector-panel" data-inspector-panel="inspect" hidden>
             <div class="selection-panel-heading"><span>ACTIVE SELECTION</span><button id="clear-selection-panel" class="text-button" type="button" disabled>Clear</button></div>
             <div id="empty-selection" class="empty-selection">
@@ -809,6 +877,10 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   const COVALENT_RADII = { H: .31, C: .76, N: .71, O: .66, F: .57, P: 1.07, S: 1.05, CL: 1.02, BR: 1.2, I: 1.39, FE: 1.24, MG: 1.3, ZN: 1.22, CA: 1.76 };
   const VDW_RADII = { H: 1.2, C: 1.7, N: 1.55, O: 1.52, F: 1.47, P: 1.8, S: 1.8, CL: 1.75, BR: 1.85, I: 1.98, FE: 1.8, MG: 1.73, ZN: 1.39, CA: 2.31 };
   const WATER_NAMES = new Set(['HOH', 'WAT', 'H2O', 'DOD']);
+  const POLAR_ELEMENTS = new Set(['N', 'O', 'S']);
+  const LIGAND_ANALYSIS_DEFAULTS = Object.freeze({
+    cutoff: 4, showLigand: true, showPocket: true, showContacts: true, polarOnly: false
+  });
   const MEASUREMENT_ATOM_COUNTS = Object.freeze({ distance: 2, angle: 3, dihedral: 4 });
   const AMINO_ACID_CODES = Object.freeze({
     ALA: 'A', ARG: 'R', ASN: 'N', ASP: 'D', CYS: 'C', GLN: 'Q', GLU: 'E',
@@ -1020,6 +1092,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       customColors: Array.isArray(doc.scene.customColors) ? doc.scene.customColors : [],
       measurements: normalizeMeasurements(doc.scene.measurements),
       savedSelections: normalizeSavedSelections(doc.scene.savedSelections),
+      ligandAnalysis: normalizeLigandAnalysis(doc.scene.ligandAnalysis, doc.structure.id),
       camera: validCamera(doc.scene.camera) ? { view: doc.scene.camera.view.map(Number) } : { view: null }
     });
     return doc;
@@ -1211,6 +1284,149 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     return 'Invalid or unsupported selector';
   }
 
+  function normalizeLigandAnalysis(value, structureId) {
+    const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const analysis = { ...source };
+    const selected = source.selectedLigand;
+    analysis.selectedLigand = selected && typeof selected === 'object' && !Array.isArray(selected)
+      && (!selected.structureId || selected.structureId === structureId)
+      ? { ...selected, structureId }
+      : null;
+    analysis.cutoff = clamp(Number(source.cutoff) || LIGAND_ANALYSIS_DEFAULTS.cutoff, 2.5, 8);
+    for (const key of ['showLigand', 'showPocket', 'showContacts', 'polarOnly']) {
+      analysis[key] = key in source ? Boolean(source[key]) : LIGAND_ANALYSIS_DEFAULTS[key];
+    }
+    return analysis;
+  }
+
+  function ligandSelector(atom, structureId) {
+    return {
+      structureId, model: atom.model, chain: atom.chain, resi: atom.resi,
+      icode: atom.icode, resn: atom.resn
+    };
+  }
+
+  function ligandKey(selector) {
+    if (!selector) return '';
+    return `${selector.structureId || ''}|${Number(selector.model) || 1}|${selector.chain || '_'}|${Number(selector.resi) || 0}|${selector.icode || ''}|${selector.resn || 'UNK'}`;
+  }
+
+  function groupLigands(value, structureId = '') {
+    const atoms = Array.isArray(value) ? value : value?.atoms;
+    if (!Array.isArray(atoms)) return [];
+    const ligands = [];
+    const byKey = new Map();
+    for (const atom of atoms) {
+      if (!atom.het || isWater(atom)) continue;
+      const selector = ligandSelector(atom, structureId);
+      const key = ligandKey(selector);
+      let ligand = byKey.get(key);
+      if (!ligand) {
+        ligand = {
+          key, selector, model: atom.model, chain: atom.chain, resi: atom.resi,
+          icode: atom.icode, resn: atom.resn, label: ligandLabel(selector), atoms: []
+        };
+        byKey.set(key, ligand);
+        ligands.push(ligand);
+      }
+      ligand.atoms.push(atom);
+    }
+    for (const ligand of ligands) {
+      ligand.atomCount = ligand.atoms.length;
+      ligand.heavyAtomCount = ligand.atoms.filter(atom => atom.element !== 'H').length;
+    }
+    return ligands;
+  }
+
+  function ligandLabel(selector) {
+    const chain = selector.chain === '_' ? 'no chain' : `chain ${selector.chain}`;
+    return `${selector.resn || 'UNK'} ${Number(selector.resi) || 0}${selector.icode || ''} · ${chain}${Number(selector.model) > 1 ? ` · model ${selector.model}` : ''}`;
+  }
+
+  function findLigand(ligands, selector, structureId) {
+    if (!selector) return null;
+    if (selector.structureId && selector.structureId !== structureId) return null;
+    return ligands.find(ligand => ligand.selector.model === Number(selector.model)
+      && ligand.selector.chain === selector.chain
+      && ligand.selector.resi === Number(selector.resi)
+      && ligand.selector.icode === (selector.icode || '')
+      && ligand.selector.resn === selector.resn) || null;
+  }
+
+  function analyzeLigandPocket(value, selectedLigand, cutoffValue = LIGAND_ANALYSIS_DEFAULTS.cutoff, structureId = '') {
+    const atoms = Array.isArray(value) ? value : value?.atoms;
+    const cutoff = clamp(Number(cutoffValue) || LIGAND_ANALYSIS_DEFAULTS.cutoff, 2.5, 8);
+    const ligands = groupLigands(atoms, structureId);
+    const ligand = findLigand(ligands, selectedLigand, structureId);
+    const empty = { cutoff, ligand, residues: [], contacts: [], candidatePairs: 0, indexedAtomCount: 0 };
+    if (!ligand || !Array.isArray(atoms)) return empty;
+
+    const eligible = atoms.filter(atom => atom.model === ligand.model && !atom.het && atom.element !== 'H'
+      && ['protein', 'nucleic'].includes(residueDescriptor(atom.resn).kind));
+    const cellSize = cutoff;
+    const cells = new Map();
+    const cellKey = (x, y, z) => `${x}|${y}|${z}`;
+    for (const atom of eligible) {
+      const cell = [Math.floor(atom.x / cellSize), Math.floor(atom.y / cellSize), Math.floor(atom.z / cellSize)];
+      const key = cellKey(...cell);
+      if (!cells.has(key)) cells.set(key, []);
+      cells.get(key).push(atom);
+    }
+
+    const contacts = [];
+    const seen = new Set();
+    let candidatePairs = 0;
+    for (const ligandAtom of ligand.atoms.filter(atom => atom.element !== 'H')) {
+      const cx = Math.floor(ligandAtom.x / cellSize);
+      const cy = Math.floor(ligandAtom.y / cellSize);
+      const cz = Math.floor(ligandAtom.z / cellSize);
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+        const nearby = cells.get(cellKey(cx + dx, cy + dy, cz + dz));
+        if (!nearby) continue;
+        for (const targetAtom of nearby) {
+          candidatePairs += 1;
+          const pairKey = `${ligandAtom.index}:${targetAtom.index}`;
+          if (seen.has(pairKey)) continue;
+          seen.add(pairKey);
+          const distance = magnitude(subtract(ligandAtom, targetAtom));
+          if (distance > cutoff || distance < .1) continue;
+          const vdwLimit = vdwRadius(ligandAtom.element) + vdwRadius(targetAtom.element) + .5;
+          const close = distance <= Math.min(cutoff, vdwLimit);
+          const polar = distance <= Math.min(cutoff, 3.5)
+            && POLAR_ELEMENTS.has(ligandAtom.element) && POLAR_ELEMENTS.has(targetAtom.element);
+          contacts.push({
+            ligandAtom, targetAtom, distance, close, polar,
+            classification: polar ? 'polar' : close ? 'close' : 'nearby'
+          });
+        }
+      }
+    }
+    contacts.sort((left, right) => left.distance - right.distance);
+
+    const residueMap = new Map();
+    for (const contact of contacts) {
+      const atom = contact.targetAtom;
+      const key = `${atom.model}|${atom.chain}|${atom.resi}|${atom.icode}|${atom.resn}`;
+      let residue = residueMap.get(key);
+      if (!residue) {
+        const descriptor = residueDescriptor(atom.resn);
+        residue = {
+          key, model: atom.model, chain: atom.chain, resi: atom.resi, icode: atom.icode,
+          resn: atom.resn, kind: descriptor.kind, atoms: [], contacts: [],
+          minimumDistance: contact.distance, hasClose: false, hasPolar: false
+        };
+        residueMap.set(key, residue);
+      }
+      if (!residue.atoms.some(candidate => candidate.index === atom.index)) residue.atoms.push(atom);
+      residue.contacts.push(contact);
+      residue.minimumDistance = Math.min(residue.minimumDistance, contact.distance);
+      residue.hasClose ||= contact.close;
+      residue.hasPolar ||= contact.polar;
+    }
+    const residues = [...residueMap.values()].sort((left, right) => left.minimumDistance - right.minimumDistance);
+    return { cutoff, ligand, residues, contacts, candidatePairs, indexedAtomCount: eligible.length };
+  }
+
   function validCamera(camera) {
     return Array.isArray(camera?.view) && camera.view.length === 8 && camera.view.every(Number.isFinite);
   }
@@ -1323,7 +1539,9 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     MEASUREMENT_ATOM_COUNTS, normalizeMeasurements, measurementAtoms, measurementValue,
     formatMeasurementValue,
     normalizeSavedSelections, normalizeCompoundSelector, matchSavedSelection, describeSavedSelector,
-    residueDescriptor, buildStructureHierarchy, representativeAtom
+    residueDescriptor, buildStructureHierarchy, representativeAtom,
+    LIGAND_ANALYSIS_DEFAULTS, normalizeLigandAnalysis, ligandSelector, ligandKey, ligandLabel,
+    groupLigands, findLigand, analyzeLigandPocket
   };
 })();
 </script>
@@ -1442,6 +1660,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       }
 
       this.applySavedSelectionHighlight();
+      this.applyLigandAnalysis();
       this.applySelectionHighlight();
       this.applyMeasurements();
       this.applyMeasurementDraft();
@@ -1491,6 +1710,40 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         stick: { radius: .25, color: '#30e3d2' },
         sphere: { scale: .38, color: '#30e3d2', opacity: .72 }
       });
+    }
+
+    applyLigandAnalysis() {
+      const state = this.doc.scene.ligandAnalysis;
+      if (!state?.selectedLigand) return;
+      const result = Core.analyzeLigandPocket(
+        this.parsed, state.selectedLigand, state.cutoff, this.doc.structure.id
+      );
+      if (!result.ligand) return;
+
+      if (state.showLigand) {
+        const ligandSelection = this.andSelection(this.to3DSelection(result.ligand.selector), { hetflag: true });
+        this.viewer.addStyle(ligandSelection, {
+          stick: { radius: .3, color: '#ff5e83' }, sphere: { scale: .45, color: '#ff5e83' }
+        });
+      }
+      if (state.showPocket) {
+        for (const residue of result.residues) {
+          this.viewer.addStyle(this.to3DSelection(residue), {
+            stick: { radius: .22, color: residue.hasPolar ? '#71ddf8' : '#7ee2a8' },
+            sphere: { scale: .25, color: residue.hasPolar ? '#71ddf8' : '#7ee2a8' }
+          });
+        }
+      }
+      if (state.showContacts) {
+        const contacts = state.polarOnly ? result.contacts.filter(contact => contact.polar) : result.contacts;
+        for (const contact of contacts.slice(0, 500)) {
+          const color = contact.polar ? '#ffcf5a' : contact.close ? '#71ddf8' : '#7c91a7';
+          this.viewer.addLine({
+            start: point(contact.ligandAtom), end: point(contact.targetAtom),
+            color, dashed: true, linewidth: contact.polar ? 2.5 : 1.5, opacity: .82
+          });
+        }
+      }
     }
 
     applyMeasurements() {
@@ -1642,6 +1895,18 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       const selection = this.to3DSelection(selector);
       this.applyingDocument = true;
       this.viewer.zoomTo(selection);
+      this.viewer.render();
+      this.doc.scene.camera = { view: this.viewer.getView() };
+      this.lastReportedView = JSON.stringify(this.doc.scene.camera.view);
+      requestAnimationFrame(() => { this.applyingDocument = false; });
+      if (notify) this.callbacks.onCamera?.(structuredClone(this.doc.scene.camera));
+    }
+
+    focusSelectors(selectors, notify = true) {
+      if (!this.doc || !Array.isArray(selectors) || !selectors.length) return;
+      const selections = selectors.map(selector => this.to3DSelection(selector));
+      this.applyingDocument = true;
+      this.viewer.zoomTo(selections.length === 1 ? selections[0] : { or: selections });
       this.viewer.render();
       this.doc.scene.camera = { view: this.viewer.getView() };
       this.lastReportedView = JSON.stringify(this.doc.scene.camera.view);
@@ -1914,7 +2179,11 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     'create-range-selection', 'saved-ligand-name', 'create-ligand-selection',
     'saved-proximity-name', 'saved-proximity-target', 'saved-proximity-cutoff',
     'create-proximity-selection', 'clear-saved-selection-highlight',
-    'empty-saved-selections', 'saved-selection-list'
+    'empty-saved-selections', 'saved-selection-list',
+    'ligands-button', 'ligands-ribbon-value', 'empty-ligands', 'ligand-analysis-controls',
+    'ligand-select', 'ligand-cutoff', 'ligand-cutoff-value', 'ligand-show-ligand',
+    'ligand-show-pocket', 'ligand-show-contacts', 'ligand-polar-only', 'ligand-focus',
+    'ligand-analysis-note', 'ligand-analysis-summary', 'empty-pocket', 'ligand-residue-list'
   ].map(id => [id, document.getElementById(id)]));
 
   const undoStack = [];
@@ -1938,7 +2207,8 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   const inspectorTitles = {
     fetch: 'Find structure', representation: 'Representation', color: 'Color',
     show: 'Show and hide', inspect: 'Selection inspector', measurements: 'Measurements',
-    navigator: 'Structure navigator', 'saved-selections': 'Named selections'
+    navigator: 'Structure navigator', 'saved-selections': 'Named selections',
+    ligands: 'Ligands and pocket'
   };
 
   const renderer = new window.MoleculeRenderer(elements['molecule-viewer'], {
@@ -2033,6 +2303,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     syncMeasurements();
     syncSavedSelections();
     syncNavigator();
+    syncLigandAnalysis();
   }
 
   function syncControls() {
@@ -2064,6 +2335,9 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     const savedSelectionCount = doc.scene.savedSelections.length;
     elements['saved-selections-ribbon-value'].textContent = savedSelectionCount
       ? `${savedSelectionCount} saved` : 'None';
+    const ligands = parsed ? Core.groupLigands(parsed, doc.structure.id) : [];
+    elements['ligands-ribbon-value'].textContent = Core.findLigand(ligands, doc.scene.ligandAnalysis.selectedLigand, doc.structure.id)
+      ? 'Pocket active' : ligands.length ? `${ligands.length} found` : 'None';
     elements['undo-button'].disabled = !undoStack.length;
     elements['redo-button'].disabled = !redoStack.length;
   }
@@ -2366,6 +2640,161 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       card.append(header, atomSummary, labelField, noteField);
       elements['measurement-list'].appendChild(card);
     }
+  }
+
+  function ligandAnalysisResult(selector = doc.scene.ligandAnalysis.selectedLigand, cutoff = doc.scene.ligandAnalysis.cutoff) {
+    return Core.analyzeLigandPocket(parsed, selector, cutoff, doc.structure.id);
+  }
+
+  function syncLigandAnalysis() {
+    if (!parsed) return;
+    const state = doc.scene.ligandAnalysis;
+    const ligands = Core.groupLigands(parsed, doc.structure.id);
+    const selected = Core.findLigand(ligands, state.selectedLigand, doc.structure.id);
+
+    elements['empty-ligands'].hidden = Boolean(ligands.length);
+    elements['ligand-analysis-controls'].hidden = !ligands.length;
+    elements['ligand-select'].replaceChildren();
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Choose a ligand…';
+    elements['ligand-select'].appendChild(placeholder);
+    for (const ligand of ligands) {
+      const option = document.createElement('option');
+      option.value = ligand.key;
+      option.textContent = `${ligand.label} (${ligand.atomCount} atom${ligand.atomCount === 1 ? '' : 's'})`;
+      elements['ligand-select'].appendChild(option);
+    }
+    elements['ligand-select'].value = selected?.key || '';
+    elements['ligand-cutoff'].value = String(state.cutoff);
+    elements['ligand-cutoff-value'].textContent = `${state.cutoff.toFixed(1)} Å`;
+    elements['ligand-show-ligand'].checked = state.showLigand;
+    elements['ligand-show-pocket'].checked = state.showPocket;
+    elements['ligand-show-contacts'].checked = state.showContacts;
+    elements['ligand-polar-only'].checked = state.polarOnly;
+    elements['ligand-polar-only'].disabled = !state.showContacts;
+    elements['ligand-focus'].disabled = !selected;
+    elements['ligand-residue-list'].replaceChildren();
+
+    const result = ligandAnalysisResult();
+    elements['empty-pocket'].hidden = !selected || Boolean(result.residues.length);
+    if (!selected) {
+      elements['ligand-analysis-summary'].textContent = 'Choose a ligand';
+      return;
+    }
+    const polarCount = result.contacts.filter(contact => contact.polar).length;
+    elements['ligand-analysis-summary'].textContent = `${result.residues.length} residues · ${result.contacts.length} pairs · ${polarCount} polar`;
+
+    for (const residue of result.residues) {
+      const card = document.createElement('article');
+      card.className = 'ligand-residue-card';
+      const focus = document.createElement('button');
+      focus.className = 'ligand-residue-focus';
+      focus.type = 'button';
+      const text = document.createElement('span');
+      const heading = document.createElement('strong');
+      const chain = residue.chain === '_' ? 'no chain' : `chain ${residue.chain}`;
+      heading.textContent = `${residue.resn} ${residue.resi}${residue.icode || ''} · ${chain}`;
+      const detail = document.createElement('small');
+      detail.textContent = `${residue.contacts.length} atom pair${residue.contacts.length === 1 ? '' : 's'} · ${residue.kind}`;
+      text.append(heading, detail);
+      const distance = document.createElement('span');
+      distance.className = 'ligand-residue-distance';
+      distance.textContent = `${residue.minimumDistance.toFixed(2)} Å`;
+      focus.append(text, distance);
+      focus.title = 'Select the nearest contacting atom and focus this residue';
+      focus.addEventListener('click', () => {
+        const atom = residue.contacts[0]?.targetAtom || residue.atoms[0];
+        if (!atom) return;
+        selectAtom(atom);
+        renderer.focusSelector(Core.selectorForAtom(atom, 'residue', doc.structure.id));
+      });
+      const badges = document.createElement('div');
+      badges.className = 'ligand-contact-badges';
+      if (residue.hasClose) badges.appendChild(contactBadge('close'));
+      if (residue.hasPolar) badges.appendChild(contactBadge('polar'));
+      const contactList = document.createElement('div');
+      contactList.className = 'ligand-atom-contacts';
+      for (const contact of residue.contacts.slice(0, 4)) {
+        const button = document.createElement('button');
+        button.className = `ligand-atom-contact ${contact.classification}`;
+        button.type = 'button';
+        button.textContent = `${contact.ligandAtom.name}–${contact.targetAtom.name} ${contact.distance.toFixed(2)} Å · ${contact.classification}`;
+        button.title = `Select ${Core.atomLabel(contact.targetAtom)}`;
+        button.addEventListener('click', () => {
+          selectAtom(contact.targetAtom);
+          renderer.focusSelector(Core.selectorForAtom(contact.targetAtom, 'atom', doc.structure.id));
+        });
+        contactList.appendChild(button);
+      }
+      if (residue.contacts.length > 4) {
+        const more = document.createElement('small');
+        more.textContent = `+${residue.contacts.length - 4} more atom pairs`;
+        contactList.appendChild(more);
+      }
+      card.append(focus, badges, contactList);
+      elements['ligand-residue-list'].appendChild(card);
+    }
+  }
+
+  function contactBadge(kind) {
+    const badge = document.createElement('span');
+    badge.className = `ligand-contact-badge ${kind}`;
+    badge.textContent = kind;
+    return badge;
+  }
+
+  function resolveLigand(value) {
+    const ligands = Core.groupLigands(parsed, doc.structure.id);
+    if (value == null || value === '') return null;
+    const ligand = typeof value === 'string'
+      ? ligands.find(candidate => candidate.key === value)
+      : Core.findLigand(ligands, value, doc.structure.id);
+    if (!ligand) throw new Error('The requested ligand instance was not found in this structure.');
+    return ligand;
+  }
+
+  function setLigandAnalysis(changes = {}, source = 'browser') {
+    const next = { ...doc.scene.ligandAnalysis, ...changes };
+    if ('selectedLigand' in changes) next.selectedLigand = resolveLigand(changes.selectedLigand)?.selector || null;
+    const normalized = Core.normalizeLigandAnalysis(next, doc.structure.id);
+    commit(() => { doc.scene.ligandAnalysis = normalized; }, { source });
+    return structuredClone(doc.scene.ligandAnalysis);
+  }
+
+  function focusLigandAnalysis() {
+    const result = ligandAnalysisResult();
+    if (!result.ligand) throw new Error('Choose a ligand first.');
+    renderer.focusSelectors([result.ligand.selector, ...result.residues]);
+    return { ligand: structuredClone(result.ligand.selector), residueCount: result.residues.length };
+  }
+
+  function serializeLigandAnalysisResult(result) {
+    return {
+      cutoff: result.cutoff,
+      ligand: result.ligand ? {
+        key: result.ligand.key, selector: result.ligand.selector, label: result.ligand.label,
+        atomCount: result.ligand.atomCount, heavyAtomCount: result.ligand.heavyAtomCount
+      } : null,
+      residues: result.residues.map(residue => ({
+        selector: {
+          structureId: doc.structure.id, model: residue.model, chain: residue.chain,
+          resi: residue.resi, icode: residue.icode, resn: residue.resn
+        },
+        label: `${residue.resn} ${residue.resi}${residue.icode || ''}`,
+        kind: residue.kind, minimumDistance: residue.minimumDistance,
+        contactCount: residue.contacts.length, hasClose: residue.hasClose, hasPolar: residue.hasPolar
+      })),
+      contacts: result.contacts.map(contact => ({
+        ligandAtom: Core.selectorForAtom(contact.ligandAtom, 'atom', doc.structure.id),
+        targetAtom: Core.selectorForAtom(contact.targetAtom, 'atom', doc.structure.id),
+        ligandAtomLabel: Core.atomLabel(contact.ligandAtom),
+        targetAtomLabel: Core.atomLabel(contact.targetAtom),
+        distance: contact.distance, classification: contact.classification,
+        close: contact.close, polar: contact.polar
+      })),
+      search: { indexedAtomCount: result.indexedAtomCount, candidatePairs: result.candidatePairs }
+    };
   }
 
   function measurementTypeName(type) {
@@ -2866,6 +3295,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       doc.scene.customColors = [];
       doc.scene.measurements = [];
       doc.scene.savedSelections = [];
+      doc.scene.ligandAnalysis = Core.normalizeLigandAnalysis(null, doc.structure.id);
       doc.scene.camera = { view: null };
     }, { history: false, fit: true });
     undoStack.length = 0; redoStack.length = 0;
@@ -3212,6 +3642,19 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   });
   elements['navigator-sequences'].addEventListener('click', handleNavigatorClick);
   elements['navigator-tree'].addEventListener('click', handleNavigatorClick);
+  elements['ligand-select'].addEventListener('change', event => setLigandAnalysis({ selectedLigand: event.target.value }));
+  elements['ligand-cutoff'].addEventListener('input', event => {
+    elements['ligand-cutoff-value'].textContent = `${Number(event.target.value).toFixed(1)} Å`;
+  });
+  elements['ligand-cutoff'].addEventListener('change', event => setLigandAnalysis({ cutoff: Number(event.target.value) }));
+  elements['ligand-show-ligand'].addEventListener('change', event => setLigandAnalysis({ showLigand: event.target.checked }));
+  elements['ligand-show-pocket'].addEventListener('change', event => setLigandAnalysis({ showPocket: event.target.checked }));
+  elements['ligand-show-contacts'].addEventListener('change', event => setLigandAnalysis({ showContacts: event.target.checked }));
+  elements['ligand-polar-only'].addEventListener('change', event => setLigandAnalysis({ polarOnly: event.target.checked }));
+  elements['ligand-focus'].addEventListener('click', () => {
+    try { focusLigandAnalysis(); }
+    catch (error) { toast(error.message, 'error'); }
+  });
   elements['open-file-button'].addEventListener('click', () => elements['file-input'].click());
   elements['close-inspector'].addEventListener('click', closeInspector);
   for (const button of inspectorButtons) {
@@ -3301,6 +3744,16 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     getSelection() { return structuredClone(doc.scene.selection); },
     getMeasurements() { return structuredClone(doc.scene.measurements); },
     getSavedSelections() { return structuredClone(doc.scene.savedSelections); },
+    listLigands() {
+      return structuredClone(Core.groupLigands(parsed, doc.structure.id).map(ligand => ({
+        key: ligand.key, selector: ligand.selector, label: ligand.label,
+        atomCount: ligand.atomCount, heavyAtomCount: ligand.heavyAtomCount
+      })));
+    },
+    getLigandAnalysis() {
+      const result = ligandAnalysisResult();
+      return structuredClone({ state: doc.scene.ligandAnalysis, ...serializeLigandAnalysisResult(result) });
+    },
     serialize() { return persistence.serialize(); },
     async save() { return persistence.save(false); },
     async importPDB(name, text) { return importPDB(name, text); },
@@ -3332,6 +3785,18 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     getSavedSelectionMatch(id) { return savedSelectionMatch(id); },
     highlightSavedSelection(id, focus = false) { return setSavedSelectionHighlight(id, { focus }); },
     clearSavedSelectionHighlight() { return setSavedSelectionHighlight(null); },
+    selectLigand(value) { return setLigandAnalysis({ selectedLigand: value }, 'agent'); },
+    setLigandAnalysis(changes) { return setLigandAnalysis(changes || {}, 'agent'); },
+    clearLigandAnalysis() { return setLigandAnalysis({ selectedLigand: null }, 'agent'); },
+    focusLigandAnalysis() { return focusLigandAnalysis(); },
+    analyzeLigand(value, cutoff) {
+      const ligand = value == null ? resolveLigand(doc.scene.ligandAnalysis.selectedLigand) : resolveLigand(value);
+      if (!ligand) throw new Error('Choose a ligand first.');
+      const result = Core.analyzeLigandPocket(
+        parsed, ligand.selector, cutoff ?? doc.scene.ligandAnalysis.cutoff, doc.structure.id
+      );
+      return structuredClone(serializeLigandAnalysisResult(result));
+    },
     loadDocument(value, modifiedBy = 'agent') {
       const next = Core.normalizeDocument(typeof value === 'string' ? JSON.parse(value) : value);
       resetMeasurementInteraction(false);

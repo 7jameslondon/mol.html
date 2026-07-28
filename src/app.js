@@ -37,7 +37,11 @@
     'create-range-selection', 'saved-ligand-name', 'create-ligand-selection',
     'saved-proximity-name', 'saved-proximity-target', 'saved-proximity-cutoff',
     'create-proximity-selection', 'clear-saved-selection-highlight',
-    'empty-saved-selections', 'saved-selection-list'
+    'empty-saved-selections', 'saved-selection-list',
+    'ligands-button', 'ligands-ribbon-value', 'empty-ligands', 'ligand-analysis-controls',
+    'ligand-select', 'ligand-cutoff', 'ligand-cutoff-value', 'ligand-show-ligand',
+    'ligand-show-pocket', 'ligand-show-contacts', 'ligand-polar-only', 'ligand-focus',
+    'ligand-analysis-note', 'ligand-analysis-summary', 'empty-pocket', 'ligand-residue-list'
   ].map(id => [id, document.getElementById(id)]));
 
   const undoStack = [];
@@ -61,7 +65,8 @@
   const inspectorTitles = {
     fetch: 'Find structure', representation: 'Representation', color: 'Color',
     show: 'Show and hide', inspect: 'Selection inspector', measurements: 'Measurements',
-    navigator: 'Structure navigator', 'saved-selections': 'Named selections'
+    navigator: 'Structure navigator', 'saved-selections': 'Named selections',
+    ligands: 'Ligands and pocket'
   };
 
   const renderer = new window.MoleculeRenderer(elements['molecule-viewer'], {
@@ -156,6 +161,7 @@
     syncMeasurements();
     syncSavedSelections();
     syncNavigator();
+    syncLigandAnalysis();
   }
 
   function syncControls() {
@@ -187,6 +193,9 @@
     const savedSelectionCount = doc.scene.savedSelections.length;
     elements['saved-selections-ribbon-value'].textContent = savedSelectionCount
       ? `${savedSelectionCount} saved` : 'None';
+    const ligands = parsed ? Core.groupLigands(parsed, doc.structure.id) : [];
+    elements['ligands-ribbon-value'].textContent = Core.findLigand(ligands, doc.scene.ligandAnalysis.selectedLigand, doc.structure.id)
+      ? 'Pocket active' : ligands.length ? `${ligands.length} found` : 'None';
     elements['undo-button'].disabled = !undoStack.length;
     elements['redo-button'].disabled = !redoStack.length;
   }
@@ -489,6 +498,161 @@
       card.append(header, atomSummary, labelField, noteField);
       elements['measurement-list'].appendChild(card);
     }
+  }
+
+  function ligandAnalysisResult(selector = doc.scene.ligandAnalysis.selectedLigand, cutoff = doc.scene.ligandAnalysis.cutoff) {
+    return Core.analyzeLigandPocket(parsed, selector, cutoff, doc.structure.id);
+  }
+
+  function syncLigandAnalysis() {
+    if (!parsed) return;
+    const state = doc.scene.ligandAnalysis;
+    const ligands = Core.groupLigands(parsed, doc.structure.id);
+    const selected = Core.findLigand(ligands, state.selectedLigand, doc.structure.id);
+
+    elements['empty-ligands'].hidden = Boolean(ligands.length);
+    elements['ligand-analysis-controls'].hidden = !ligands.length;
+    elements['ligand-select'].replaceChildren();
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Choose a ligand…';
+    elements['ligand-select'].appendChild(placeholder);
+    for (const ligand of ligands) {
+      const option = document.createElement('option');
+      option.value = ligand.key;
+      option.textContent = `${ligand.label} (${ligand.atomCount} atom${ligand.atomCount === 1 ? '' : 's'})`;
+      elements['ligand-select'].appendChild(option);
+    }
+    elements['ligand-select'].value = selected?.key || '';
+    elements['ligand-cutoff'].value = String(state.cutoff);
+    elements['ligand-cutoff-value'].textContent = `${state.cutoff.toFixed(1)} Å`;
+    elements['ligand-show-ligand'].checked = state.showLigand;
+    elements['ligand-show-pocket'].checked = state.showPocket;
+    elements['ligand-show-contacts'].checked = state.showContacts;
+    elements['ligand-polar-only'].checked = state.polarOnly;
+    elements['ligand-polar-only'].disabled = !state.showContacts;
+    elements['ligand-focus'].disabled = !selected;
+    elements['ligand-residue-list'].replaceChildren();
+
+    const result = ligandAnalysisResult();
+    elements['empty-pocket'].hidden = !selected || Boolean(result.residues.length);
+    if (!selected) {
+      elements['ligand-analysis-summary'].textContent = 'Choose a ligand';
+      return;
+    }
+    const polarCount = result.contacts.filter(contact => contact.polar).length;
+    elements['ligand-analysis-summary'].textContent = `${result.residues.length} residues · ${result.contacts.length} pairs · ${polarCount} polar`;
+
+    for (const residue of result.residues) {
+      const card = document.createElement('article');
+      card.className = 'ligand-residue-card';
+      const focus = document.createElement('button');
+      focus.className = 'ligand-residue-focus';
+      focus.type = 'button';
+      const text = document.createElement('span');
+      const heading = document.createElement('strong');
+      const chain = residue.chain === '_' ? 'no chain' : `chain ${residue.chain}`;
+      heading.textContent = `${residue.resn} ${residue.resi}${residue.icode || ''} · ${chain}`;
+      const detail = document.createElement('small');
+      detail.textContent = `${residue.contacts.length} atom pair${residue.contacts.length === 1 ? '' : 's'} · ${residue.kind}`;
+      text.append(heading, detail);
+      const distance = document.createElement('span');
+      distance.className = 'ligand-residue-distance';
+      distance.textContent = `${residue.minimumDistance.toFixed(2)} Å`;
+      focus.append(text, distance);
+      focus.title = 'Select the nearest contacting atom and focus this residue';
+      focus.addEventListener('click', () => {
+        const atom = residue.contacts[0]?.targetAtom || residue.atoms[0];
+        if (!atom) return;
+        selectAtom(atom);
+        renderer.focusSelector(Core.selectorForAtom(atom, 'residue', doc.structure.id));
+      });
+      const badges = document.createElement('div');
+      badges.className = 'ligand-contact-badges';
+      if (residue.hasClose) badges.appendChild(contactBadge('close'));
+      if (residue.hasPolar) badges.appendChild(contactBadge('polar'));
+      const contactList = document.createElement('div');
+      contactList.className = 'ligand-atom-contacts';
+      for (const contact of residue.contacts.slice(0, 4)) {
+        const button = document.createElement('button');
+        button.className = `ligand-atom-contact ${contact.classification}`;
+        button.type = 'button';
+        button.textContent = `${contact.ligandAtom.name}–${contact.targetAtom.name} ${contact.distance.toFixed(2)} Å · ${contact.classification}`;
+        button.title = `Select ${Core.atomLabel(contact.targetAtom)}`;
+        button.addEventListener('click', () => {
+          selectAtom(contact.targetAtom);
+          renderer.focusSelector(Core.selectorForAtom(contact.targetAtom, 'atom', doc.structure.id));
+        });
+        contactList.appendChild(button);
+      }
+      if (residue.contacts.length > 4) {
+        const more = document.createElement('small');
+        more.textContent = `+${residue.contacts.length - 4} more atom pairs`;
+        contactList.appendChild(more);
+      }
+      card.append(focus, badges, contactList);
+      elements['ligand-residue-list'].appendChild(card);
+    }
+  }
+
+  function contactBadge(kind) {
+    const badge = document.createElement('span');
+    badge.className = `ligand-contact-badge ${kind}`;
+    badge.textContent = kind;
+    return badge;
+  }
+
+  function resolveLigand(value) {
+    const ligands = Core.groupLigands(parsed, doc.structure.id);
+    if (value == null || value === '') return null;
+    const ligand = typeof value === 'string'
+      ? ligands.find(candidate => candidate.key === value)
+      : Core.findLigand(ligands, value, doc.structure.id);
+    if (!ligand) throw new Error('The requested ligand instance was not found in this structure.');
+    return ligand;
+  }
+
+  function setLigandAnalysis(changes = {}, source = 'browser') {
+    const next = { ...doc.scene.ligandAnalysis, ...changes };
+    if ('selectedLigand' in changes) next.selectedLigand = resolveLigand(changes.selectedLigand)?.selector || null;
+    const normalized = Core.normalizeLigandAnalysis(next, doc.structure.id);
+    commit(() => { doc.scene.ligandAnalysis = normalized; }, { source });
+    return structuredClone(doc.scene.ligandAnalysis);
+  }
+
+  function focusLigandAnalysis() {
+    const result = ligandAnalysisResult();
+    if (!result.ligand) throw new Error('Choose a ligand first.');
+    renderer.focusSelectors([result.ligand.selector, ...result.residues]);
+    return { ligand: structuredClone(result.ligand.selector), residueCount: result.residues.length };
+  }
+
+  function serializeLigandAnalysisResult(result) {
+    return {
+      cutoff: result.cutoff,
+      ligand: result.ligand ? {
+        key: result.ligand.key, selector: result.ligand.selector, label: result.ligand.label,
+        atomCount: result.ligand.atomCount, heavyAtomCount: result.ligand.heavyAtomCount
+      } : null,
+      residues: result.residues.map(residue => ({
+        selector: {
+          structureId: doc.structure.id, model: residue.model, chain: residue.chain,
+          resi: residue.resi, icode: residue.icode, resn: residue.resn
+        },
+        label: `${residue.resn} ${residue.resi}${residue.icode || ''}`,
+        kind: residue.kind, minimumDistance: residue.minimumDistance,
+        contactCount: residue.contacts.length, hasClose: residue.hasClose, hasPolar: residue.hasPolar
+      })),
+      contacts: result.contacts.map(contact => ({
+        ligandAtom: Core.selectorForAtom(contact.ligandAtom, 'atom', doc.structure.id),
+        targetAtom: Core.selectorForAtom(contact.targetAtom, 'atom', doc.structure.id),
+        ligandAtomLabel: Core.atomLabel(contact.ligandAtom),
+        targetAtomLabel: Core.atomLabel(contact.targetAtom),
+        distance: contact.distance, classification: contact.classification,
+        close: contact.close, polar: contact.polar
+      })),
+      search: { indexedAtomCount: result.indexedAtomCount, candidatePairs: result.candidatePairs }
+    };
   }
 
   function measurementTypeName(type) {
@@ -989,6 +1153,7 @@
       doc.scene.customColors = [];
       doc.scene.measurements = [];
       doc.scene.savedSelections = [];
+      doc.scene.ligandAnalysis = Core.normalizeLigandAnalysis(null, doc.structure.id);
       doc.scene.camera = { view: null };
     }, { history: false, fit: true });
     undoStack.length = 0; redoStack.length = 0;
@@ -1335,6 +1500,19 @@
   });
   elements['navigator-sequences'].addEventListener('click', handleNavigatorClick);
   elements['navigator-tree'].addEventListener('click', handleNavigatorClick);
+  elements['ligand-select'].addEventListener('change', event => setLigandAnalysis({ selectedLigand: event.target.value }));
+  elements['ligand-cutoff'].addEventListener('input', event => {
+    elements['ligand-cutoff-value'].textContent = `${Number(event.target.value).toFixed(1)} Å`;
+  });
+  elements['ligand-cutoff'].addEventListener('change', event => setLigandAnalysis({ cutoff: Number(event.target.value) }));
+  elements['ligand-show-ligand'].addEventListener('change', event => setLigandAnalysis({ showLigand: event.target.checked }));
+  elements['ligand-show-pocket'].addEventListener('change', event => setLigandAnalysis({ showPocket: event.target.checked }));
+  elements['ligand-show-contacts'].addEventListener('change', event => setLigandAnalysis({ showContacts: event.target.checked }));
+  elements['ligand-polar-only'].addEventListener('change', event => setLigandAnalysis({ polarOnly: event.target.checked }));
+  elements['ligand-focus'].addEventListener('click', () => {
+    try { focusLigandAnalysis(); }
+    catch (error) { toast(error.message, 'error'); }
+  });
   elements['open-file-button'].addEventListener('click', () => elements['file-input'].click());
   elements['close-inspector'].addEventListener('click', closeInspector);
   for (const button of inspectorButtons) {
@@ -1424,6 +1602,16 @@
     getSelection() { return structuredClone(doc.scene.selection); },
     getMeasurements() { return structuredClone(doc.scene.measurements); },
     getSavedSelections() { return structuredClone(doc.scene.savedSelections); },
+    listLigands() {
+      return structuredClone(Core.groupLigands(parsed, doc.structure.id).map(ligand => ({
+        key: ligand.key, selector: ligand.selector, label: ligand.label,
+        atomCount: ligand.atomCount, heavyAtomCount: ligand.heavyAtomCount
+      })));
+    },
+    getLigandAnalysis() {
+      const result = ligandAnalysisResult();
+      return structuredClone({ state: doc.scene.ligandAnalysis, ...serializeLigandAnalysisResult(result) });
+    },
     serialize() { return persistence.serialize(); },
     async save() { return persistence.save(false); },
     async importPDB(name, text) { return importPDB(name, text); },
@@ -1455,6 +1643,18 @@
     getSavedSelectionMatch(id) { return savedSelectionMatch(id); },
     highlightSavedSelection(id, focus = false) { return setSavedSelectionHighlight(id, { focus }); },
     clearSavedSelectionHighlight() { return setSavedSelectionHighlight(null); },
+    selectLigand(value) { return setLigandAnalysis({ selectedLigand: value }, 'agent'); },
+    setLigandAnalysis(changes) { return setLigandAnalysis(changes || {}, 'agent'); },
+    clearLigandAnalysis() { return setLigandAnalysis({ selectedLigand: null }, 'agent'); },
+    focusLigandAnalysis() { return focusLigandAnalysis(); },
+    analyzeLigand(value, cutoff) {
+      const ligand = value == null ? resolveLigand(doc.scene.ligandAnalysis.selectedLigand) : resolveLigand(value);
+      if (!ligand) throw new Error('Choose a ligand first.');
+      const result = Core.analyzeLigandPocket(
+        parsed, ligand.selector, cutoff ?? doc.scene.ligandAnalysis.cutoff, doc.structure.id
+      );
+      return structuredClone(serializeLigandAnalysisResult(result));
+    },
     loadDocument(value, modifiedBy = 'agent') {
       const next = Core.normalizeDocument(typeof value === 'string' ? JSON.parse(value) : value);
       resetMeasurementInteraction(false);

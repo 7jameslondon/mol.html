@@ -186,6 +186,43 @@ preserve unknown fields on both the record and document. When replacing the
 embedded structure, remove measurements whose selectors refer to the old
 structure; the browser's structure import workflow clears them automatically.
 
+## Ligand and binding-pocket analysis
+
+The optional current analysis state lives in `scene.ligandAnalysis`. Derived
+ligand lists, residues, and atom contacts are never persisted; the browser
+recomputes them locally from the embedded PDB coordinates.
+
+```json
+{
+  "selectedLigand": {
+    "structureId": "structure-id",
+    "model": 1,
+    "chain": "B",
+    "resi": 401,
+    "icode": "",
+    "resn": "ATP"
+  },
+  "cutoff": 4.0,
+  "showLigand": true,
+  "showPocket": true,
+  "showContacts": true,
+  "polarOnly": false
+}
+```
+
+Ligand instances are non-water `HETATM` residues grouped by model, chain,
+residue number, insertion code, and residue name. `cutoff` is bounded to
+2.5–8.0 Å. The visibility booleans control ligand and pocket emphasis and
+contact lines; `polarOnly` limits lines, not the computed residue list.
+
+The classifications are deliberately geometric heuristics. A close contact is
+within the two atoms' van der Waals radii plus 0.5 Å. A plausible polar
+contact is an N/O/S pair within 3.5 Å. These labels do not assign bond order,
+donor/acceptor roles, hydrogen bonds, energies, protonation, or solvent
+accessibility. Preserve unknown fields. Set `selectedLigand` to `null` to clear
+the active analysis; when replacing the structure, clear it or retarget it to
+the new `structure.id`.
+
 Valid `scene.representation` values are `cartoon`, `ball-and-stick`, `sticks`,
 `spacefill`, `lines`, and `surface`. Valid `scene.colorMode` values are `element`,
 `chain`, `residue`, and `uniform`. CSS hex colors are recommended.
@@ -203,6 +240,8 @@ window.molview.document
 window.molview.getSelection()
 window.molview.getMeasurements()
 window.molview.getSavedSelections()
+window.molview.listLigands()
+window.molview.getLigandAnalysis()
 window.molview.fetchPDB('4HHB')
 window.molview.searchPDB('human hemoglobin')
 window.molview.selectAtom(317)
@@ -224,6 +263,11 @@ window.molview.highlightSavedSelection('selection-id', true)
 window.molview.clearSavedSelectionHighlight()
 window.molview.removeSavedSelection('selection-id')
 window.molview.clearSavedSelections()
+window.molview.selectLigand(ligandKeyOrSelector)
+window.molview.setLigandAnalysis({ cutoff: 5, showContacts: false })
+window.molview.analyzeLigand(ligandKeyOrSelector, 4)
+window.molview.focusLigandAnalysis()
+window.molview.clearLigandAnalysis()
 window.molview.loadDocument(updatedDocument, 'agent')
 window.molview.serialize()
 window.molview.save()
