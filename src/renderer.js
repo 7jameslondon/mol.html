@@ -12,6 +12,7 @@
       this.doc = null;
       this.parsed = null;
       this.model = null;
+      this.models = [];
       this.cacheKey = '';
       this.surfaceGeneration = 0;
       this.applyingDocument = false;
@@ -19,6 +20,8 @@
       this.measurementDraft = [];
       this.activeMeasurementId = null;
       this.activeSavedSelectionId = null;
+      this.domainByRendererKey = new Map();
+      this.rendererLocationByDomainIndex = new Map();
       this.viewer = ThreeDmol.createViewer(container, {
         backgroundColor: '#07111f',
         antialias: true
@@ -39,15 +42,20 @@
 
       try {
         if (structureChanged) {
-          this.parsed = Core.parsePDB(doc.structure.data);
-          this.serialAtoms = new Map(this.parsed.atoms.map(atom => [atom.serial, atom]));
+          this.parsed = Core.parseStructure(doc.structure.data, doc.structure.format);
           this.cacheKey = key;
           this.surfaceGeneration += 1;
           this.viewer.removeAllSurfaces();
           this.viewer.removeAllLabels();
           this.viewer.removeAllShapes();
           this.viewer.removeAllModels();
-          this.model = this.viewer.addModel(doc.structure.data, doc.structure.format);
+          const rendererFormat = doc.structure.format === 'mmcif' ? 'cif' : doc.structure.format;
+          const multiplePdbModels = doc.structure.format === 'pdb' && this.parsed.coordinateSets.length > 1;
+          this.models = multiplePdbModels
+            ? this.viewer.addModels(doc.structure.data, rendererFormat, { keepH: true })
+            : [this.viewer.addModel(doc.structure.data, rendererFormat, { keepH: true })];
+          this.model = this.models[0] || null;
+          this.buildAtomMapping();
           fit = true;
         }
 
@@ -77,7 +85,7 @@
       this.viewer.removeAllShapes();
       this.viewer.removeAllSurfaces();
       this.viewer.setStyle({}, {});
-      this.model?.setColorByFunction({}, colorfunc);
+      for (const model of this.models) model?.setColorByFunction({}, colorfunc);
 
       switch (this.doc.scene.representation) {
         case 'cartoon':
@@ -119,7 +127,7 @@
       this.applyMeasurementDraft();
       this.viewer.setClickable({}, false);
       this.viewer.setClickable(visible, true, atom => {
-        const selected = this.serialAtoms.get(Number(atom.serial)) || this.normalizeAtom(atom);
+        const selected = this.domainAtomForRenderer(atom) || this.normalizeAtom(atom);
         this.callbacks.onPick?.(selected);
       });
     }
@@ -159,7 +167,7 @@
         && (this.doc.scene.showWater || !Core.isWater(atom))
       );
       if (!atoms.length) return;
-      this.viewer.addStyle({ serial: atoms.map(atom => atom.serial) }, {
+      this.viewer.addStyle(this.selectionForAtoms(atoms), {
         stick: { radius: .25, color: '#30e3d2' },
         sphere: { scale: .38, color: '#30e3d2', opacity: .72 }
       });
@@ -274,7 +282,7 @@
       const match = Core.matchSavedSelection(saved, this.parsed.atoms, this.doc.structure.id);
       if (!match.valid || !match.atoms.length) return false;
       this.applyingDocument = true;
-      this.viewer.zoomTo({ serial: match.atoms.map(atom => atom.serial) });
+      this.viewer.zoomTo(this.selectionForAtoms(match.atoms));
       this.viewer.render();
       this.doc.scene.camera = { view: this.viewer.getView() };
       this.lastReportedView = JSON.stringify(this.doc.scene.camera.view);
@@ -297,6 +305,11 @@
     }
 
     to3DSelection(selector) {
+      const kind = selector?.kind || this.inferSelectorKind(selector);
+      if (kind && this.parsed) {
+        const match = Core.matchSavedSelection({ ...selector, kind }, this.parsed.atoms, this.doc.structure.id);
+        if (match.valid) return this.selectionForAtoms(match.atoms);
+      }
       const selection = {};
       if (selector.chain != null) selection.chain = selector.chain === '_' ? '' : selector.chain;
       if (selector.resi != null) selection.resi = Number(selector.resi);
@@ -306,6 +319,71 @@
       if (selector.altLoc != null) selection.altLoc = selector.altLoc;
       if (selector.serial != null) selection.serial = Number(selector.serial);
       return selection;
+    }
+
+    inferSelectorKind(selector) {
+      if (!selector) return '';
+      if (selector.instanceId != null) return 'instance';
+      if (selector.entityId != null) return 'entity';
+      if (selector.role != null) return 'role';
+      if (selector.connectedComponentId != null) return 'connected-component';
+      if (selector.atom != null || selector.sourceIdentity?.atomSiteId != null || selector.sourceIdentity?.labelAtomId != null) return 'atom';
+      if (selector.resi != null || selector.sourceIdentity?.labelSeqId != null || selector.sourceIdentity?.authSeqId != null) return 'residue';
+      if (selector.chain != null) return 'chain';
+      return '';
+    }
+
+    selectionForAtoms(atoms) {
+      const indexesByModel = new Map();
+      for (const atom of atoms || []) {
+        const location = this.rendererLocationByDomainIndex.get(atom.index);
+        if (!location) continue;
+        if (!indexesByModel.has(location.model)) indexesByModel.set(location.model, []);
+        indexesByModel.get(location.model).push(location.index);
+      }
+      const selections = [...indexesByModel].map(([model, index]) => ({ model, index }));
+      if (!selections.length) return { index: [] };
+      return selections.length === 1 ? selections[0] : { or: selections };
+    }
+
+    buildAtomMapping() {
+      const rendered = this.models.flatMap(model => model?.selectedAtoms?.({}) || []);
+      const domain = this.parsed?.atoms || [];
+      if (rendered.length !== domain.length) {
+        throw new Error(`Renderer parsed ${rendered.length} atoms but the molecular model parsed ${domain.length}.`);
+      }
+      this.domainByRendererKey = new Map();
+      this.rendererLocationByDomainIndex = new Map();
+      const available = new Set(rendered.map((_, index) => index));
+      const buckets = new Map();
+      for (let index = 0; index < rendered.length; index += 1) {
+        const key = rendererAtomKey(rendered[index]);
+        if (!buckets.has(key)) buckets.set(key, []);
+        buckets.get(key).push(index);
+      }
+      for (let domainIndex = 0; domainIndex < domain.length; domainIndex += 1) {
+        const atom = domain[domainIndex];
+        let renderedPosition = domainIndex;
+        if (!available.has(renderedPosition) || !coordinatesAgree(atom, rendered[renderedPosition])) {
+          const candidates = buckets.get(domainAtomKey(atom)) || [];
+          renderedPosition = candidates.find(index => available.has(index));
+        }
+        if (renderedPosition == null || !available.has(renderedPosition)) {
+          throw new Error(`Could not map molecular atom ${domainIndex + 1} into the renderer.`);
+        }
+        available.delete(renderedPosition);
+        const rendererAtom = rendered[renderedPosition];
+        const rendererIndex = Number(rendererAtom.index);
+        if (!Number.isInteger(rendererIndex)) throw new Error('Renderer atom mapping is missing a numeric atom index.');
+        const rendererModel = Number(rendererAtom.model);
+        if (!Number.isInteger(rendererModel)) throw new Error('Renderer atom mapping is missing a numeric model index.');
+        this.domainByRendererKey.set(`${rendererModel}|${rendererIndex}`, atom);
+        this.rendererLocationByDomainIndex.set(atom.index, { model: rendererModel, index: rendererIndex });
+      }
+    }
+
+    domainAtomForRenderer(atom) {
+      return this.domainByRendererKey.get(`${Number(atom?.model)}|${Number(atom?.index)}`) || null;
     }
 
     normalizeAtom(atom) {
@@ -328,7 +406,7 @@
     }
 
     colorFor3DAtom(atom) {
-      const normalized = this.serialAtoms.get(Number(atom.serial)) || this.normalizeAtom(atom);
+      const normalized = this.domainAtomForRenderer(atom) || this.normalizeAtom(atom);
       return Core.colorForAtom(normalized, this.doc, this.parsed);
     }
 
@@ -393,6 +471,24 @@
 
   function point(atom) {
     return { x: Number(atom.x), y: Number(atom.y), z: Number(atom.z) };
+  }
+
+  function coordinatesAgree(left, right) {
+    return Math.abs(Number(left?.x) - Number(right?.x)) < .01
+      && Math.abs(Number(left?.y) - Number(right?.y)) < .01
+      && Math.abs(Number(left?.z) - Number(right?.z)) < .01;
+  }
+
+  function coordinateKey(atom) {
+    return [Number(atom?.x).toFixed(3), Number(atom?.y).toFixed(3), Number(atom?.z).toFixed(3)].join('|');
+  }
+
+  function rendererAtomKey(atom) {
+    return `${coordinateKey(atom)}|${String(atom?.atom || atom?.name || '').trim()}|${String(atom?.resn || '').trim()}`;
+  }
+
+  function domainAtomKey(atom) {
+    return `${coordinateKey(atom)}|${String(atom?.name || '').trim()}|${String(atom?.resn || '').trim()}`;
   }
 
   function measurementLabelPosition(type, atoms) {

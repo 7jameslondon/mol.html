@@ -1,0 +1,10 @@
+HEADER    TWO MODEL COORDINATE SET REGRESSION FIXTURE
+MODEL        1
+ATOM      1  N   GLY A   1       0.000   0.000   0.000  1.00 20.00           N
+ATOM      2  CA  GLY A   1       1.300   0.000   0.000  1.00 20.00           C
+ENDMDL
+MODEL        2
+ATOM      1  N   GLY A   1       0.000   4.000   0.000  1.00 22.00           N
+ATOM      2  CA  GLY A   1       1.300   4.000   0.000  1.00 22.00           C
+ENDMDL
+END

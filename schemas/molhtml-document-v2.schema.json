@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://molhtml.local/schema/molhtml-document-v2.schema.json",
+  "title": "mol.html document version 2",
+  "type": "object",
+  "required": ["format", "version", "structure", "scene"],
+  "properties": {
+    "format": { "const": "molhtml/document" },
+    "version": { "const": 2 },
+    "documentId": { "type": "string", "minLength": 1 },
+    "title": { "type": "string" },
+    "revision": { "type": "integer", "minimum": 0 },
+    "modified": { "type": "string" },
+    "modifiedBy": { "type": "string" },
+    "structure": {
+      "type": "object",
+      "required": ["id", "format", "data"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "format": { "enum": ["pdb", "mmcif"] },
+        "data": { "type": "string", "minLength": 1 },
+        "metadata": { "type": "object" },
+        "source": { "type": "object" }
+      },
+      "additionalProperties": true
+    },
+    "scene": { "$ref": "#/$defs/scene" }
+  },
+  "$defs": {
+    "sourceIdentity": {
+      "type": "object",
+      "properties": {
+        "modelNumber": { "type": "number" },
+        "atomSiteId": { "type": "string" },
+        "labelEntityId": { "type": "string" },
+        "labelAsymId": { "type": "string" },
+        "labelSeqId": { "type": "string" },
+        "labelCompId": { "type": "string" },
+        "labelAtomId": { "type": "string" },
+        "labelAltId": { "type": "string" },
+        "authAsymId": { "type": "string" },
+        "authSeqId": { "type": "string" },
+        "authCompId": { "type": "string" },
+        "authAtomId": { "type": "string" },
+        "insertionCode": { "type": "string" },
+        "pdbSerial": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "selector": {
+      "type": "object",
+      "required": ["kind", "structureId"],
+      "properties": {
+        "kind": {
+          "enum": ["atom", "residue", "chain", "instance", "entity", "role", "connected-component", "residue-range", "ligands", "within"]
+        },
+        "structureId": { "type": "string", "minLength": 1 },
+        "model": { "type": "number" },
+        "chain": { "type": "string" },
+        "instanceId": { "type": "string" },
+        "entityId": { "type": "string" },
+        "role": { "enum": ["polymer", "ligand", "ion", "solvent", "unknown"] },
+        "connectedComponentId": { "type": "string" },
+        "sourceIdentity": { "$ref": "#/$defs/sourceIdentity" },
+        "target": { "$ref": "#/$defs/selector" }
+      },
+      "additionalProperties": true
+    },
+    "scene": {
+      "type": "object",
+      "properties": {
+        "representation": { "enum": ["cartoon", "ball-and-stick", "sticks", "spacefill", "lines", "surface"] },
+        "colorMode": { "enum": ["element", "chain", "author-chain", "instance", "entity", "role", "residue", "uniform"] },
+        "background": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "showHydrogens": { "type": "boolean" },
+        "showWater": { "type": "boolean" },
+        "selection": { "type": ["object", "null"] },
+        "customColors": { "type": "array" },
+        "measurements": { "type": "array" },
+        "savedSelections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "selector"],
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "selector": { "$ref": "#/$defs/selector" }
+            },
+            "additionalProperties": true
+          }
+        },
+        "savedViews": { "type": "array" },
+        "ligandAnalysis": { "type": "object" },
+        "camera": { "type": "object" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
