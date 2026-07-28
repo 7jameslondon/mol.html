@@ -77,6 +77,10 @@ __DOCUMENT__
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5m11-5h5v5M9 20H4v-5m11 5h5v-5"/></svg>
             <span>Fit</span><small>Whole scene</small>
           </button>
+          <button id="saved-views-button" class="ribbon-button" type="button" data-inspector-target="saved-views" aria-controls="inspector" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h14v15H5zM8 8h8m-8 4h8m-8 4h5"/><path d="m16 14 3 2-3 2z"/></svg>
+            <span>Saved views</span><small id="saved-views-ribbon-value">None</small>
+          </button>
         </div>
         <div class="ribbon-group-label">View</div>
       </div>
@@ -189,6 +193,23 @@ __DOCUMENT__
             <div class="navigator-section-heading"><span>STRUCTURE</span><small>Chain → residue → atom</small></div>
             <div id="navigator-tree" class="navigator-tree" role="tree" aria-label="Structure navigator"></div>
             <p id="navigator-status" class="navigator-status" aria-live="polite"></p>
+          </section>
+
+          <section id="panel-saved-views" class="inspector-panel" data-inspector-panel="saved-views" hidden>
+            <p class="panel-intro">Capture the current camera and appearance, then arrange views into a guided story.</p>
+            <div class="saved-view-toolbar">
+              <button id="create-saved-view" class="button accent" type="button">Capture current view</button>
+              <button id="start-story" class="button secondary" type="button" disabled>Present story</button>
+            </div>
+            <div class="saved-view-list-heading">
+              <span>STORY ORDER</span>
+              <small id="saved-view-count">0 views</small>
+            </div>
+            <div id="empty-saved-views" class="empty-saved-views">
+              <strong>No saved views yet</strong>
+              <span>Set up the molecule, then capture its camera and presentation state.</span>
+            </div>
+            <div id="saved-view-list" class="saved-view-list" aria-label="Saved story views"></div>
           </section>
 
           <section id="panel-color" class="inspector-panel" data-inspector-panel="color" hidden>
@@ -389,6 +410,16 @@ __DOCUMENT__
           <span><strong>File changed on disk.</strong> Reload to use the agent's changes.</span>
           <button id="reload-button" class="button primary">Reload</button>
         </div>
+        <section id="story-overlay" class="story-overlay" aria-label="Story presentation" hidden>
+          <div class="story-progress"><span id="story-position">1 of 1</span><span>STORY</span></div>
+          <h2 id="story-title">Saved view</h2>
+          <p id="story-narrative" hidden></p>
+          <div class="story-controls">
+            <button id="story-previous" class="story-control" type="button" aria-label="Previous story view">← Previous</button>
+            <button id="story-next" class="story-control primary" type="button" aria-label="Next story view">Next →</button>
+            <button id="story-exit" class="story-control" type="button">Exit</button>
+          </div>
+        </section>
         <div class="controls-hint"><span>Drag</span> rotate <span>Shift + drag</span> pan <span>Scroll</span> zoom <span>Click</span> select</div>
         <div id="canvas-message" class="canvas-message" hidden></div>
       </section>

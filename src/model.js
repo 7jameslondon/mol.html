@@ -15,6 +15,13 @@
     cutoff: 4, showLigand: true, showPocket: true, showContacts: true, polarOnly: false
   });
   const MEASUREMENT_ATOM_COUNTS = Object.freeze({ distance: 2, angle: 3, dihedral: 4 });
+  const REPRESENTATIONS = new Set(['cartoon', 'ball-and-stick', 'sticks', 'spacefill', 'lines', 'surface']);
+  const COLOR_MODES = new Set(['element', 'chain', 'residue', 'uniform']);
+  const SAVED_VIEW_SCENE_FIELDS = Object.freeze([
+    'representation', 'colorMode', 'background', 'showHydrogens', 'showWater',
+    'selection', 'customColors', 'activeAnalysis', 'analysisHighlight',
+    'highlight', 'highlights', 'activeHighlight', 'activeLigandId', 'ligandHighlight'
+  ]);
   const AMINO_ACID_CODES = Object.freeze({
     ALA: 'A', ARG: 'R', ASN: 'N', ASP: 'D', CYS: 'C', GLN: 'Q', GLU: 'E',
     GLY: 'G', HIS: 'H', ILE: 'I', LEU: 'L', LYS: 'K', MET: 'M', PHE: 'F',
@@ -508,7 +515,8 @@
       measurements: normalizeMeasurements(doc.scene.measurements),
       savedSelections: normalizeSavedSelections(doc.scene.savedSelections),
       ligandAnalysis: normalizeLigandAnalysis(doc.scene.ligandAnalysis, doc.structure.id),
-      camera: validCamera(doc.scene.camera) ? { view: doc.scene.camera.view.map(Number) } : { view: null }
+      savedViews: normalizeSavedViews(doc.scene.savedViews),
+      camera: normalizeCamera(doc.scene.camera)
     });
     return doc;
   }
@@ -846,6 +854,85 @@
     return Array.isArray(camera?.view) && camera.view.length === 8 && camera.view.every(Number.isFinite);
   }
 
+  function normalizeCamera(camera) {
+    if (!camera || typeof camera !== 'object' || Array.isArray(camera)) return { view: null };
+    return { ...camera, view: validCamera(camera) ? camera.view.map(Number) : null };
+  }
+
+  function normalizeSavedViewSnapshot(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return { camera: { view: null } };
+    const snapshot = structuredClone(value);
+    snapshot.camera = normalizeCamera(value.camera);
+    if ('representation' in snapshot && !REPRESENTATIONS.has(snapshot.representation)) delete snapshot.representation;
+    if ('colorMode' in snapshot && !COLOR_MODES.has(snapshot.colorMode)) delete snapshot.colorMode;
+    if ('background' in snapshot) snapshot.background = String(snapshot.background || '#07111f');
+    if ('showHydrogens' in snapshot) snapshot.showHydrogens = Boolean(snapshot.showHydrogens);
+    if ('showWater' in snapshot) snapshot.showWater = Boolean(snapshot.showWater);
+    if ('selection' in snapshot) snapshot.selection = snapshot.selection && typeof snapshot.selection === 'object'
+      ? structuredClone(snapshot.selection) : null;
+    if ('customColors' in snapshot) snapshot.customColors = Array.isArray(snapshot.customColors)
+      ? structuredClone(snapshot.customColors) : [];
+    delete snapshot.savedViews;
+    return snapshot;
+  }
+
+  function normalizeSavedViews(value) {
+    if (!Array.isArray(value)) return [];
+    const usedIds = new Set();
+    return value
+      .filter(record => record && typeof record === 'object' && !Array.isArray(record))
+      .map((record, index) => {
+        const view = structuredClone(record);
+        const proposedId = typeof record.id === 'string' && record.id.trim() ? record.id.trim() : uid('view');
+        view.id = usedIds.has(proposedId) ? uid('view') : proposedId;
+        usedIds.add(view.id);
+        view.title = String(record.title || '').trim();
+        if ('narrative' in record || 'note' in record) {
+          view.narrative = String(record.narrative ?? record.note ?? '');
+        }
+        view.order = Number.isFinite(Number(record.order)) ? Number(record.order) : index;
+        view.snapshot = normalizeSavedViewSnapshot(record.snapshot);
+        return view;
+      })
+      .sort((left, right) => left.order - right.order)
+      .map((view, order) => ({ ...view, title: view.title || `View ${order + 1}`, order }));
+  }
+
+  function captureSavedViewSnapshot(scene, options = {}) {
+    const snapshot = {};
+    for (const field of SAVED_VIEW_SCENE_FIELDS) {
+      if (Object.prototype.hasOwnProperty.call(scene || {}, field)) snapshot[field] = structuredClone(scene[field]);
+    }
+    snapshot.camera = normalizeCamera(options.camera || scene?.camera);
+    if (Object.prototype.hasOwnProperty.call(options, 'activeAnalysis')) {
+      snapshot.activeAnalysis = structuredClone(options.activeAnalysis);
+    }
+    delete snapshot.savedViews;
+    return snapshot;
+  }
+
+  function applySavedViewSnapshot(scene, value) {
+    const snapshot = normalizeSavedViewSnapshot(value);
+    const next = structuredClone(scene || {});
+    for (const field of SAVED_VIEW_SCENE_FIELDS) {
+      if (Object.prototype.hasOwnProperty.call(snapshot, field)) next[field] = structuredClone(snapshot[field]);
+    }
+    if (Object.prototype.hasOwnProperty.call(snapshot, 'camera')) next.camera = normalizeCamera(snapshot.camera);
+    return next;
+  }
+
+  function reorderSavedViews(value, id, offset) {
+    const views = normalizeSavedViews(value);
+    const index = views.findIndex(view => view.id === id);
+    if (index < 0) return views;
+    const target = Math.max(0, Math.min(views.length - 1, index + Number(offset || 0)));
+    if (target !== index) {
+      const [view] = views.splice(index, 1);
+      views.splice(target, 0, view);
+    }
+    return views.map((view, order) => ({ ...view, order }));
+  }
+
   function selectorForAtom(atom, scope, structureId) {
     const base = { structureId, model: atom.model };
     if (scope === 'chain') return { ...base, chain: atom.chain };
@@ -957,6 +1044,8 @@
     normalizeSavedSelections, normalizeCompoundSelector, matchSavedSelection, describeSavedSelector,
     residueDescriptor, buildStructureHierarchy, representativeAtom,
     LIGAND_ANALYSIS_DEFAULTS, normalizeLigandAnalysis, ligandSelector, ligandKey, ligandLabel,
-    groupLigands, findLigand, analyzeLigandPocket
+    groupLigands, findLigand, analyzeLigandPocket,
+    SAVED_VIEW_SCENE_FIELDS, normalizeSavedViews, normalizeSavedViewSnapshot,
+    captureSavedViewSnapshot, applySavedViewSnapshot, reorderSavedViews, validCamera
   };
 })();

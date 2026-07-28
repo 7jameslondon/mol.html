@@ -44,7 +44,10 @@
     'ligand-analysis-note', 'ligand-analysis-summary', 'empty-pocket', 'ligand-residue-list',
     'metadata-button', 'metadata-ribbon-value', 'metadata-source', 'metadata-details',
     'metadata-entities-section', 'metadata-entities', 'metadata-citation-section', 'metadata-citation',
-    'quality-stats', 'quality-observations'
+    'quality-stats', 'quality-observations',
+    'saved-views-button', 'saved-views-ribbon-value', 'create-saved-view', 'start-story',
+    'saved-view-count', 'empty-saved-views', 'saved-view-list', 'story-overlay',
+    'story-position', 'story-title', 'story-narrative', 'story-previous', 'story-next', 'story-exit'
   ].map(id => [id, document.getElementById(id)]));
 
   const undoStack = [];
@@ -59,6 +62,7 @@
   let activeMeasurementId = null;
   let activeSavedSelectionId = null;
   let currentQuality = null;
+  const storyState = { active: false, index: 0 };
   const navigatorState = {
     structureKey: '', chains: [], residueByKey: new Map(),
     expandedChains: new Set(), expandedResidues: new Set(), query: ''
@@ -70,7 +74,8 @@
     fetch: 'Find structure', representation: 'Representation', color: 'Color',
     show: 'Show and hide', inspect: 'Selection inspector', measurements: 'Measurements',
     navigator: 'Structure navigator', 'saved-selections': 'Named selections',
-    ligands: 'Ligands and pocket', metadata: 'Metadata and quality'
+    ligands: 'Ligands and pocket', metadata: 'Metadata and quality',
+    'saved-views': 'Saved views and story'
   };
 
   const renderer = new window.MoleculeRenderer(elements['molecule-viewer'], {
@@ -131,6 +136,7 @@
 
   function undo() {
     if (!undoStack.length) return;
+    exitStory(false);
     resetMeasurementInteraction(false);
     redoStack.push(snapshot());
     restoreSnapshot(undoStack.pop());
@@ -140,6 +146,7 @@
 
   function redo() {
     if (!redoStack.length) return;
+    exitStory(false);
     resetMeasurementInteraction(false);
     undoStack.push(snapshot());
     restoreSnapshot(redoStack.pop());
@@ -167,6 +174,8 @@
     syncNavigator();
     syncLigandAnalysis();
     syncMetadata();
+    syncSavedViews();
+    syncStory();
   }
 
   function syncControls() {
@@ -201,6 +210,9 @@
     const ligands = parsed ? Core.groupLigands(parsed, doc.structure.id) : [];
     elements['ligands-ribbon-value'].textContent = Core.findLigand(ligands, doc.scene.ligandAnalysis.selectedLigand, doc.structure.id)
       ? 'Pocket active' : ligands.length ? `${ligands.length} found` : 'None';
+    const savedViewCount = doc.scene.savedViews.length;
+    elements['saved-views-ribbon-value'].textContent = savedViewCount
+      ? `${savedViewCount} view${savedViewCount === 1 ? '' : 's'}` : 'None';
     elements['undo-button'].disabled = !undoStack.length;
     elements['redo-button'].disabled = !redoStack.length;
   }
@@ -1197,8 +1209,240 @@
     }
   }
 
+  function liveCamera() {
+    const view = renderer.viewer?.getView?.();
+    return Core.validCamera({ view }) ? { view: view.map(Number) } : structuredClone(doc.scene.camera);
+  }
+
+  function savedViewSnapshot() {
+    return Core.captureSavedViewSnapshot(doc.scene, {
+      camera: liveCamera(),
+      activeAnalysis: activeMeasurementId
+        ? { kind: 'measurement', id: activeMeasurementId }
+        : null
+    });
+  }
+
+  function savedViewById(id) {
+    return doc.scene.savedViews.find(view => view.id === id);
+  }
+
+  function createSavedView(options = {}, source = 'browser') {
+    const id = Core.uid('view');
+    const view = {
+      id,
+      title: String(options.title || '').trim() || `View ${doc.scene.savedViews.length + 1}`,
+      narrative: String(options.narrative ?? options.note ?? ''),
+      order: doc.scene.savedViews.length,
+      structureId: doc.structure.id,
+      snapshot: savedViewSnapshot()
+    };
+    commit(() => {
+      doc.scene.savedViews = Core.normalizeSavedViews([...doc.scene.savedViews, view]);
+    }, { source });
+    return structuredClone(savedViewById(id));
+  }
+
+  function updateSavedView(id, changes = {}, source = 'browser') {
+    const target = savedViewById(id);
+    if (!target) throw new Error(`Saved view ${id} was not found.`);
+    const next = {};
+    if ('title' in changes) next.title = String(changes.title || '').trim() || target.title;
+    if ('narrative' in changes || 'note' in changes) {
+      next.narrative = String(changes.narrative ?? changes.note ?? '');
+    }
+    if (changes.recapture || 'snapshot' in changes) {
+      next.snapshot = 'snapshot' in changes
+        ? Core.normalizeSavedViewSnapshot(changes.snapshot)
+        : savedViewSnapshot();
+      next.structureId = doc.structure.id;
+    }
+    commit(() => Object.assign(target, next), { source });
+    return structuredClone(savedViewById(id));
+  }
+
+  function duplicateSavedView(id, source = 'browser') {
+    const sourceView = savedViewById(id);
+    if (!sourceView) throw new Error(`Saved view ${id} was not found.`);
+    const copy = structuredClone(sourceView);
+    copy.id = Core.uid('view');
+    copy.title = `${sourceView.title} copy`;
+    const index = doc.scene.savedViews.indexOf(sourceView);
+    commit(() => {
+      const views = [...doc.scene.savedViews];
+      views.splice(index + 1, 0, copy);
+      doc.scene.savedViews = views.map((view, order) => ({ ...view, order }));
+    }, { source });
+    return structuredClone(savedViewById(copy.id));
+  }
+
+  function moveSavedView(id, offset, source = 'browser') {
+    if (!savedViewById(id)) throw new Error(`Saved view ${id} was not found.`);
+    commit(() => {
+      doc.scene.savedViews = Core.reorderSavedViews(doc.scene.savedViews, id, offset);
+    }, { source });
+    return structuredClone(doc.scene.savedViews);
+  }
+
+  function deleteSavedView(id, source = 'browser') {
+    if (!savedViewById(id)) return false;
+    commit(() => {
+      doc.scene.savedViews = doc.scene.savedViews
+        .filter(view => view.id !== id)
+        .map((view, order) => ({ ...view, order }));
+    }, { source });
+    if (storyState.active) {
+      storyState.index = Math.min(storyState.index, Math.max(0, doc.scene.savedViews.length - 1));
+      if (!doc.scene.savedViews.length) exitStory();
+      else syncStory();
+    }
+    return true;
+  }
+
+  function applySavedView(id, source = 'browser') {
+    const view = savedViewById(id);
+    if (!view) throw new Error(`Saved view ${id} was not found.`);
+    const snapshotStructureIds = [
+      view.structureId,
+      view.snapshot?.selection?.selector?.structureId,
+      ...(view.snapshot?.customColors || []).map(rule => rule?.selector?.structureId)
+    ].filter(Boolean);
+    if (snapshotStructureIds.some(structureId => structureId !== doc.structure.id)) {
+      throw new Error('This saved view belongs to a different structure.');
+    }
+    resetMeasurementInteraction(false);
+    const analysis = view.snapshot?.activeAnalysis;
+    commit(() => {
+      doc.scene = Core.applySavedViewSnapshot(doc.scene, view.snapshot);
+      activeMeasurementId = analysis?.kind === 'measurement'
+        && doc.scene.measurements.some(measurement => measurement.id === analysis.id)
+        ? analysis.id : null;
+    }, { source });
+    return structuredClone(doc.scene);
+  }
+
+  function syncSavedViews() {
+    const views = doc.scene.savedViews || [];
+    elements['saved-view-count'].textContent = `${views.length} view${views.length === 1 ? '' : 's'}`;
+    elements['empty-saved-views'].hidden = Boolean(views.length);
+    elements['start-story'].disabled = !views.length;
+    elements['saved-view-list'].replaceChildren();
+    const fragment = document.createDocumentFragment();
+
+    for (const [index, view] of views.entries()) {
+      const card = document.createElement('article');
+      card.className = 'saved-view-card';
+      card.dataset.savedViewId = view.id;
+
+      const header = document.createElement('div');
+      header.className = 'saved-view-card-header';
+      const order = document.createElement('span');
+      order.className = 'saved-view-order';
+      order.textContent = String(index + 1);
+      const title = document.createElement('input');
+      title.className = 'saved-view-title';
+      title.type = 'text';
+      title.maxLength = 100;
+      title.value = view.title;
+      title.setAttribute('aria-label', `Title for story view ${index + 1}`);
+      title.addEventListener('change', () => updateSavedView(view.id, { title: title.value }));
+      const remove = document.createElement('button');
+      remove.className = 'saved-view-delete';
+      remove.type = 'button';
+      remove.textContent = '×';
+      remove.title = `Delete ${view.title}`;
+      remove.setAttribute('aria-label', `Delete ${view.title}`);
+      remove.addEventListener('click', () => {
+        if (confirm(`Delete saved view “${view.title}”?`)) deleteSavedView(view.id);
+      });
+      header.append(order, title, remove);
+
+      const narrative = document.createElement('textarea');
+      narrative.className = 'saved-view-narrative';
+      narrative.maxLength = 1200;
+      narrative.placeholder = 'Optional narrative shown during the story';
+      narrative.value = view.narrative || '';
+      narrative.setAttribute('aria-label', `Narrative for ${view.title}`);
+      narrative.addEventListener('change', () => updateSavedView(view.id, { narrative: narrative.value }));
+
+      const actions = document.createElement('div');
+      actions.className = 'saved-view-actions';
+      const actionDefinitions = [
+        ['Apply', () => applySavedView(view.id), false, 'Apply this saved view'],
+        ['Recapture', () => updateSavedView(view.id, { recapture: true }), false, 'Update from the current scene'],
+        ['Duplicate', () => duplicateSavedView(view.id), false, 'Duplicate this saved view'],
+        ['↑', () => moveSavedView(view.id, -1), index === 0, 'Move earlier'],
+        ['↓', () => moveSavedView(view.id, 1), index === views.length - 1, 'Move later']
+      ];
+      for (const [label, action, disabled, titleText] of actionDefinitions) {
+        const button = document.createElement('button');
+        button.className = 'saved-view-action';
+        button.type = 'button';
+        button.textContent = label;
+        button.title = titleText;
+        button.disabled = disabled;
+        button.addEventListener('click', action);
+        actions.appendChild(button);
+      }
+      card.append(header, narrative, actions);
+      fragment.appendChild(card);
+    }
+    elements['saved-view-list'].appendChild(fragment);
+  }
+
+  function startStory(id, source = 'browser') {
+    const views = doc.scene.savedViews || [];
+    if (!views.length) throw new Error('Capture a saved view before starting a story.');
+    const requested = id ? views.findIndex(view => view.id === id) : 0;
+    storyState.active = true;
+    storyState.index = requested >= 0 ? requested : 0;
+    if (!elements['inspector'].hidden) closeInspector();
+    applySavedView(views[storyState.index].id, source);
+    syncStory();
+    elements['story-next'].focus();
+    return structuredClone(views[storyState.index]);
+  }
+
+  function navigateStory(offset, source = 'browser') {
+    if (!storyState.active) return false;
+    const views = doc.scene.savedViews || [];
+    const next = Math.max(0, Math.min(views.length - 1, storyState.index + Number(offset || 0)));
+    if (next === storyState.index) return false;
+    storyState.index = next;
+    applySavedView(views[next].id, source);
+    syncStory();
+    return true;
+  }
+
+  function syncStory() {
+    const views = doc.scene.savedViews || [];
+    if (!storyState.active || !views.length) {
+      elements['story-overlay'].hidden = true;
+      return;
+    }
+    storyState.index = Math.max(0, Math.min(storyState.index, views.length - 1));
+    const view = views[storyState.index];
+    elements['story-overlay'].hidden = false;
+    elements['story-position'].textContent = `${storyState.index + 1} of ${views.length}`;
+    elements['story-title'].textContent = view.title;
+    const narrative = String(view.narrative || '').trim();
+    elements['story-narrative'].hidden = !narrative;
+    elements['story-narrative'].textContent = narrative;
+    elements['story-previous'].disabled = storyState.index === 0;
+    elements['story-next'].disabled = storyState.index === views.length - 1;
+  }
+
+  function exitStory(restoreFocus = true) {
+    if (!storyState.active) return false;
+    storyState.active = false;
+    elements['story-overlay'].hidden = true;
+    if (restoreFocus) elements['molecule-viewer'].focus();
+    return true;
+  }
+
   function openInspector(name) {
     if (!inspectorTitles[name]) return;
+    if (storyState.active) exitStory(false);
     if (measurementDraft && name !== 'measurements') cancelMeasurement();
     activeInspector = name;
     elements['inspector-title'].textContent = inspectorTitles[name];
@@ -1267,6 +1511,7 @@
     const metadata = Core.mergeMetadata(parsedCandidate.metadata, options.metadata);
     resetMeasurementInteraction(false);
     activeSavedSelectionId = null;
+    exitStory(false);
     commit(() => {
       doc.title = displayName;
       doc.structure = { id: Core.uid('structure'), name: displayName, format: 'pdb', data: text, metadata };
@@ -1276,6 +1521,7 @@
       doc.scene.measurements = [];
       doc.scene.savedSelections = [];
       doc.scene.ligandAnalysis = Core.normalizeLigandAnalysis(null, doc.structure.id);
+      doc.scene.savedViews = [];
       doc.scene.camera = { view: null };
     }, { history: false, fit: true });
     undoStack.length = 0; redoStack.length = 0;
@@ -1659,6 +1905,17 @@
     try { focusLigandAnalysis(); }
     catch (error) { toast(error.message, 'error'); }
   });
+  elements['create-saved-view'].addEventListener('click', () => {
+    const view = createSavedView();
+    toast(`Captured “${view.title}”`, 'success');
+  });
+  elements['start-story'].addEventListener('click', () => {
+    try { startStory(); }
+    catch (error) { toast(error.message, 'error'); }
+  });
+  elements['story-previous'].addEventListener('click', () => navigateStory(-1));
+  elements['story-next'].addEventListener('click', () => navigateStory(1));
+  elements['story-exit'].addEventListener('click', () => exitStory());
   elements['open-file-button'].addEventListener('click', () => elements['file-input'].click());
   elements['close-inspector'].addEventListener('click', closeInspector);
   for (const button of inspectorButtons) {
@@ -1733,9 +1990,15 @@
 
   window.addEventListener('keydown', event => {
     const command = event.ctrlKey || event.metaKey;
+    const target = event.target;
+    const editing = target instanceof HTMLElement
+      && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
     if (command && event.key.toLowerCase() === 's') { event.preventDefault(); persistence.save(event.shiftKey); }
     else if (command && event.key.toLowerCase() === 'z' && !event.shiftKey) { event.preventDefault(); undo(); }
     else if ((command && event.key.toLowerCase() === 'y') || (command && event.shiftKey && event.key.toLowerCase() === 'z')) { event.preventDefault(); redo(); }
+    else if (storyState.active && event.key === 'Escape') { event.preventDefault(); exitStory(); }
+    else if (storyState.active && !editing && event.key === 'ArrowLeft') { event.preventDefault(); navigateStory(-1); }
+    else if (storyState.active && !editing && event.key === 'ArrowRight') { event.preventDefault(); navigateStory(1); }
     else if (event.key === 'Escape' && measurementDraft) cancelMeasurement();
     else if (event.key === 'Escape' && !elements['inspector'].hidden) closeInspector();
     else if (event.key === 'Escape') selectAtom(null);
@@ -1760,6 +2023,7 @@
     },
     getMetadata() { return structuredClone(doc.structure.metadata); },
     getDataQuality() { return structuredClone(currentQuality); },
+    getSavedViews() { return structuredClone(doc.scene.savedViews); },
     serialize() { return persistence.serialize(); },
     async save() { return persistence.save(false); },
     async importPDB(name, text) { return importPDB(name, text); },
@@ -1803,8 +2067,20 @@
       );
       return structuredClone(serializeLigandAnalysisResult(result));
     },
+    createSavedView(options) { return createSavedView(options || {}, 'agent'); },
+    updateSavedView(id, changes) { return updateSavedView(id, changes || {}, 'agent'); },
+    recaptureSavedView(id) { return updateSavedView(id, { recapture: true }, 'agent'); },
+    applySavedView(id) { return applySavedView(id, 'agent'); },
+    moveSavedView(id, offset) { return moveSavedView(id, offset, 'agent'); },
+    duplicateSavedView(id) { return duplicateSavedView(id, 'agent'); },
+    removeSavedView(id) { return deleteSavedView(id, 'agent'); },
+    startStory(id) { return startStory(id, 'agent'); },
+    previousStoryView() { return navigateStory(-1, 'agent'); },
+    nextStoryView() { return navigateStory(1, 'agent'); },
+    exitStory() { return exitStory(); },
     loadDocument(value, modifiedBy = 'agent') {
       const next = Core.normalizeDocument(typeof value === 'string' ? JSON.parse(value) : value);
+      exitStory(false);
       resetMeasurementInteraction(false);
       activeSavedSelectionId = null;
       undoStack.push(snapshot()); redoStack.length = 0;

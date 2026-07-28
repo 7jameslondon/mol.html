@@ -267,6 +267,38 @@ donor/acceptor roles, hydrogen bonds, energies, protonation, or solvent
 accessibility. Preserve unknown fields. Set `selectedLigand` to `null` to clear
 the active analysis; when replacing the structure, clear it or retarget it to
 the new `structure.id`.
+## Saved views and stories
+
+Presentation bookmarks live in `scene.savedViews`. The array is displayed in ascending
+`order`; keep each `id` stable when editing a view. A saved view stores presentation state,
+not molecular coordinates. `structureId` ties it to the structure it was captured from.
+
+```json
+{
+  "id": "view-active-site",
+  "title": "Active site",
+  "narrative": "The highlighted residues surround the bound ligand.",
+  "order": 0,
+  "structureId": "structure-id",
+  "snapshot": {
+    "representation": "sticks",
+    "colorMode": "element",
+    "background": "#07111f",
+    "showHydrogens": false,
+    "showWater": false,
+    "selection": null,
+    "customColors": [],
+    "camera": { "view": [0, 0, 0, 35, 0, 0, 0, 1] }
+  }
+}
+```
+
+`narrative` is optional and is shown with the title in story mode. A snapshot may also
+contain compatible active analysis/highlight state. Never put `savedViews`, structure data,
+measurements, saved selections, metadata, or other document content inside a snapshot.
+Applying a view changes only the presentation fields explicitly owned by its snapshot, so
+unrelated and unknown scene fields survive. Structure import clears saved views because
+their selectors and cameras are not guaranteed to be compatible with replacement coordinates.
 
 Valid `scene.representation` values are `cartoon`, `ball-and-stick`, `sticks`,
 `spacefill`, `lines`, and `surface`. Valid `scene.colorMode` values are `element`,
@@ -289,6 +321,7 @@ window.molview.listLigands()
 window.molview.getLigandAnalysis()
 window.molview.getMetadata()
 window.molview.getDataQuality()
+window.molview.getSavedViews()
 window.molview.fetchPDB('4HHB')
 window.molview.searchPDB('human hemoglobin')
 window.molview.selectAtom(317)
@@ -315,6 +348,17 @@ window.molview.setLigandAnalysis({ cutoff: 5, showContacts: false })
 window.molview.analyzeLigand(ligandKeyOrSelector, 4)
 window.molview.focusLigandAnalysis()
 window.molview.clearLigandAnalysis()
+window.molview.createSavedView({ title: 'Overview', narrative: 'Opening view' })
+window.molview.updateSavedView('view-id', { title: 'Active site', narrative: 'Look here' })
+window.molview.recaptureSavedView('view-id')
+window.molview.applySavedView('view-id')
+window.molview.moveSavedView('view-id', -1)
+window.molview.duplicateSavedView('view-id')
+window.molview.removeSavedView('view-id')
+window.molview.startStory('view-id')
+window.molview.previousStoryView()
+window.molview.nextStoryView()
+window.molview.exitStory()
 window.molview.loadDocument(updatedDocument, 'agent')
 window.molview.serialize()
 window.molview.save()

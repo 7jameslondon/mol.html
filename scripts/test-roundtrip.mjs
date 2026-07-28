@@ -50,6 +50,17 @@ doc.structure.metadata.agentReview = {
   note: 'Unknown metadata fields must round-trip unchanged.'
 };
 
+doc.scene.savedViews.push({
+  id: 'agent-saved-view-test', title: 'Agent overview',
+  narrative: 'Agent-authored story note', order: 0, structureId: doc.structure.id,
+  snapshot: {
+    representation: 'cartoon', colorMode: 'chain', background: '#102030',
+    showHydrogens: false, showWater: false,
+    selection: doc.scene.selection, customColors: doc.scene.customColors,
+    camera: { view: [0, 0, 0, 25, 0, 0, 0, 1] }
+  }
+});
+
 const json = JSON.stringify(doc, null, 2).replace(/</g, '\\u003c');
 const edited = html.replace(pattern, `$1${json}$3`);
 await mkdir(resolve('output'), { recursive: true });
@@ -63,4 +74,5 @@ if (roundtrip.scene.measurements.at(-1)?.note !== 'Agent-authored annotation') t
 if (roundtrip.scene.savedSelections.at(-1)?.futureSelectionField !== 'preserved') throw new Error('Agent named selection did not round-trip.');
 if (roundtrip.scene.ligandAnalysis?.cutoff !== 5.2 || roundtrip.scene.ligandAnalysis?.futureAnalysisField !== 'agent-preserved') throw new Error('Agent ligand analysis state did not round-trip.');
 if (roundtrip.structure.metadata.agentReview?.note !== 'Unknown metadata fields must round-trip unchanged.') throw new Error('Agent metadata did not round-trip.');
+if (roundtrip.scene.savedViews.at(-1)?.snapshot?.representation !== 'cartoon') throw new Error('Agent saved view did not round-trip.');
 console.log(`Agent edit round-trip passed: ${output}`);

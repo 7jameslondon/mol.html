@@ -61,6 +61,7 @@ const document = {
       showContacts: true,
       polarOnly: false
     },
+    savedViews: [],
     camera: { view: null }
   }
 };

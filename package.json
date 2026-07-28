@@ -12,6 +12,7 @@
     "test:navigator": "node scripts/test-navigator.mjs",
     "test:ligands": "node scripts/test-ligand-analysis.mjs",
     "test:metadata": "node scripts/test-metadata-quality.mjs",
+    "test:saved-views": "node scripts/test-saved-views.mjs",
     "test:roundtrip": "node scripts/test-roundtrip.mjs",
     "test:save-harness": "node scripts/test-save-harness.mjs"
   },
