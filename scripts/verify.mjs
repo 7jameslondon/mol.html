@@ -36,6 +36,16 @@ assert(html.includes("return `${base}.mol.html`;"), 'artifact suggests the .mol.
 assert(html.includes('<meta name="generator" content="mol.html">') && html.includes('<div class="eyebrow">MOL.HTML</div>'), 'artifact uses mol.html metadata and interface branding');
 assert(html.includes('showSaveFilePicker'), 'artifact includes in-place self-save support');
 assert(html.includes('https://files.rcsb.org/download/') && html.includes('async fetchPDB(id)'), 'artifact includes RCSB PDB fetching');
+assert(html.includes('parseMmcifDocument') && html.includes('parseStructure(data, formatHint')
+  && html.includes('async fetchStructure(id)'), 'artifact includes normalized PDB/mmCIF parsing and format-neutral fetching');
+assert(html.includes('Molecular instance') && html.includes('Functional role')
+  && html.includes('sourceIdentity'), 'artifact includes identity-aware selection and coloring concepts');
+assert(html.includes('assemblyInstances') && html.includes('expandOperatorExpression')
+  && html.includes('baseInstanceIndex'), 'artifact includes explicit non-duplicating assembly-instance transforms');
+assert(html.includes("type === 'set-measurements'") && html.includes("type === 'set-saved-selections'")
+  && html.includes("type === 'set-saved-views'") && html.includes("type === 'set-camera'"),
+  'artifact routes persisted workflows through the shared document-command layer');
+assert(html.includes('getStructureSummary()'), 'artifact exposes format-neutral structure identity and assembly summaries');
 assert(html.includes('https://search.rcsb.org/rcsbsearch/v2/query') && html.includes('https://data.rcsb.org/graphql'), 'artifact includes RCSB full-text search and metadata lookup');
 assert(html.includes('role="tab"') && html.includes('data-inspector-target="representation"'), 'artifact includes the ribbon and contextual inspector UI');
 assert(html.includes('data-inspector-target="measurements"') && html.includes('beginMeasurement(type)'), 'artifact includes persistent measurement UI and API');
@@ -56,6 +66,9 @@ const doc = JSON.parse(match[1]);
 assert(doc.format === 'molhtml/document' && doc.version === 1, 'document format is molhtml/document version 1');
 assert(doc.modified === '2026-07-27T00:00:00.000Z' && doc.modifiedBy === 'build', 'starter template metadata is deterministic');
 assert(doc.structure?.format === 'pdb' && doc.structure.data.includes('\nATOM'), 'PDB coordinates are embedded in the file');
+assert(!('topology' in doc.structure) && !('coordinateSets' in doc.structure)
+  && !('assemblies' in doc.structure) && !('indexes' in doc.structure),
+  'derived runtime topology and dense indexes are excluded from the serialized document');
 assert(doc.structure?.metadata?.provenance?.kind === 'generated-demo' && doc.structure.metadata.flags?.syntheticDemo, 'source metadata and the starter-data caveat are embedded');
 assert(doc.scene?.camera && 'view' in doc.scene.camera && Array.isArray(doc.scene.customColors)
   && Array.isArray(doc.scene.measurements) && Array.isArray(doc.scene.savedSelections)

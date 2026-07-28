@@ -1,5 +1,14 @@
 import { expect, guardUnexpectedNetwork, openArtifact, test } from './fixtures.mjs';
 
+const PERFORMANCE_BUDGETS = Object.freeze({
+  parseToRenderMs: 15_000,
+  navigatorMs: 5_000,
+  representationMs: 8_000,
+  serializationMs: 5_000,
+  jsHeapDeltaBytes: 128 * 1024 * 1024,
+  jsHeapUsedBytes: 256 * 1024 * 1024
+});
+
 function largePdb(residueCount = 1_000) {
   const lines = ['HEADER    DETERMINISTIC PERFORMANCE FIXTURE'];
   let serial = 1;
@@ -30,6 +39,7 @@ test('records deterministic large-document timing observations', async ({ contex
   await openArtifact(page);
   const pdb = largePdb();
   const timings = await page.evaluate(async text => {
+    const heapBefore = performance.memory?.usedJSHeapSize ?? null;
     const started = performance.now();
     await window.molhtml.importPDB('large-deterministic.pdb', text);
     const imported = performance.now();
@@ -39,12 +49,15 @@ test('records deterministic large-document timing observations', async ({ contex
     const represented = performance.now();
     const html = window.molhtml.serialize();
     const serialized = performance.now();
+    const heapAfter = performance.memory?.usedJSHeapSize ?? null;
     return {
       atomCount: window.molhtml.getDataQuality().summary.atomCount,
       artifactBytes: new Blob([html]).size,
       parseToRenderMs: imported - started,
       representationMs: represented - imported,
-      serializationMs: serialized - represented
+      serializationMs: serialized - represented,
+      jsHeapDeltaBytes: heapBefore == null || heapAfter == null ? null : Math.max(0, heapAfter - heapBefore),
+      jsHeapUsedBytes: heapAfter
     };
   }, pdb);
   const navigatorStarted = await page.evaluate(() => performance.now());
@@ -56,9 +69,13 @@ test('records deterministic large-document timing observations', async ({ contex
   expect(timings.artifactBytes).toBeGreaterThan(900_000);
   for (const key of ['parseToRenderMs', 'navigatorMs', 'representationMs', 'serializationMs']) {
     expect(Number.isFinite(timings[key])).toBe(true);
+    expect(timings[key], `${key} stays within its scheduled performance budget`).toBeLessThan(PERFORMANCE_BUDGETS[key]);
   }
+  expect(timings.jsHeapDeltaBytes, 'Chromium exposes precise heap observations for the scheduled gate').not.toBeNull();
+  expect(timings.jsHeapDeltaBytes).toBeLessThan(PERFORMANCE_BUDGETS.jsHeapDeltaBytes);
+  expect(timings.jsHeapUsedBytes).toBeLessThan(PERFORMANCE_BUDGETS.jsHeapUsedBytes);
   await testInfo.attach('performance-observations.json', {
-    body: Buffer.from(`${JSON.stringify(timings, null, 2)}\n`),
+    body: Buffer.from(`${JSON.stringify({ budgets: PERFORMANCE_BUDGETS, observations: timings }, null, 2)}\n`),
     contentType: 'application/json'
   });
 });

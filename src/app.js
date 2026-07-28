@@ -82,7 +82,7 @@
   const renderer = new window.MoleculeRenderer(elements['molecule-viewer'], {
     onPick: atom => handleAtomPick(atom),
     onCamera: camera => {
-      doc.scene.camera = camera;
+      Core.applyDocumentCommand(doc, { type: 'set-camera', camera });
       touchDocument('browser', false);
     }
   });
@@ -121,7 +121,13 @@
     refresh({ fit });
   }
 
+  function dispatch(command, options = {}) {
+    commit(() => { Core.applyDocumentCommand(doc, command); }, options);
+    return structuredClone(doc);
+  }
+
   function touchDocument(source = 'browser', schedule = true) {
+    if (Core.requiresDocumentV2(doc)) doc.version = 2;
     doc.revision = (Number(doc.revision) || 0) + 1;
     doc.modified = new Date().toISOString();
     doc.modifiedBy = source;
@@ -184,7 +190,9 @@
     const atoms = parsed?.atoms.length || 0;
     const residues = parsed ? new Set(parsed.atoms.map(atom => `${atom.model}|${atom.chain}|${atom.resi}|${atom.icode}`)).size : 0;
     const chains = parsed?.chains.length || 0;
-    elements['structure-stats'].textContent = `${atoms.toLocaleString()} atom${atoms === 1 ? '' : 's'} · ${residues.toLocaleString()} residue${residues === 1 ? '' : 's'} · ${chains} chain${chains === 1 ? '' : 's'}`;
+    const instances = parsed?.topology?.instances?.length || chains;
+    const instanceText = instances !== chains ? ` · ${instances} instance${instances === 1 ? '' : 's'}` : '';
+    elements['structure-stats'].textContent = `${atoms.toLocaleString()} atom${atoms === 1 ? '' : 's'} · ${residues.toLocaleString()} residue${residues === 1 ? '' : 's'} · ${chains} author chain${chains === 1 ? '' : 's'}${instanceText}`;
     elements['structure-chip'].textContent = `${doc.structure.name.toUpperCase()} · ${doc.structure.format.toUpperCase()}`;
     elements['representation'].value = doc.scene.representation;
     elements['color-mode'].value = doc.scene.colorMode;
@@ -197,7 +205,8 @@
       spacefill: 'Spacefill', lines: 'Lines', surface: 'Surface'
     })[doc.scene.representation] || doc.scene.representation;
     elements['color-ribbon-value'].textContent = ({
-      element: 'By element', chain: 'By chain', residue: 'By residue', uniform: 'Uniform'
+      element: 'By element', chain: 'By author chain', 'author-chain': 'By author chain',
+      instance: 'By instance', entity: 'By entity', role: 'By role', residue: 'By residue', uniform: 'Uniform'
     })[doc.scene.colorMode] || doc.scene.colorMode;
     elements['show-ribbon-value'].textContent = doc.scene.showHydrogens && doc.scene.showWater
       ? 'H + water' : doc.scene.showHydrogens ? 'Hydrogens' : doc.scene.showWater ? 'Water' : 'Standard';
@@ -224,6 +233,7 @@
     const sourceLabels = {
       'rcsb-data-api': 'RCSB Data API',
       'embedded-pdb-header': 'Embedded PDB header',
+      'embedded-mmcif': 'Embedded PDBx/mmCIF',
       'generated-demo': 'Generated demonstration'
     };
     const sourceLabel = sourceLabels[provenanceKind] || provenanceKind || 'Embedded document metadata';
@@ -355,7 +365,11 @@
     elements['selected-element'].textContent = atom.element;
     elements['selected-element'].style.background = Core.ELEMENT_COLORS[atom.element] || '#8795a7';
     elements['selected-name'].textContent = atom.name;
-    elements['selected-path'].textContent = `${atom.chain === '_' ? 'No chain' : `Chain ${atom.chain}`} · ${atom.resn} ${atom.resi}${atom.icode || ''}`;
+    const authorChain = atom.chain === '_' ? 'No author chain' : `Author chain ${atom.chain}`;
+    const standardIdentity = atom.sourceFormat === 'mmcif'
+      ? ` · instance ${atom.labelAsymId || atom.instanceId} · entity ${atom.labelEntityId || atom.entityId}`
+      : '';
+    elements['selected-path'].textContent = `${authorChain}${standardIdentity} · ${atom.resn} ${atom.resi}${atom.icode || ''}`;
     elements['selected-serial'].textContent = atom.serial;
     elements['selected-coordinates'].textContent = `${atom.x.toFixed(2)}, ${atom.y.toFixed(2)}, ${atom.z.toFixed(2)}`;
   }
@@ -363,7 +377,9 @@
   function selectorForCurrent(scope) {
     const atom = selectedAtom();
     if (!atom) throw new Error('Select an atom first.');
-    if (!['atom', 'residue', 'chain'].includes(scope)) throw new Error(`Unsupported current selection scope: ${scope}`);
+    if (!['atom', 'residue', 'chain', 'instance', 'entity', 'role', 'connected-component'].includes(scope)) {
+      throw new Error(`Unsupported current selection scope: ${scope}`);
+    }
     const selector = { kind: scope, ...Core.selectorForAtom(atom, scope, doc.structure.id) };
     if (scope === 'atom') selector.resn = atom.resn;
     return selector;
@@ -471,7 +487,9 @@
     const match = Core.matchSavedSelection(record, parsed?.atoms || [], doc.structure.id);
     if (!match.valid) throw new Error(match.error);
     activeSavedSelectionId = record.id;
-    commit(() => { doc.scene.savedSelections.push(record); }, { source });
+    commit(() => Core.applyDocumentCommand(doc, {
+      type: 'set-saved-selections', savedSelections: [...doc.scene.savedSelections, record]
+    }), { source });
     return structuredClone(record);
   }
 
@@ -481,23 +499,29 @@
     const saved = doc.scene.savedSelections.find(record => record.id === id);
     if (!saved) throw new Error(`Named selection ${id} was not found.`);
     if (saved.name === name) return structuredClone(saved);
-    commit(() => { saved.name = name; }, { source });
+    commit(() => Core.applyDocumentCommand(doc, {
+      type: 'set-saved-selections',
+      savedSelections: doc.scene.savedSelections.map(record => record.id === id ? { ...record, name } : record)
+    }), { source });
     return structuredClone(doc.scene.savedSelections.find(record => record.id === id));
   }
 
   function removeSavedSelection(id, source = 'browser') {
     if (!doc.scene.savedSelections.some(saved => saved.id === id)) return false;
     if (activeSavedSelectionId === id) activeSavedSelectionId = null;
-    commit(() => {
-      doc.scene.savedSelections = doc.scene.savedSelections.filter(saved => saved.id !== id);
-    }, { source });
+    commit(() => Core.applyDocumentCommand(doc, {
+      type: 'set-saved-selections',
+      savedSelections: doc.scene.savedSelections.filter(saved => saved.id !== id)
+    }), { source });
     return true;
   }
 
   function clearSavedSelections(source = 'agent') {
     if (!doc.scene.savedSelections.length) return false;
     activeSavedSelectionId = null;
-    commit(() => { doc.scene.savedSelections = []; }, { source });
+    commit(() => Core.applyDocumentCommand(doc, {
+      type: 'set-saved-selections', savedSelections: []
+    }), { source });
     return true;
   }
 
@@ -749,7 +773,9 @@
     const next = { ...doc.scene.ligandAnalysis, ...changes };
     if ('selectedLigand' in changes) next.selectedLigand = resolveLigand(changes.selectedLigand)?.selector || null;
     const normalized = Core.normalizeLigandAnalysis(next, doc.structure.id);
-    commit(() => { doc.scene.ligandAnalysis = normalized; }, { source });
+    commit(() => Core.applyDocumentCommand(doc, {
+      type: 'set-ligand-analysis', ligandAnalysis: normalized
+    }), { source });
     return structuredClone(doc.scene.ligandAnalysis);
   }
 
@@ -852,12 +878,13 @@
     const id = Core.uid('measurement');
     measurementDraft = null;
     activeMeasurementId = id;
-    commit(() => {
-      doc.scene.measurements.push({
+    commit(() => Core.applyDocumentCommand(doc, {
+      type: 'set-measurements',
+      measurements: [...doc.scene.measurements, {
         id, type,
         atoms: atoms.map(atom => Core.selectorForAtom(atom, 'atom', doc.structure.id))
-      });
-    });
+      }]
+    }));
     toast(`${measurementTypeName(type)} added`, 'success');
   }
 
@@ -873,23 +900,28 @@
     if ('note' in changes) allowed.note = String(changes.note ?? '').slice(0, 500);
     const target = doc.scene.measurements.find(measurement => measurement.id === id);
     if (!target) throw new Error(`Measurement ${id} was not found.`);
-    commit(() => Object.assign(target, allowed), { source });
+    commit(() => Core.applyDocumentCommand(doc, {
+      type: 'set-measurements',
+      measurements: doc.scene.measurements.map(measurement =>
+        measurement.id === id ? { ...measurement, ...allowed } : measurement)
+    }), { source });
     return structuredClone(doc.scene.measurements.find(measurement => measurement.id === id));
   }
 
   function deleteMeasurement(id, source = 'browser') {
     if (!doc.scene.measurements.some(measurement => measurement.id === id)) return false;
     if (activeMeasurementId === id) activeMeasurementId = null;
-    commit(() => {
-      doc.scene.measurements = doc.scene.measurements.filter(measurement => measurement.id !== id);
-    }, { source });
+    commit(() => Core.applyDocumentCommand(doc, {
+      type: 'set-measurements',
+      measurements: doc.scene.measurements.filter(measurement => measurement.id !== id)
+    }), { source });
     return true;
   }
 
   function clearMeasurements(source = 'browser') {
     if (!doc.scene.measurements.length) return false;
     activeMeasurementId = null;
-    commit(() => { doc.scene.measurements = []; }, { source });
+    commit(() => Core.applyDocumentCommand(doc, { type: 'set-measurements', measurements: [] }), { source });
     return true;
   }
 
@@ -912,17 +944,20 @@
     if (options.label != null) record.label = String(options.label).slice(0, 80);
     if (options.note != null) record.note = String(options.note).slice(0, 500);
     activeMeasurementId = record.id;
-    commit(() => { doc.scene.measurements.push(record); }, { source });
+    commit(() => Core.applyDocumentCommand(doc, {
+      type: 'set-measurements', measurements: [...doc.scene.measurements, record]
+    }), { source });
     return structuredClone(record);
   }
 
   function selectAtom(atom) {
-    commit(() => {
-      doc.scene.selection = atom ? {
+    dispatch({
+      type: 'set-selection',
+      selection: atom ? {
         kind: 'atom',
         selector: Core.selectorForAtom(atom, 'atom', doc.structure.id),
         identity: Core.atomIdentity(atom, doc.structure.id)
-      } : null;
+      } : null
     }, { history: false });
     if (atom && elements['inspector'].hidden) openInspector('inspect');
   }
@@ -1237,9 +1272,9 @@
       structureId: doc.structure.id,
       snapshot: savedViewSnapshot()
     };
-    commit(() => {
-      doc.scene.savedViews = Core.normalizeSavedViews([...doc.scene.savedViews, view]);
-    }, { source });
+    commit(() => Core.applyDocumentCommand(doc, {
+      type: 'set-saved-views', savedViews: [...doc.scene.savedViews, view]
+    }), { source });
     return structuredClone(savedViewById(id));
   }
 
@@ -1257,7 +1292,10 @@
         : savedViewSnapshot();
       next.structureId = doc.structure.id;
     }
-    commit(() => Object.assign(target, next), { source });
+    commit(() => Core.applyDocumentCommand(doc, {
+      type: 'set-saved-views',
+      savedViews: doc.scene.savedViews.map(view => view.id === id ? { ...view, ...next } : view)
+    }), { source });
     return structuredClone(savedViewById(id));
   }
 
@@ -1271,26 +1309,29 @@
     commit(() => {
       const views = [...doc.scene.savedViews];
       views.splice(index + 1, 0, copy);
-      doc.scene.savedViews = views.map((view, order) => ({ ...view, order }));
+      Core.applyDocumentCommand(doc, {
+        type: 'set-saved-views', savedViews: views.map((view, order) => ({ ...view, order }))
+      });
     }, { source });
     return structuredClone(savedViewById(copy.id));
   }
 
   function moveSavedView(id, offset, source = 'browser') {
     if (!savedViewById(id)) throw new Error(`Saved view ${id} was not found.`);
-    commit(() => {
-      doc.scene.savedViews = Core.reorderSavedViews(doc.scene.savedViews, id, offset);
-    }, { source });
+    commit(() => Core.applyDocumentCommand(doc, {
+      type: 'set-saved-views', savedViews: Core.reorderSavedViews(doc.scene.savedViews, id, offset)
+    }), { source });
     return structuredClone(doc.scene.savedViews);
   }
 
   function deleteSavedView(id, source = 'browser') {
     if (!savedViewById(id)) return false;
-    commit(() => {
-      doc.scene.savedViews = doc.scene.savedViews
+    commit(() => Core.applyDocumentCommand(doc, {
+      type: 'set-saved-views',
+      savedViews: doc.scene.savedViews
         .filter(view => view.id !== id)
-        .map((view, order) => ({ ...view, order }));
-    }, { source });
+        .map((view, order) => ({ ...view, order }))
+    }), { source });
     if (storyState.active) {
       storyState.index = Math.min(storyState.index, Math.max(0, doc.scene.savedViews.length - 1));
       if (!doc.scene.savedViews.length) exitStory();
@@ -1313,7 +1354,7 @@
     resetMeasurementInteraction(false);
     const analysis = view.snapshot?.activeAnalysis;
     commit(() => {
-      doc.scene = Core.applySavedViewSnapshot(doc.scene, view.snapshot);
+      Core.applyDocumentCommand(doc, { type: 'apply-saved-view', snapshot: view.snapshot });
       activeMeasurementId = analysis?.kind === 'measurement'
         && doc.scene.measurements.some(measurement => measurement.id === analysis.id)
         ? analysis.id : null;
@@ -1475,11 +1516,16 @@
     const atom = selectedAtom();
     if (!atom) throw new Error('Select an atom first.');
     const selector = Core.selectorForAtom(atom, scope, doc.structure.id);
-    commit(() => {
-      doc.scene.customColors.push({
+    dispatch({
+      type: 'add-custom-color',
+      rule: {
         id: Core.uid('color'), scope, selector, color,
-        label: scope === 'chain' ? `Chain ${atom.chain}` : scope === 'residue' ? `${atom.resn} ${atom.resi}${atom.icode || ''}` : Core.atomLabel(atom)
-      });
+        label: scope === 'chain' ? `Author chain ${atom.chain}`
+          : scope === 'instance' ? `Molecular instance ${atom.instanceId}`
+            : scope === 'entity' ? `Entity ${atom.entityId}`
+              : scope === 'role' ? `${atom.role} role`
+                : scope === 'residue' ? `${atom.resn} ${atom.resi}${atom.icode || ''}` : Core.atomLabel(atom)
+      }
     });
   }
 
@@ -1511,28 +1557,23 @@
     }
   }
 
-  async function importPDB(name, text, options = {}) {
-    const parsedCandidate = Core.parsePDB(text);
-    const displayName = options.displayName || name.replace(/\.(pdb|ent|txt)$/i, '') || 'Imported molecule';
+  async function importStructure(name, text, options = {}) {
+    const parsedCandidate = Core.parseStructure(text, options.format || name);
+    const displayName = options.displayName || name.replace(/\.(pdb|ent|cif|mmcif|txt)$/i, '') || 'Imported molecule';
     const metadata = Core.mergeMetadata(parsedCandidate.metadata, options.metadata);
     resetMeasurementInteraction(false);
     activeSavedSelectionId = null;
     exitStory(false);
-    commit(() => {
-      doc.title = displayName;
-      doc.structure = { id: Core.uid('structure'), name: displayName, format: 'pdb', data: text, metadata };
-      if (options.source) doc.structure.source = structuredClone(options.source);
-      doc.scene.selection = null;
-      doc.scene.customColors = [];
-      doc.scene.measurements = [];
-      doc.scene.savedSelections = [];
-      doc.scene.ligandAnalysis = Core.normalizeLigandAnalysis(null, doc.structure.id);
-      doc.scene.savedViews = [];
-      doc.scene.camera = { view: null };
-    }, { history: false, fit: true });
+    const structure = { id: Core.uid('structure'), name: displayName, format: parsedCandidate.format, data: text, metadata };
+    if (options.source) structure.source = structuredClone(options.source);
+    dispatch({ type: 'replace-structure', title: displayName, structure }, { history: false, fit: true });
     undoStack.length = 0; redoStack.length = 0;
     toast(`Loaded ${parsedCandidate.atoms.length.toLocaleString()} atoms from ${name}`, 'success');
     return structuredClone(doc);
+  }
+
+  async function importPDB(name, text, options = {}) {
+    return importStructure(name, text, { ...options, format: 'pdb' });
   }
 
   function normalizePDBId(value) {
@@ -1746,19 +1787,28 @@
     try { id = normalizePDBId(idValue); }
     catch (error) { setFetchState(error.message, 'error'); throw error; }
 
-    const url = `https://files.rcsb.org/download/${encodeURIComponent(id)}.pdb`;
     fetchController?.abort();
     const controller = new AbortController();
     fetchController = controller;
     const timeout = setTimeout(() => controller.abort(), 20000);
     setFetchState(`Fetching ${id} from RCSB…`, '', true);
     try {
-      const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'text/plain' } });
-      if (!response.ok) {
-        if (response.status === 404) throw new Error(`${id} has no legacy PDB file. Check the ID; some entries are available only as mmCIF.`);
-        throw new Error(`RCSB returned HTTP ${response.status}.`);
+      const candidates = [
+        { format: 'pdb', extension: 'pdb', kind: 'rcsb-pdb' },
+        { format: 'mmcif', extension: 'cif', kind: 'rcsb-mmcif' }
+      ];
+      let coordinate = null;
+      for (const candidate of candidates) {
+        const candidateUrl = `https://files.rcsb.org/download/${encodeURIComponent(id)}.${candidate.extension}`;
+        const response = await fetch(candidateUrl, { signal: controller.signal, headers: { Accept: 'text/plain' } });
+        if (response.ok) {
+          coordinate = { ...candidate, url: candidateUrl, text: await response.text() };
+          break;
+        }
+        if (response.status !== 404) throw new Error(`RCSB returned HTTP ${response.status}.`);
       }
-      const text = await response.text();
+      if (!coordinate) throw new Error(`${id} has no downloadable PDB or text mmCIF coordinate file.`);
+      const { format, extension, kind, url, text } = coordinate;
       const fetchedAt = new Date().toISOString();
       let embeddedMetadata;
       try {
@@ -1768,13 +1818,17 @@
       } catch (metadataError) {
         if (controller.signal.aborted && fetchController !== controller) throw metadataError;
         embeddedMetadata = {
-          provenance: { kind: 'embedded-pdb-header', coordinateSource: 'rcsb-pdb', coordinateUrl: url, fetchedAt },
-          metadataWarnings: [`RCSB Data API metadata was unavailable during fetch; displayed metadata is limited to the embedded PDB header (${metadataError.message}).`]
+          provenance: {
+            kind: format === 'mmcif' ? 'embedded-mmcif' : 'embedded-pdb-header',
+            coordinateSource: kind, coordinateUrl: url, fetchedAt
+          },
+          metadataWarnings: [`RCSB Data API metadata was unavailable during fetch; displayed metadata is limited to the embedded coordinate file (${metadataError.message}).`]
         };
       }
-      const result = await importPDB(`${id}.pdb`, text, {
+      const result = await importStructure(`${id}.${extension}`, text, {
+        format,
         displayName: `PDB ${id}`,
-        source: { kind: 'rcsb-pdb', pdbId: id, url, fetchedAt },
+        source: { kind, pdbId: id, url, fetchedAt },
         metadata: embeddedMetadata
       });
       elements['pdb-id'].value = id;
@@ -1800,25 +1854,23 @@
     }
   }
 
-  elements['representation'].addEventListener('change', event => commit(() => { doc.scene.representation = event.target.value; }));
-  elements['color-mode'].addEventListener('change', event => commit(() => { doc.scene.colorMode = event.target.value; }));
-  elements['show-hydrogens'].addEventListener('change', event => commit(() => { doc.scene.showHydrogens = event.target.checked; }));
-  elements['show-water'].addEventListener('change', event => commit(() => { doc.scene.showWater = event.target.checked; }));
+  elements['representation'].addEventListener('change', event => dispatch({ type: 'set-scene-field', field: 'representation', value: event.target.value }));
+  elements['color-mode'].addEventListener('change', event => dispatch({ type: 'set-scene-field', field: 'colorMode', value: event.target.value }));
+  elements['show-hydrogens'].addEventListener('change', event => dispatch({ type: 'set-scene-field', field: 'showHydrogens', value: event.target.checked }));
+  elements['show-water'].addEventListener('change', event => dispatch({ type: 'set-scene-field', field: 'showWater', value: event.target.checked }));
   elements['background-color'].addEventListener('input', event => {
-    doc.scene.background = event.target.value;
+    Core.applyDocumentCommand(doc, { type: 'set-scene-field', field: 'background', value: event.target.value });
     elements['background-value'].textContent = event.target.value;
     renderer.render();
   });
   elements['background-color'].addEventListener('focus', () => { backgroundBeforeEdit = doc.scene.background; });
   elements['background-color'].addEventListener('change', event => {
     const next = event.target.value;
-    doc.scene.background = backgroundBeforeEdit;
-    commit(() => { doc.scene.background = next; });
+    Core.applyDocumentCommand(doc, { type: 'set-scene-field', field: 'background', value: backgroundBeforeEdit });
+    dispatch({ type: 'set-scene-field', field: 'background', value: next });
     backgroundBeforeEdit = next;
   });
-  elements['reset-appearance'].addEventListener('click', () => commit(() => {
-    Object.assign(doc.scene, { representation: 'ball-and-stick', colorMode: 'element', background: '#07111f', showHydrogens: false, showWater: false, customColors: [] });
-  }));
+  elements['reset-appearance'].addEventListener('click', () => dispatch({ type: 'reset-appearance' }));
   elements['clear-selection'].addEventListener('click', () => selectAtom(null));
   elements['clear-selection-panel'].addEventListener('click', () => selectAtom(null));
   elements['start-measurement'].addEventListener('click', () => {
@@ -1939,7 +1991,7 @@
   elements['file-input'].addEventListener('change', async event => {
     const file = event.target.files?.[0];
     if (!file) return;
-    try { await importPDB(file.name, await file.text()); }
+    try { await importStructure(file.name, await file.text()); }
     catch (error) { toast(`Could not load ${file.name}: ${error.message}`, 'error'); }
     event.target.value = '';
   });
@@ -2007,7 +2059,7 @@
   });
 
   window.molhtml = Object.freeze({
-    version: '0.7.0',
+    version: '0.8.0',
     get document() { return structuredClone(doc); },
     getSelection() { return structuredClone(doc.scene.selection); },
     getMeasurements() { return structuredClone(doc.scene.measurements); },
@@ -2024,10 +2076,38 @@
     },
     getMetadata() { return structuredClone(doc.structure.metadata); },
     getDataQuality() { return structuredClone(currentQuality); },
+    getStructureSummary() {
+      return structuredClone({
+        format: parsed?.format || doc.structure.format,
+        atomCount: parsed?.atoms.length || 0,
+        residueCount: parsed?.topology?.residues?.length || 0,
+        coordinateModels: parsed?.coordinateSets?.map(set => set.modelNumber) || [],
+        entities: parsed?.topology?.entities?.map(entity => ({
+          id: entity.id, sourceId: entity.sourceId, role: entity.role, subtype: entity.subtype,
+          description: entity.description, instanceIds: entity.instanceIndices.map(index => parsed.topology.instances[index]?.id)
+        })) || [],
+        instances: parsed?.topology?.instances?.map(instance => ({
+          id: instance.id, sourceId: instance.sourceId, entityId: parsed.topology.entities[instance.entityIndex]?.id,
+          authorChains: instance.authAsymIds, role: instance.role, subtype: instance.subtype,
+          identityProvenance: instance.identityProvenance
+        })) || [],
+        assemblies: parsed?.assemblies?.map(assembly => ({
+          id: assembly.id, details: assembly.details, oligomericDetails: assembly.oligomericDetails,
+          oligomericCount: assembly.oligomericCount, assemblyInstanceCount: assembly.instances.length,
+          generators: assembly.generators.map(generator => ({
+            asymIds: generator.asymIds, operatorExpression: generator.operatorExpression,
+            operatorIds: generator.operatorIds, operatorSequences: generator.operatorSequences
+          }))
+        })) || [],
+        diagnostics: parsed?.diagnostics || null
+      });
+    },
     getSavedViews() { return structuredClone(doc.scene.savedViews); },
     serialize() { return persistence.serialize(); },
     async save() { return persistence.save(false); },
+    async importStructure(name, text, format) { return importStructure(name, text, { format }); },
     async importPDB(name, text) { return importPDB(name, text); },
+    async fetchStructure(id) { return fetchPDB(id); },
     async fetchPDB(id) { return fetchPDB(id); },
     async searchPDB(query) { return searchPDB(query); },
     selectAtom(serial) {
