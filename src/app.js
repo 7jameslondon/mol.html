@@ -925,15 +925,38 @@
     return true;
   }
 
-  function addMeasurement(type, serials, options = {}, source = 'agent') {
+  function resolveAtomReference(reference) {
+    let selector;
+    if (typeof reference === 'number' || typeof reference === 'string') {
+      const serial = Number(reference);
+      if (!Number.isFinite(serial)) throw new Error('Atom serials must be numbers.');
+      selector = { serial };
+    } else if (reference && typeof reference === 'object' && !Array.isArray(reference)) {
+      selector = reference.selector && typeof reference.selector === 'object' ? reference.selector : reference;
+    } else {
+      throw new Error('An atom reference must be a serial number or selector object.');
+    }
+    if (selector.structureId && selector.structureId !== doc.structure.id) {
+      throw new Error('The atom reference belongs to a different structure.');
+    }
+    const scoped = { ...selector, structureId: selector.structureId || doc.structure.id };
+    const matches = parsed?.atoms.filter(atom => Core.atomMatchesSelector(atom, scoped, doc.structure.id)) || [];
+    if (!matches.length) throw new Error('The atom reference was not found.');
+    if (matches.length > 1) {
+      const subject = scoped.serial == null ? 'The atom reference' : `Atom serial ${scoped.serial}`;
+      throw new Error(`${subject} is ambiguous across coordinate models; provide { model, serial }.`);
+    }
+    return matches[0];
+  }
+
+  function addMeasurement(type, atomReferences, options = {}, source = 'agent') {
     const expected = Core.MEASUREMENT_ATOM_COUNTS[type];
     if (!expected) throw new Error(`Unsupported measurement type: ${type}`);
-    if (!Array.isArray(serials) || serials.length !== expected) {
-      throw new Error(`${measurementTypeName(type)} requires ${expected} atom serials.`);
+    if (!Array.isArray(atomReferences) || atomReferences.length !== expected) {
+      throw new Error(`${measurementTypeName(type)} requires ${expected} atom references.`);
     }
-    const atoms = serials.map(serial => parsed?.atoms.find(atom => atom.serial === Number(serial)));
-    if (!atoms.every(Boolean)) throw new Error('One or more atom serials were not found.');
-    if (new Set(atoms.map(atom => `${atom.model}:${atom.serial}`)).size !== atoms.length) {
+    const atoms = atomReferences.map(resolveAtomReference);
+    if (new Set(atoms.map(atom => atom.index)).size !== atoms.length) {
       throw new Error('Each measurement atom must be distinct.');
     }
     const record = {
@@ -2110,9 +2133,8 @@
     async fetchStructure(id) { return fetchPDB(id); },
     async fetchPDB(id) { return fetchPDB(id); },
     async searchPDB(query) { return searchPDB(query); },
-    selectAtom(serial) {
-      const atom = parsed?.atoms.find(candidate => candidate.serial === Number(serial));
-      if (!atom) throw new Error(`Atom serial ${serial} was not found.`);
+    selectAtom(reference) {
+      const atom = resolveAtomReference(reference);
       selectAtom(atom);
       return structuredClone(doc.scene.selection);
     },
@@ -2122,7 +2144,7 @@
       return startMeasurement(type);
     },
     cancelMeasurement() { return cancelMeasurement(); },
-    addMeasurement(type, serials, options) { return addMeasurement(type, serials, options, 'agent'); },
+    addMeasurement(type, atomReferences, options) { return addMeasurement(type, atomReferences, options, 'agent'); },
     updateMeasurement(id, changes) { return updateMeasurement(id, changes || {}, 'agent'); },
     removeMeasurement(id) { return deleteMeasurement(id, 'agent'); },
     clearMeasurements() { return clearMeasurements('agent'); },

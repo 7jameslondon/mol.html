@@ -5,6 +5,7 @@ import {
 } from './fixtures.mjs';
 
 const mmcif = await readFile(resolve('fixtures/7ril-identity.cif'), 'utf8');
+const multiModelMmcif = await readFile(resolve('fixtures/multi-model.cif'), 'utf8');
 
 test('imports, renders, selects, colors, and serializes an identity-aware mmCIF document', async ({ context, page }) => {
   await guardUnexpectedNetwork(context);
@@ -56,6 +57,24 @@ test('imports, renders, selects, colors, and serializes an identity-aware mmCIF 
   expect(reopened.document.version).toBe(2);
   expect(reopened.document.structure.format).toBe('mmcif');
   expect(reopened.match).toMatchObject({ valid: true, atomCount: 2 });
+  await expectHealthyRender(page);
+  assertNoRuntimeErrors();
+});
+
+test('renders and addresses multiple mmCIF coordinate models independently', async ({ context, page }) => {
+  await guardUnexpectedNetwork(context);
+  const assertNoRuntimeErrors = observeRuntime(page);
+  await openArtifact(page);
+  await page.evaluate(text => window.molhtml.importStructure('multi-model.cif', text), multiModelMmcif);
+
+  const summary = await page.evaluate(() => window.molhtml.getStructureSummary());
+  expect(summary).toMatchObject({ format: 'mmcif', atomCount: 4, coordinateModels: [1, 2] });
+  const selection = await page.evaluate(() => window.molhtml.selectAtom({ model: 2, serial: 3 }));
+  expect(selection.selector).toMatchObject({ model: 2, serial: 3 });
+  const saved = await page.evaluate(() => window.molhtml.saveCurrentSelection('Second mmCIF model atom'));
+  const match = await page.evaluate(id => window.molhtml.getSavedSelectionMatch(id), saved.id);
+  expect(match).toMatchObject({ valid: true, atomCount: 1 });
+  expect(match.atoms[0]).toMatchObject({ model: 2, serial: 3 });
   await expectHealthyRender(page);
   assertNoRuntimeErrors();
 });

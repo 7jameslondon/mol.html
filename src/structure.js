@@ -19,6 +19,12 @@
     H: .31, C: .76, N: .71, O: .66, F: .57, P: 1.07, S: 1.05,
     CL: 1.02, BR: 1.2, I: 1.39, FE: 1.24, MG: 1.3, ZN: 1.22, CA: 1.76
   };
+  const ELEMENT_SYMBOLS = new Set((
+    'H HE LI BE B C N O F NE NA MG AL SI P S CL AR K CA SC TI V CR MN FE CO NI CU ZN GA GE AS SE BR KR '
+    + 'RB SR Y ZR NB MO TC RU RH PD AG CD IN SN SB TE I XE CS BA LA CE PR ND PM SM EU GD TB DY HO ER TM '
+    + 'YB LU HF TA W RE OS IR PT AU HG TL PB BI PO AT RN FR RA AC TH PA U NP PU AM CM BK CF ES FM MD NO LR '
+    + 'RF DB SG BH HS MT DS RG CN NH FL MC LV TS OG'
+  ).split(' '));
   const MAX_ATOMS = 2_000_000;
   const spatialIndexCache = new WeakMap();
 
@@ -45,13 +51,16 @@
 
   function inferElement(rawName, explicit) {
     const provided = String(explicit || '').trim().toUpperCase();
-    if (provided && /^[A-Z]{1,2}$/.test(provided)) return provided;
-    const letters = String(rawName || '').replace(/[^A-Za-z]/g, '').toUpperCase();
-    if (!letters) return 'C';
-    if (letters.length > 1 && ['CL', 'BR', 'FE', 'MG', 'ZN', 'CA', 'NA', 'MN', 'CU', 'NI', 'CO'].includes(letters.slice(0, 2))) {
-      return letters.slice(0, 2);
-    }
-    return letters[0];
+    if (ELEMENT_SYMBOLS.has(provided)) return provided;
+    const source = String(rawName || '');
+    const field = source.padEnd(4, ' ').slice(0, 4);
+    let inferred = '';
+    if (/^[0-9]/.test(field)) inferred = field[1];
+    else if (field[0] === ' ') inferred = field[1];
+    else inferred = field.slice(0, 2).replace(/[^A-Za-z]/g, '');
+    inferred = String(inferred || source.match(/[A-Za-z]/)?.[0] || 'C').toUpperCase();
+    if (ELEMENT_SYMBOLS.has(inferred)) return inferred;
+    return ELEMENT_SYMBOLS.has(inferred[0]) ? inferred[0] : 'C';
   }
 
   function parsePDBCoordinates(value) {
@@ -119,7 +128,6 @@
           if (atoms.length >= MAX_ATOMS) throw new Error(`The structure exceeds the ${MAX_ATOMS.toLocaleString()} atom safety limit.`);
           atoms.push(atom);
           serialMap.set(`${model}|${serial}`, atom.index);
-          if (!serialMap.has(`*|${serial}`)) serialMap.set(`*|${serial}`, atom.index);
         } else {
           diagnostics.skippedCoordinateLines += 1;
           diagnostics.malformedCoordinateLines += 1;
@@ -139,11 +147,14 @@
 
     if (!atoms.length) throw new Error('No ATOM or HETATM coordinates were found in this PDB file.');
     const bonds = [];
+    const modelNumbers = [...new Set(atoms.map(atom => atom.model))];
     for (const key of explicitBondSerials) {
       const [left, right] = key.split(':').map(Number);
-      const a = serialMap.get(`*|${left}`);
-      const b = serialMap.get(`*|${right}`);
-      if (a != null && b != null) bonds.push([a, b]);
+      for (const modelNumber of modelNumbers) {
+        const a = serialMap.get(`${modelNumber}|${left}`);
+        const b = serialMap.get(`${modelNumber}|${right}`);
+        if (a != null && b != null) bonds.push([a, b]);
+      }
     }
     inferBonds(atoms, bonds);
     return finalizeStructure({
@@ -802,33 +813,40 @@
     const bonds = [];
     const existing = new Set();
     for (const row of categories.struct_conn || []) {
-      const left = findStructConnAtom(atoms, row, 'ptnr1');
-      const right = findStructConnAtom(atoms, row, 'ptnr2');
-      if (left == null || right == null || left === right) continue;
-      const key = left < right ? `${left}:${right}` : `${right}:${left}`;
-      if (!existing.has(key)) {
-        existing.add(key);
-        bonds.push([left, right]);
+      const leftAtoms = findStructConnAtoms(atoms, row, 'ptnr1');
+      const rightAtoms = findStructConnAtoms(atoms, row, 'ptnr2');
+      for (const left of leftAtoms) for (const right of rightAtoms) {
+        if (left.model !== right.model || left.index === right.index) continue;
+        if (left.altLoc && right.altLoc && left.altLoc !== right.altLoc) continue;
+        const key = left.index < right.index ? `${left.index}:${right.index}` : `${right.index}:${left.index}`;
+        if (!existing.has(key)) {
+          existing.add(key);
+          bonds.push([left.index, right.index]);
+        }
       }
     }
     return bonds;
   }
 
-  function findStructConnAtom(atoms, row, prefix) {
+  function findStructConnAtoms(atoms, row, prefix) {
     const labelAsymId = cifValue(row[`${prefix}_label_asym_id`]);
     const labelSeqId = cifValue(row[`${prefix}_label_seq_id`]);
     const labelCompId = cifValue(row[`${prefix}_label_comp_id`]);
     const labelAtomId = cifValue(row[`${prefix}_label_atom_id`]);
     const authAsymId = cifValue(row[`${prefix}_auth_asym_id`]);
     const authSeqId = cifValue(row[`${prefix}_auth_seq_id`]);
-    return atoms.find(atom =>
+    const labelAltId = cifValue(row[`pdbx_${prefix}_label_alt_id`] ?? row[`${prefix}_label_alt_id`]);
+    const insertionCode = cifValue(row[`pdbx_${prefix}_pdb_ins_code`]);
+    return atoms.filter(atom =>
       (labelAsymId == null || atom.labelAsymId === labelAsymId)
       && (labelSeqId == null || atom.labelSeqId === labelSeqId)
       && (labelCompId == null || atom.labelCompId === labelCompId)
       && (labelAtomId == null || atom.labelAtomId === labelAtomId)
       && (authAsymId == null || atom.authAsymId === authAsymId)
       && (authSeqId == null || atom.authSeqId === authSeqId)
-    )?.index;
+      && (labelAltId == null || atom.labelAltId === labelAltId)
+      && (insertionCode == null || atom.icode === insertionCode)
+    );
   }
 
   function mmcifAssemblies(categories) {

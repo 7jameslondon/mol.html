@@ -2,13 +2,14 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
-const [structureSource, modelSource, mmcif, pdb, sharedChainPdb, multiModelPdb, conformanceCif, equivalentCif, malformedCif, pdbAssemblyText] = await Promise.all([
+const [structureSource, modelSource, mmcif, pdb, sharedChainPdb, multiModelPdb, multiModelCif, conformanceCif, equivalentCif, malformedCif, pdbAssemblyText] = await Promise.all([
   readFile(new URL('../src/structure.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/model.js', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/7ril-identity.cif', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/mini-peptide.pdb', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/7ril-author-chain.pdb', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/multi-model.pdb', import.meta.url), 'utf8'),
+  readFile(new URL('../fixtures/multi-model.cif', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/identity-conformance.cif', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/mini-peptide.cif', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/malformed.cif', import.meta.url), 'utf8'),
@@ -69,6 +70,11 @@ function assertNormalizedInvariants(structure) {
 
 assert.equal(Structure.detectStructureFormat(mmcif, 'pdb'), 'mmcif', 'content detection overrides a misleading hint');
 assert.equal(Structure.detectStructureFormat(pdb, 'mmcif'), 'pdb', 'PDB content is detected independently of its extension');
+assert.equal(Structure.inferElement(' CA ', ''), 'C', 'right-aligned PDB alpha carbon remains carbon');
+assert.equal(Structure.inferElement('CA  ', ''), 'CA', 'left-aligned two-character PDB element remains calcium');
+assert.equal(Structure.inferElement('1HG ', ''), 'H', 'leading-digit PDB hydrogen names infer hydrogen');
+assert.equal(Structure.inferElement('CL  ', ''), 'CL', 'two-character element names retain both characters');
+assert.equal(Structure.inferElement(' CA ', 'ZN'), 'ZN', 'an explicit valid element takes precedence');
 
 const parsed = Core.parseStructure(mmcif, 'mmcif');
 assertNormalizedInvariants(parsed);
@@ -195,6 +201,17 @@ assert.equal(multiModel.coordinateSets.length, 2);
 assert.deepEqual(Array.from(multiModel.coordinateSets, set => set.modelNumber), [1, 2]);
 assert.equal(multiModel.atoms.length, 4);
 assert.equal(multiModel.topology.instances.length, 1, 'coordinate models share one inferred molecular instance');
+const explicitMultiModel = Core.parseStructure(
+  multiModelPdb.replaceAll('1.300', '4.000').replace(/END\s*$/, 'CONECT    1    2\nEND\n'), 'pdb'
+);
+assert.deepEqual(JSON.parse(JSON.stringify(explicitMultiModel.bonds)), [[0, 1], [2, 3]],
+  'PDB CONECT records are resolved independently in every coordinate model');
+
+const multiModelMmcif = Core.parseStructure(multiModelCif, 'mmcif');
+assertNormalizedInvariants(multiModelMmcif);
+assert.deepEqual(Array.from(multiModelMmcif.coordinateSets, set => set.modelNumber), [1, 2]);
+assert.deepEqual(JSON.parse(JSON.stringify(multiModelMmcif.bonds)), [[0, 1], [2, 3]],
+  'mmCIF struct_conn records are resolved independently in every coordinate model');
 
 const pdbAssembly = Core.parseStructure(pdbAssemblyText, 'pdb');
 assertNormalizedInvariants(pdbAssembly);

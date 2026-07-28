@@ -51,11 +51,21 @@
           this.viewer.removeAllModels();
           const rendererFormat = doc.structure.format === 'mmcif' ? 'cif' : doc.structure.format;
           const multiplePdbModels = doc.structure.format === 'pdb' && this.parsed.coordinateSets.length > 1;
-          this.models = multiplePdbModels
-            ? this.viewer.addModels(doc.structure.data, rendererFormat, { keepH: true })
-            : [this.viewer.addModel(doc.structure.data, rendererFormat, { keepH: true })];
+          const multipleMmcifModels = doc.structure.format === 'mmcif' && this.parsed.coordinateSets.length > 1;
+          if (multipleMmcifModels) {
+            this.models = this.parsed.coordinateSets.map(coordinateSet => {
+              const atoms = coordinateSet.atomIndices.map(index => this.parsed.atoms[index]);
+              return this.viewer.addModel(rendererCifForAtoms(atoms, coordinateSet.modelNumber), 'cif', { keepH: true });
+            });
+          } else {
+            this.models = multiplePdbModels
+              ? this.viewer.addModels(doc.structure.data, rendererFormat, { keepH: true })
+              : [this.viewer.addModel(doc.structure.data, rendererFormat, { keepH: true })];
+          }
           this.model = this.models[0] || null;
-          this.buildAtomMapping();
+          if (multipleMmcifModels) this.buildCoordinateSetAtomMapping();
+          else this.buildAtomMapping();
+          if (multipleMmcifModels) this.applyNormalizedBonds();
           fit = true;
         }
 
@@ -382,6 +392,53 @@
       }
     }
 
+    buildCoordinateSetAtomMapping() {
+      this.domainByRendererKey = new Map();
+      this.rendererLocationByDomainIndex = new Map();
+      for (let modelIndex = 0; modelIndex < this.models.length; modelIndex += 1) {
+        const rendered = this.models[modelIndex]?.selectedAtoms?.({}) || [];
+        const atomIndices = this.parsed.coordinateSets[modelIndex]?.atomIndices || [];
+        if (rendered.length !== atomIndices.length) {
+          throw new Error(`Renderer parsed ${rendered.length} atoms for coordinate model ${modelIndex + 1}, but the molecular model parsed ${atomIndices.length}.`);
+        }
+        for (let atomIndex = 0; atomIndex < atomIndices.length; atomIndex += 1) {
+          const atom = this.parsed.atoms[atomIndices[atomIndex]];
+          const rendererAtom = rendered[atomIndex];
+          if (!coordinatesAgree(atom, rendererAtom)) {
+            throw new Error(`Could not map molecular atom ${atom.index + 1} into coordinate model ${modelIndex + 1}.`);
+          }
+          const rendererIndex = Number(rendererAtom.index);
+          const rendererModel = Number(rendererAtom.model);
+          if (!Number.isInteger(rendererIndex) || !Number.isInteger(rendererModel)) {
+            throw new Error('Renderer atom mapping is missing a numeric model or atom index.');
+          }
+          this.domainByRendererKey.set(`${rendererModel}|${rendererIndex}`, atom);
+          this.rendererLocationByDomainIndex.set(atom.index, { model: rendererModel, index: rendererIndex });
+        }
+      }
+    }
+
+    applyNormalizedBonds() {
+      const renderedByKey = new Map();
+      for (const model of this.models) for (const atom of model?.selectedAtoms?.({}) || []) {
+        atom.bonds = [];
+        atom.bondOrder = [];
+        renderedByKey.set(`${Number(atom.model)}|${Number(atom.index)}`, atom);
+      }
+      for (const [leftIndex, rightIndex] of this.parsed?.bonds || []) {
+        const leftLocation = this.rendererLocationByDomainIndex.get(leftIndex);
+        const rightLocation = this.rendererLocationByDomainIndex.get(rightIndex);
+        if (!leftLocation || !rightLocation || leftLocation.model !== rightLocation.model) continue;
+        const left = renderedByKey.get(`${leftLocation.model}|${leftLocation.index}`);
+        const right = renderedByKey.get(`${rightLocation.model}|${rightLocation.index}`);
+        if (!left || !right) continue;
+        left.bonds.push(right.index);
+        left.bondOrder.push(1);
+        right.bonds.push(left.index);
+        right.bondOrder.push(1);
+      }
+    }
+
     domainAtomForRenderer(atom) {
       return this.domainByRendererKey.get(`${Number(atom?.model)}|${Number(atom?.index)}`) || null;
     }
@@ -489,6 +546,37 @@
 
   function domainAtomKey(atom) {
     return `${coordinateKey(atom)}|${String(atom?.name || '').trim()}|${String(atom?.resn || '').trim()}`;
+  }
+
+  function rendererCifForAtoms(atoms, modelNumber) {
+    const columns = [
+      'group_PDB', 'id', 'type_symbol', 'label_atom_id', 'label_alt_id', 'label_comp_id',
+      'label_asym_id', 'label_entity_id', 'label_seq_id', 'Cartn_x', 'Cartn_y', 'Cartn_z',
+      'occupancy', 'B_iso_or_equiv', 'auth_seq_id', 'auth_comp_id', 'auth_asym_id',
+      'auth_atom_id', 'pdbx_PDB_ins_code', 'pdbx_PDB_model_num'
+    ];
+    const lines = [`data_molhtml_model_${modelNumber}`, 'loop_', ...columns.map(name => `_atom_site.${name}`)];
+    for (const atom of atoms) {
+      lines.push([
+        atom.het ? 'HETATM' : 'ATOM', atom.atomSiteId ?? atom.serial, atom.element,
+        atom.labelAtomId || atom.name, atom.labelAltId || '.', atom.labelCompId || atom.resn,
+        atom.labelAsymId || atom.chain, atom.labelEntityId || '.', atom.labelSeqId ?? '.',
+        atom.x, atom.y, atom.z, atom.occupancy, atom.bfactor, atom.authSeqId ?? atom.resi,
+        atom.authCompId || atom.resn, atom.authAsymId || atom.chain, atom.authAtomId || atom.name,
+        atom.icode || '?', modelNumber
+      ].map(cifToken).join(' '));
+    }
+    lines.push('#');
+    return lines.join('\n');
+  }
+
+  function cifToken(value) {
+    if (value == null || value === '') return '.';
+    const token = String(value);
+    if (/^[^\s'"#;]+$/.test(token)) return token;
+    if (!token.includes("'")) return `'${token}'`;
+    if (!token.includes('"')) return `"${token}"`;
+    throw new Error('An atom identifier contains unsupported mmCIF quote characters.');
   }
 
   function measurementLabelPosition(type, atoms) {

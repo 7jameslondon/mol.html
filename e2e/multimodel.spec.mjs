@@ -13,6 +13,14 @@ test('maps duplicate atom serials across multiple PDB coordinate models', async 
   await page.evaluate(text => window.molhtml.importPDB('multi-model.pdb', text), pdb);
 
   await expect(page.locator('#structure-stats')).toContainText('4 atoms');
+  await expect(page.evaluate(() => window.molhtml.selectAtom(1))).rejects.toThrow(/ambiguous/i);
+  const selected = await page.evaluate(() => window.molhtml.selectAtom({ model: 2, serial: 1 }));
+  expect(selected.selector).toMatchObject({ model: 2, serial: 1 });
+  const measurement = await page.evaluate(() => window.molhtml.addMeasurement('distance', [
+    { model: 2, serial: 1 }, { model: 2, serial: 2 }
+  ]));
+  expect(measurement.atoms).toHaveLength(2);
+  expect(measurement.atoms.every(atom => atom.model === 2)).toBe(true);
   const saved = await page.evaluate(() => window.molhtml.addSavedSelection('Second model nitrogen', {
     kind: 'atom',
     structureId: window.molhtml.document.structure.id,

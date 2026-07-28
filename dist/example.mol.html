@@ -1516,6 +1516,12 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     H: .31, C: .76, N: .71, O: .66, F: .57, P: 1.07, S: 1.05,
     CL: 1.02, BR: 1.2, I: 1.39, FE: 1.24, MG: 1.3, ZN: 1.22, CA: 1.76
   };
+  const ELEMENT_SYMBOLS = new Set((
+    'H HE LI BE B C N O F NE NA MG AL SI P S CL AR K CA SC TI V CR MN FE CO NI CU ZN GA GE AS SE BR KR '
+    + 'RB SR Y ZR NB MO TC RU RH PD AG CD IN SN SB TE I XE CS BA LA CE PR ND PM SM EU GD TB DY HO ER TM '
+    + 'YB LU HF TA W RE OS IR PT AU HG TL PB BI PO AT RN FR RA AC TH PA U NP PU AM CM BK CF ES FM MD NO LR '
+    + 'RF DB SG BH HS MT DS RG CN NH FL MC LV TS OG'
+  ).split(' '));
   const MAX_ATOMS = 2_000_000;
   const spatialIndexCache = new WeakMap();
 
@@ -1542,13 +1548,16 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
 
   function inferElement(rawName, explicit) {
     const provided = String(explicit || '').trim().toUpperCase();
-    if (provided && /^[A-Z]{1,2}$/.test(provided)) return provided;
-    const letters = String(rawName || '').replace(/[^A-Za-z]/g, '').toUpperCase();
-    if (!letters) return 'C';
-    if (letters.length > 1 && ['CL', 'BR', 'FE', 'MG', 'ZN', 'CA', 'NA', 'MN', 'CU', 'NI', 'CO'].includes(letters.slice(0, 2))) {
-      return letters.slice(0, 2);
-    }
-    return letters[0];
+    if (ELEMENT_SYMBOLS.has(provided)) return provided;
+    const source = String(rawName || '');
+    const field = source.padEnd(4, ' ').slice(0, 4);
+    let inferred = '';
+    if (/^[0-9]/.test(field)) inferred = field[1];
+    else if (field[0] === ' ') inferred = field[1];
+    else inferred = field.slice(0, 2).replace(/[^A-Za-z]/g, '');
+    inferred = String(inferred || source.match(/[A-Za-z]/)?.[0] || 'C').toUpperCase();
+    if (ELEMENT_SYMBOLS.has(inferred)) return inferred;
+    return ELEMENT_SYMBOLS.has(inferred[0]) ? inferred[0] : 'C';
   }
 
   function parsePDBCoordinates(value) {
@@ -1616,7 +1625,6 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
           if (atoms.length >= MAX_ATOMS) throw new Error(`The structure exceeds the ${MAX_ATOMS.toLocaleString()} atom safety limit.`);
           atoms.push(atom);
           serialMap.set(`${model}|${serial}`, atom.index);
-          if (!serialMap.has(`*|${serial}`)) serialMap.set(`*|${serial}`, atom.index);
         } else {
           diagnostics.skippedCoordinateLines += 1;
           diagnostics.malformedCoordinateLines += 1;
@@ -1636,11 +1644,14 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
 
     if (!atoms.length) throw new Error('No ATOM or HETATM coordinates were found in this PDB file.');
     const bonds = [];
+    const modelNumbers = [...new Set(atoms.map(atom => atom.model))];
     for (const key of explicitBondSerials) {
       const [left, right] = key.split(':').map(Number);
-      const a = serialMap.get(`*|${left}`);
-      const b = serialMap.get(`*|${right}`);
-      if (a != null && b != null) bonds.push([a, b]);
+      for (const modelNumber of modelNumbers) {
+        const a = serialMap.get(`${modelNumber}|${left}`);
+        const b = serialMap.get(`${modelNumber}|${right}`);
+        if (a != null && b != null) bonds.push([a, b]);
+      }
     }
     inferBonds(atoms, bonds);
     return finalizeStructure({
@@ -2299,33 +2310,40 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     const bonds = [];
     const existing = new Set();
     for (const row of categories.struct_conn || []) {
-      const left = findStructConnAtom(atoms, row, 'ptnr1');
-      const right = findStructConnAtom(atoms, row, 'ptnr2');
-      if (left == null || right == null || left === right) continue;
-      const key = left < right ? `${left}:${right}` : `${right}:${left}`;
-      if (!existing.has(key)) {
-        existing.add(key);
-        bonds.push([left, right]);
+      const leftAtoms = findStructConnAtoms(atoms, row, 'ptnr1');
+      const rightAtoms = findStructConnAtoms(atoms, row, 'ptnr2');
+      for (const left of leftAtoms) for (const right of rightAtoms) {
+        if (left.model !== right.model || left.index === right.index) continue;
+        if (left.altLoc && right.altLoc && left.altLoc !== right.altLoc) continue;
+        const key = left.index < right.index ? `${left.index}:${right.index}` : `${right.index}:${left.index}`;
+        if (!existing.has(key)) {
+          existing.add(key);
+          bonds.push([left.index, right.index]);
+        }
       }
     }
     return bonds;
   }
 
-  function findStructConnAtom(atoms, row, prefix) {
+  function findStructConnAtoms(atoms, row, prefix) {
     const labelAsymId = cifValue(row[`${prefix}_label_asym_id`]);
     const labelSeqId = cifValue(row[`${prefix}_label_seq_id`]);
     const labelCompId = cifValue(row[`${prefix}_label_comp_id`]);
     const labelAtomId = cifValue(row[`${prefix}_label_atom_id`]);
     const authAsymId = cifValue(row[`${prefix}_auth_asym_id`]);
     const authSeqId = cifValue(row[`${prefix}_auth_seq_id`]);
-    return atoms.find(atom =>
+    const labelAltId = cifValue(row[`pdbx_${prefix}_label_alt_id`] ?? row[`${prefix}_label_alt_id`]);
+    const insertionCode = cifValue(row[`pdbx_${prefix}_pdb_ins_code`]);
+    return atoms.filter(atom =>
       (labelAsymId == null || atom.labelAsymId === labelAsymId)
       && (labelSeqId == null || atom.labelSeqId === labelSeqId)
       && (labelCompId == null || atom.labelCompId === labelCompId)
       && (labelAtomId == null || atom.labelAtomId === labelAtomId)
       && (authAsymId == null || atom.authAsymId === authAsymId)
       && (authSeqId == null || atom.authSeqId === authSeqId)
-    )?.index;
+      && (labelAltId == null || atom.labelAltId === labelAltId)
+      && (insertionCode == null || atom.icode === insertionCode)
+    );
   }
 
   function mmcifAssemblies(categories) {
@@ -3853,11 +3871,21 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
           this.viewer.removeAllModels();
           const rendererFormat = doc.structure.format === 'mmcif' ? 'cif' : doc.structure.format;
           const multiplePdbModels = doc.structure.format === 'pdb' && this.parsed.coordinateSets.length > 1;
-          this.models = multiplePdbModels
-            ? this.viewer.addModels(doc.structure.data, rendererFormat, { keepH: true })
-            : [this.viewer.addModel(doc.structure.data, rendererFormat, { keepH: true })];
+          const multipleMmcifModels = doc.structure.format === 'mmcif' && this.parsed.coordinateSets.length > 1;
+          if (multipleMmcifModels) {
+            this.models = this.parsed.coordinateSets.map(coordinateSet => {
+              const atoms = coordinateSet.atomIndices.map(index => this.parsed.atoms[index]);
+              return this.viewer.addModel(rendererCifForAtoms(atoms, coordinateSet.modelNumber), 'cif', { keepH: true });
+            });
+          } else {
+            this.models = multiplePdbModels
+              ? this.viewer.addModels(doc.structure.data, rendererFormat, { keepH: true })
+              : [this.viewer.addModel(doc.structure.data, rendererFormat, { keepH: true })];
+          }
           this.model = this.models[0] || null;
-          this.buildAtomMapping();
+          if (multipleMmcifModels) this.buildCoordinateSetAtomMapping();
+          else this.buildAtomMapping();
+          if (multipleMmcifModels) this.applyNormalizedBonds();
           fit = true;
         }
 
@@ -4184,6 +4212,53 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       }
     }
 
+    buildCoordinateSetAtomMapping() {
+      this.domainByRendererKey = new Map();
+      this.rendererLocationByDomainIndex = new Map();
+      for (let modelIndex = 0; modelIndex < this.models.length; modelIndex += 1) {
+        const rendered = this.models[modelIndex]?.selectedAtoms?.({}) || [];
+        const atomIndices = this.parsed.coordinateSets[modelIndex]?.atomIndices || [];
+        if (rendered.length !== atomIndices.length) {
+          throw new Error(`Renderer parsed ${rendered.length} atoms for coordinate model ${modelIndex + 1}, but the molecular model parsed ${atomIndices.length}.`);
+        }
+        for (let atomIndex = 0; atomIndex < atomIndices.length; atomIndex += 1) {
+          const atom = this.parsed.atoms[atomIndices[atomIndex]];
+          const rendererAtom = rendered[atomIndex];
+          if (!coordinatesAgree(atom, rendererAtom)) {
+            throw new Error(`Could not map molecular atom ${atom.index + 1} into coordinate model ${modelIndex + 1}.`);
+          }
+          const rendererIndex = Number(rendererAtom.index);
+          const rendererModel = Number(rendererAtom.model);
+          if (!Number.isInteger(rendererIndex) || !Number.isInteger(rendererModel)) {
+            throw new Error('Renderer atom mapping is missing a numeric model or atom index.');
+          }
+          this.domainByRendererKey.set(`${rendererModel}|${rendererIndex}`, atom);
+          this.rendererLocationByDomainIndex.set(atom.index, { model: rendererModel, index: rendererIndex });
+        }
+      }
+    }
+
+    applyNormalizedBonds() {
+      const renderedByKey = new Map();
+      for (const model of this.models) for (const atom of model?.selectedAtoms?.({}) || []) {
+        atom.bonds = [];
+        atom.bondOrder = [];
+        renderedByKey.set(`${Number(atom.model)}|${Number(atom.index)}`, atom);
+      }
+      for (const [leftIndex, rightIndex] of this.parsed?.bonds || []) {
+        const leftLocation = this.rendererLocationByDomainIndex.get(leftIndex);
+        const rightLocation = this.rendererLocationByDomainIndex.get(rightIndex);
+        if (!leftLocation || !rightLocation || leftLocation.model !== rightLocation.model) continue;
+        const left = renderedByKey.get(`${leftLocation.model}|${leftLocation.index}`);
+        const right = renderedByKey.get(`${rightLocation.model}|${rightLocation.index}`);
+        if (!left || !right) continue;
+        left.bonds.push(right.index);
+        left.bondOrder.push(1);
+        right.bonds.push(left.index);
+        right.bondOrder.push(1);
+      }
+    }
+
     domainAtomForRenderer(atom) {
       return this.domainByRendererKey.get(`${Number(atom?.model)}|${Number(atom?.index)}`) || null;
     }
@@ -4291,6 +4366,37 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
 
   function domainAtomKey(atom) {
     return `${coordinateKey(atom)}|${String(atom?.name || '').trim()}|${String(atom?.resn || '').trim()}`;
+  }
+
+  function rendererCifForAtoms(atoms, modelNumber) {
+    const columns = [
+      'group_PDB', 'id', 'type_symbol', 'label_atom_id', 'label_alt_id', 'label_comp_id',
+      'label_asym_id', 'label_entity_id', 'label_seq_id', 'Cartn_x', 'Cartn_y', 'Cartn_z',
+      'occupancy', 'B_iso_or_equiv', 'auth_seq_id', 'auth_comp_id', 'auth_asym_id',
+      'auth_atom_id', 'pdbx_PDB_ins_code', 'pdbx_PDB_model_num'
+    ];
+    const lines = [`data_molhtml_model_${modelNumber}`, 'loop_', ...columns.map(name => `_atom_site.${name}`)];
+    for (const atom of atoms) {
+      lines.push([
+        atom.het ? 'HETATM' : 'ATOM', atom.atomSiteId ?? atom.serial, atom.element,
+        atom.labelAtomId || atom.name, atom.labelAltId || '.', atom.labelCompId || atom.resn,
+        atom.labelAsymId || atom.chain, atom.labelEntityId || '.', atom.labelSeqId ?? '.',
+        atom.x, atom.y, atom.z, atom.occupancy, atom.bfactor, atom.authSeqId ?? atom.resi,
+        atom.authCompId || atom.resn, atom.authAsymId || atom.chain, atom.authAtomId || atom.name,
+        atom.icode || '?', modelNumber
+      ].map(cifToken).join(' '));
+    }
+    lines.push('#');
+    return lines.join('\n');
+  }
+
+  function cifToken(value) {
+    if (value == null || value === '') return '.';
+    const token = String(value);
+    if (/^[^\s'"#;]+$/.test(token)) return token;
+    if (!token.includes("'")) return `'${token}'`;
+    if (!token.includes('"')) return `"${token}"`;
+    throw new Error('An atom identifier contains unsupported mmCIF quote characters.');
   }
 
   function measurementLabelPosition(type, atoms) {
@@ -5464,15 +5570,38 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     return true;
   }
 
-  function addMeasurement(type, serials, options = {}, source = 'agent') {
+  function resolveAtomReference(reference) {
+    let selector;
+    if (typeof reference === 'number' || typeof reference === 'string') {
+      const serial = Number(reference);
+      if (!Number.isFinite(serial)) throw new Error('Atom serials must be numbers.');
+      selector = { serial };
+    } else if (reference && typeof reference === 'object' && !Array.isArray(reference)) {
+      selector = reference.selector && typeof reference.selector === 'object' ? reference.selector : reference;
+    } else {
+      throw new Error('An atom reference must be a serial number or selector object.');
+    }
+    if (selector.structureId && selector.structureId !== doc.structure.id) {
+      throw new Error('The atom reference belongs to a different structure.');
+    }
+    const scoped = { ...selector, structureId: selector.structureId || doc.structure.id };
+    const matches = parsed?.atoms.filter(atom => Core.atomMatchesSelector(atom, scoped, doc.structure.id)) || [];
+    if (!matches.length) throw new Error('The atom reference was not found.');
+    if (matches.length > 1) {
+      const subject = scoped.serial == null ? 'The atom reference' : `Atom serial ${scoped.serial}`;
+      throw new Error(`${subject} is ambiguous across coordinate models; provide { model, serial }.`);
+    }
+    return matches[0];
+  }
+
+  function addMeasurement(type, atomReferences, options = {}, source = 'agent') {
     const expected = Core.MEASUREMENT_ATOM_COUNTS[type];
     if (!expected) throw new Error(`Unsupported measurement type: ${type}`);
-    if (!Array.isArray(serials) || serials.length !== expected) {
-      throw new Error(`${measurementTypeName(type)} requires ${expected} atom serials.`);
+    if (!Array.isArray(atomReferences) || atomReferences.length !== expected) {
+      throw new Error(`${measurementTypeName(type)} requires ${expected} atom references.`);
     }
-    const atoms = serials.map(serial => parsed?.atoms.find(atom => atom.serial === Number(serial)));
-    if (!atoms.every(Boolean)) throw new Error('One or more atom serials were not found.');
-    if (new Set(atoms.map(atom => `${atom.model}:${atom.serial}`)).size !== atoms.length) {
+    const atoms = atomReferences.map(resolveAtomReference);
+    if (new Set(atoms.map(atom => atom.index)).size !== atoms.length) {
       throw new Error('Each measurement atom must be distinct.');
     }
     const record = {
@@ -6649,9 +6778,8 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     async fetchStructure(id) { return fetchPDB(id); },
     async fetchPDB(id) { return fetchPDB(id); },
     async searchPDB(query) { return searchPDB(query); },
-    selectAtom(serial) {
-      const atom = parsed?.atoms.find(candidate => candidate.serial === Number(serial));
-      if (!atom) throw new Error(`Atom serial ${serial} was not found.`);
+    selectAtom(reference) {
+      const atom = resolveAtomReference(reference);
       selectAtom(atom);
       return structuredClone(doc.scene.selection);
     },
@@ -6661,7 +6789,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       return startMeasurement(type);
     },
     cancelMeasurement() { return cancelMeasurement(); },
-    addMeasurement(type, serials, options) { return addMeasurement(type, serials, options, 'agent'); },
+    addMeasurement(type, atomReferences, options) { return addMeasurement(type, atomReferences, options, 'agent'); },
     updateMeasurement(id, changes) { return updateMeasurement(id, changes || {}, 'agent'); },
     removeMeasurement(id) { return deleteMeasurement(id, 'agent'); },
     clearMeasurements() { return clearMeasurements('agent'); },

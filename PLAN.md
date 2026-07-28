@@ -27,8 +27,12 @@ spatial indexes, a shared document-command boundary, and regression fixtures. Mo
 BinaryCIF, and richer Chemical Component Dictionary integration remain the explicitly deferred
 Phase 6 scope.
 
-The final deterministic artifact is 928,869 bytes, leaving 21,131 bytes under the existing
-950,000-byte ceiling. Model/schema checks, 67 artifact invariants, all 27 Chromium regression
+PR review hardening now also preserves column-aware PDB element inference, resolves explicit
+bonds independently for every coordinate model, renders multi-model text mmCIF as separate
+3Dmol models, and requires model-qualified atom references whenever a serial is ambiguous.
+
+The final deterministic artifact is 935,879 bytes, leaving 14,121 bytes under the existing
+950,000-byte ceiling. Model/schema checks, 67 artifact invariants, all 28 Chromium regression
 tests, and the scheduled 5,000-atom performance case pass. Publication is performed from the
 dedicated branch through a review-ready pull request; merging is intentionally outside this
 plan's implementation step.
