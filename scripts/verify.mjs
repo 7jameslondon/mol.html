@@ -32,7 +32,7 @@ assert(html.includes('window.MolhtmlCore') && html.includes('window.MolhtmlPersi
 assert(html.includes('data-role="molhtml-app"'), 'artifact uses the renamed application data role');
 assert(html.includes("const DB_NAME = 'molhtml-autosave'") && html.includes("id: 'molhtml-document'"), 'artifact uses the renamed persistence identifiers');
 assert(html.includes("return `${base}.mol.html`;"), 'artifact suggests the .mol.html saved-document suffix');
-assert(html.includes('<meta name="generator" content="mol.html">') && html.includes('MOL.HTML / SELF-CONTAINED SCENE'), 'artifact uses mol.html metadata and interface branding');
+assert(html.includes('<meta name="generator" content="mol.html">') && html.includes('<div class="eyebrow">MOL.HTML</div>'), 'artifact uses mol.html metadata and interface branding');
 assert(html.includes('showSaveFilePicker'), 'artifact includes in-place self-save support');
 assert(html.includes('https://files.rcsb.org/download/') && html.includes('async fetchPDB(id)'), 'artifact includes RCSB PDB fetching');
 assert(html.includes('https://search.rcsb.org/rcsbsearch/v2/query') && html.includes('https://data.rcsb.org/graphql'), 'artifact includes RCSB full-text search and metadata lookup');
