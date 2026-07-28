@@ -1,6 +1,7 @@
 {
   "name": "molview-file",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "description": "A self-contained, self-editing molecular viewer document.",
   "type": "module",
