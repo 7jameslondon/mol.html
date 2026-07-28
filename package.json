@@ -4,6 +4,26 @@
   "license": "MIT",
   "private": true,
   "description": "A self-contained, self-editing molecular viewer document.",
+  "keywords": [
+    "molecular-visualization",
+    "molecular-viewer",
+    "structural-biology",
+    "bioinformatics",
+    "pdb",
+    "webgl",
+    "javascript",
+    "html",
+    "3dmol",
+    "offline-first"
+  ],
+  "homepage": "https://github.com/7jameslondon/mol.html#readme",
+  "bugs": {
+    "url": "https://github.com/7jameslondon/mol.html/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/7jameslondon/mol.html.git"
+  },
   "type": "module",
   "packageManager": "pnpm@11.9.0",
   "engines": {
