@@ -13,6 +13,13 @@ Edit only the JSON inside this block. Leave the application shell untouched.
 Escape every `<` in JSON strings as `\u003c` so data can never terminate the
 script block. Preserve fields you do not understand.
 
+The `#molhtml-license-notices` block and the surrounding application shell are
+immutable. Never edit, remove, replace, or duplicate that block. Official
+browser saves reconstruct it from the canonical build-time copy and refuse to
+write a file if the result cannot be validated. After a direct agent edit, run
+`node scripts/test-license-integrity.mjs` to verify that only document JSON
+changed and that the complete project and third-party notices remain intact.
+
 ## Change protocol
 
 For every edit:

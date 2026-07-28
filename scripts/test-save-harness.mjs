@@ -16,6 +16,14 @@ const mock = `<div id="save-test-probe" hidden></div><script>
 (function () {
   let savedHtml = '';
   let modified = Date.now();
+  const originalLicense = document.getElementById('molhtml-license-notices');
+  const expectedLicenseText = originalLicense.textContent;
+  const expectedLicenseHash = originalLicense.dataset.noticeSha256;
+  const duplicateLicense = originalLicense.cloneNode(true);
+  duplicateLicense.textContent = '\\nDUPLICATE TAMPERED LICENSE NOTICE\\n';
+  originalLicense.after(duplicateLicense);
+  originalLicense.textContent = '\\nTAMPERED LICENSE NOTICE\\n';
+  originalLicense.dataset.noticeSha256 = 'tampered';
   window.showSaveFilePicker = async function () {
     return {
       name: 'save-harness.mol.html',
@@ -33,6 +41,11 @@ const mock = `<div id="save-test-probe" hidden></div><script>
             probe.dataset.selectedSerial = String(state.scene.selection?.identity?.serial || '');
             probe.dataset.sourceId = String(state.structure.source?.pdbId || '');
             probe.dataset.structureBytes = String(state.structure.data?.length || 0);
+            const licenses = parsed.querySelectorAll('[id="molhtml-license-notices"]');
+            probe.dataset.licenseCount = String(licenses.length);
+            probe.dataset.licenseRestored = String(licenses.length === 1
+              && licenses[0].textContent === expectedLicenseText
+              && licenses[0].dataset.noticeSha256 === expectedLicenseHash);
           },
           async close() { document.getElementById('save-test-probe').dataset.closed = 'true'; }
         };

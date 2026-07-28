@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 1,
+  "project": {
+    "name": "mol.html",
+    "license": "MIT",
+    "licensePath": "LICENSE",
+    "licenseSha256": "cf413e8e3dae7d6ef99deb86d6c8c73cddf92225a0092b788ec828a728733406"
+  },
+  "bundle": {
+    "package": "3dmol",
+    "version": "2.5.5",
+    "license": "BSD-3-Clause",
+    "minifiedPath": "node_modules/3dmol/build/3Dmol-min.js",
+    "minifiedSha256": "f7cc78921ae72e7623e89cdd111434f58c2efddd2ffda1cd212644b406fb8016",
+    "auditPath": "node_modules/3dmol/build/3Dmol.js",
+    "auditSha256": "553ea0ab68182aafd520e598396d3903a354d22d3d02426b09cbc93ea0d28297",
+    "packagePath": "node_modules/3dmol/package.json",
+    "expectedBundledPackages": [
+      "iobuffer",
+      "netcdfjs",
+      "pako",
+      "upng-js"
+    ],
+    "attributionChecks": [
+      {
+        "sourceMarker": "Adapted from the text sprite example from http://stemkoski.github.io/Three.js/index.html",
+        "noticeMarker": "Lee Stemkoski’s Three.js text-sprite"
+      },
+      {
+        "sourceMarker": "Ported and modified for Javascript based on EDTSurf",
+        "noticeMarker": "EDTSurf-derived ProteinSurface code"
+      },
+      {
+        "sourceMarker": "adapted from 'chg2cube.pl'",
+        "noticeMarker": "VTST Tools chg2cube.pl-derived parser code"
+      },
+      {
+        "sourceMarker": "code mostly copied from ngl",
+        "noticeMarker": "NGL matrix routines"
+      },
+      {
+        "sourceMarker": "MIT License Copyright (c) 2017 Simon Rodriguez",
+        "noticeMarker": "Rendu FXAA shader"
+      },
+      {
+        "sourceMarker": "Copyright (c) 2017-2024 mol* contributors, licensed under MIT",
+        "noticeMarker": "Mol* BinaryCIF decoder"
+      },
+      {
+        "sourceMarker": "adopted from https://github.com/rcsb/mmtf-javascript/",
+        "noticeMarker": "MMTF-JavaScript decoder routines"
+      },
+      {
+        "sourceMarker": "adapted from https://stackoverflow.com/questions/3969475/javascript-pause-settimeout",
+        "noticeMarker": "Sean Vieira"
+      },
+      {
+        "sourceMarker": "cylinder-ray intersection testing taken from http://mrl.nyu.edu/~dzorin/cg05/lecture12.pdf",
+        "noticeMarker": "Cylinder-intersection shader references"
+      }
+    ]
+  },
+  "notices": {
+    "path": "THIRD_PARTY_NOTICES.txt",
+    "sha256": "50eeacb39a6c3bd5c96f05c6aeefdf23908bb6e66abacb5d79a71c26ccacfffa",
+    "requiredMarkers": [
+      "Copyright (c) 2014, University of Pittsburgh and contributors",
+      "Copyright (C) 2011-2012, biochem_fan",
+      "Copyright (c) 2010-2012 three.js Authors",
+      "Copyright (c) 2011 John Resig",
+      "Copyright (c) 2015 Michaël Zasso",
+      "Copyright (c) 2016 cheminfo",
+      "Copyright (c) 2017 Photopea",
+      "Copyright (C) 2014-2017 by Vitaly Puzrin and Andrei Tuputcyn",
+      "(C) 1995-2013 Jean-loup Gailly and Mark Adler",
+      "This notice may not be removed or altered from any source distribution.",
+      "Copyright (c) 2017 Simon Rodriguez",
+      "Copyright (c) 2017 - now, Mol* contributors",
+      "Copyright (c) 2015-2016, Alexander S. Rose",
+      "Copyright (c) 2014-2017, Alexander S Rose",
+      "Apache License",
+      "Creative Commons Attribution-ShareAlike 2.5 Generic license"
+    ]
+  },
+  "referenceLicenses": [
+    {
+      "name": "3Dmol.js",
+      "path": "node_modules/3dmol/LICENSE",
+      "sha256": "8f10f88d2391f515dbdbe5fc414bad53cbc69c5d901f8c2d9b39425fe4de8ec0"
+    },
+    {
+      "name": "IOBuffer",
+      "path": "node_modules/.pnpm/iobuffer@5.4.0/node_modules/iobuffer/LICENSE",
+      "sha256": "1354462645abd60af00904b26bf25f4fa25859c069d80b696da4eab61cf0c4c7"
+    },
+    {
+      "name": "netcdfjs",
+      "path": "node_modules/.pnpm/netcdfjs@3.0.0/node_modules/netcdfjs/LICENSE",
+      "sha256": "b9ec0790a463f0c00cb639584dbf290da1f2da26292e8ee85f461352ebe52a8a"
+    },
+    {
+      "name": "UPNG.js",
+      "path": "node_modules/.pnpm/upng-js@2.1.0/node_modules/upng-js/LICENSE",
+      "sha256": "ba8b485276d2a2d1062ce653a3f73c0ea538ddd3847341becf279201daceb4ed"
+    },
+    {
+      "name": "pako 1.x MIT terms",
+      "path": "node_modules/.pnpm/pako@1.0.11/node_modules/pako/LICENSE",
+      "sha256": "9bce71206bb197a44eea817bf9c4091118b153cbe09f7544ed7e5abc536d5bcc"
+    },
+    {
+      "name": "pako 2.x MIT terms",
+      "path": "node_modules/.pnpm/pako@2.2.0/node_modules/pako/LICENSE",
+      "sha256": "9bce71206bb197a44eea817bf9c4091118b153cbe09f7544ed7e5abc536d5bcc"
+    },
+    {
+      "name": "Apache License 2.0",
+      "path": "node_modules/3dmol/doc/scripts/third-party/Apache-License-2.0.txt",
+      "sha256": "283ea6cc2997a1a70da0049e09adf9317bb60ca1b51279b65196b83a69e1996b"
+    }
+  ],
+  "zlibReference": {
+    "path": "node_modules/.pnpm/pako@1.0.11/node_modules/pako/lib/zlib/inflate.js",
+    "sha256": "f5d7d86cfa366355f246e963df0dcbe8c6adae3fb77beaddceda54ad680efb0c"
+  },
+  "components": [
+    { "name": "3Dmol.js", "version": "2.5.5", "license": "BSD-3-Clause" },
+    { "name": "GLmol", "version": "0.47", "license": "MIT" },
+    { "name": "Three.js", "version": "bundled by 3Dmol.js", "license": "MIT" },
+    { "name": "jQuery", "version": "bundled by 3Dmol.js", "license": "MIT" },
+    { "name": "IOBuffer", "version": "bundled by 3Dmol.js", "license": "MIT" },
+    { "name": "netcdfjs", "version": "bundled by 3Dmol.js", "license": "MIT" },
+    { "name": "UPNG.js", "version": "bundled by 3Dmol.js", "license": "MIT" },
+    { "name": "pako", "version": "2.1.0 bundle identification", "license": "(MIT AND Zlib)" },
+    { "name": "pako", "version": "nested copy via UPNG.js", "license": "(MIT AND Zlib)" },
+    { "name": "EDTSurf-derived ProteinSurface code", "version": "incorporated by 3Dmol.js", "license": "permissive upstream notice" },
+    { "name": "Rendu FXAA shader", "version": "incorporated by 3Dmol.js", "license": "MIT" },
+    { "name": "Mol* BinaryCIF and FXAA-derived code", "version": "incorporated by 3Dmol.js", "license": "MIT" },
+    { "name": "MMTF-JavaScript decoder code", "version": "incorporated by 3Dmol.js", "license": "MIT" },
+    { "name": "NGL matrix code", "version": "incorporated by 3Dmol.js", "license": "MIT" },
+    { "name": "VTST Tools chg2cube.pl-derived parser code", "version": "incorporated by 3Dmol.js", "license": "Apache-2.0" },
+    { "name": "Stack Overflow PausableTimer-derived code", "version": "2010 answer adapted by 3Dmol.js", "license": "CC-BY-SA-2.5" },
+    { "name": "Lee Stemkoski Three.js text-sprite example", "version": "incorporated by 3Dmol.js", "license": "source attribution; Three.js MIT notice retained" }
+  ]
+}

@@ -1,22 +1,27 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadLegalNotices, validateBuiltLicenseNotices } from './legal-notices.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = path => readFile(resolve(root, path), 'utf8');
+const legal = await loadLegalNotices(root);
 
-const [template, styles, threeDmol, threeDmolLicense, threeDmolPackage, model, renderer, persistence, app] = await Promise.all([
+const [template, styles, model, renderer, persistence, app] = await Promise.all([
   read('src/index.html'), read('src/styles.css'),
-  read('node_modules/3dmol/build/3Dmol-min.js'), read('node_modules/3dmol/LICENSE'), read('node_modules/3dmol/package.json'),
   read('src/model.js'), read('src/renderer.js'), read('src/persistence.js'), read('src/app.js')
 ]);
+const canonicalNoticesJson = JSON.stringify(legal.canonicalNotices).replace(/</g, '\\u003c');
+const persistenceWithNotices = persistence
+  .replace('__CANONICAL_LICENSE_NOTICES_JSON__', () => canonicalNoticesJson)
+  .replace('__CANONICAL_LICENSE_NOTICES_SHA256__', legal.canonicalSha256);
+if (persistenceWithNotices === persistence || /__CANONICAL_LICENSE_NOTICES_(?:JSON|SHA256)__/.test(persistenceWithNotices)) {
+  throw new Error('Could not inject canonical license notices into persistence.js.');
+}
 
-for (const [name, source] of Object.entries({ threeDmol, model, renderer, persistence, app })) {
+for (const [name, source] of Object.entries({ threeDmol: legal.minifiedBundle, model, renderer, persistence: persistenceWithNotices, app })) {
   if (/<\/script/i.test(source)) throw new Error(`${name}.js contains a script-close sequence that would corrupt the single-file build.`);
 }
-if (/<\/script/i.test(threeDmolLicense)) throw new Error('The 3Dmol.js license contains a script-close sequence that would corrupt the single-file build.');
-const installed3Dmol = JSON.parse(threeDmolPackage);
-if (installed3Dmol.version !== '2.5.5') throw new Error(`Expected 3Dmol.js 2.5.5, found ${installed3Dmol.version}.`);
 
 const starterPdb = buildStarterStructure();
 const document = {
@@ -69,25 +74,28 @@ const document = {
 const replacements = {
   __STYLES__: styles,
   __DOCUMENT__: JSON.stringify(document, null, 2).replace(/</g, '\\u003c'),
-  __THIRD_PARTY_NOTICES__: `3Dmol.js ${installed3Dmol.version}\n\n${threeDmolLicense}`,
-  __THREEDMOL_JS__: threeDmol,
+  __LICENSE_NOTICES__: legal.canonicalNotices,
+  __LICENSE_NOTICES_SHA256__: legal.canonicalSha256,
+  __THREEDMOL_JS__: legal.minifiedBundle,
   __MODEL_JS__: model,
   __RENDERER_JS__: renderer,
-  __PERSISTENCE_JS__: persistence,
+  __PERSISTENCE_JS__: persistenceWithNotices,
   __APP_JS__: app
 };
 
 let html = template;
 for (const [marker, content] of Object.entries(replacements)) {
   if (!html.includes(marker)) throw new Error(`Missing template marker ${marker}`);
-  html = html.replace(marker, content);
+  html = html.replace(marker, () => content);
 }
 if (/__[A-Z_]+__/.test(html)) throw new Error('An unreplaced build marker remains in the generated HTML.');
+validateBuiltLicenseNotices(html, legal);
+if (!html.includes(legal.minifiedBundle)) throw new Error('The audited 3Dmol.js bundle was altered during HTML assembly.');
 
 const output = resolve(root, 'dist/example.mol.html');
 await mkdir(dirname(output), { recursive: true });
 await writeFile(output, html, 'utf8');
-console.log(`Built ${output} (${(Buffer.byteLength(html) / 1024).toFixed(1)} KB)`);
+console.log(`Built ${output} (${(Buffer.byteLength(html) / 1024).toFixed(1)} KB; license notices ${legal.canonicalSha256})`);
 
 function buildStarterStructure() {
   const lines = [

@@ -2,6 +2,10 @@
   'use strict';
 
   const DATA_BLOCK_ID = 'molhtml-doc';
+  const LICENSE_BLOCK_ID = 'molhtml-license-notices';
+  const CANONICAL_LICENSE_NOTICES = __CANONICAL_LICENSE_NOTICES_JSON__;
+  const CANONICAL_LICENSE_NOTICES_SHA256 = '__CANONICAL_LICENSE_NOTICES_SHA256__';
+  const CANONICAL_LICENSE_BLOCK_TEXT = `\n${CANONICAL_LICENSE_NOTICES}\n`;
   const DB_NAME = 'molhtml-autosave';
   const STORE_NAME = 'recovery';
 
@@ -9,14 +13,46 @@
     return document.cloneNode(true);
   }
 
+  function rebuildLicenseBlock(clone) {
+    const existing = [...clone.querySelectorAll(`[id="${LICENSE_BLOCK_ID}"]`)];
+    const first = existing.shift();
+    const block = clone.createElement('script');
+    block.type = 'text/plain';
+    block.id = LICENSE_BLOCK_ID;
+    block.dataset.noticeSha256 = CANONICAL_LICENSE_NOTICES_SHA256;
+    block.textContent = CANONICAL_LICENSE_BLOCK_TEXT;
+
+    if (first?.parentNode) first.parentNode.replaceChild(block, first);
+    else {
+      const anchor = clone.querySelector('script[data-role="molhtml-app"]');
+      if (!anchor?.parentNode) throw new Error('The application shell has no safe location for its license notices.');
+      anchor.parentNode.insertBefore(block, anchor);
+    }
+    for (const duplicate of existing) duplicate.remove();
+  }
+
+  function validateSerializedLicenseNotices(html) {
+    const parsed = new DOMParser().parseFromString(html, 'text/html');
+    const blocks = [...parsed.querySelectorAll(`[id="${LICENSE_BLOCK_ID}"]`)];
+    if (blocks.length !== 1) throw new Error(`Expected exactly one canonical license block, found ${blocks.length}.`);
+    const block = blocks[0];
+    if (block.tagName !== 'SCRIPT' || block.type !== 'text/plain') throw new Error('The canonical license block has an invalid element type.');
+    if (block.dataset.noticeSha256 !== CANONICAL_LICENSE_NOTICES_SHA256) throw new Error('The canonical license identifier was altered.');
+    if (block.textContent !== CANONICAL_LICENSE_BLOCK_TEXT) throw new Error('The canonical license notices were altered.');
+    return true;
+  }
+
   function serializeDocument(pristine, doc) {
     const clone = pristine.cloneNode(true);
+    rebuildLicenseBlock(clone);
     const block = clone.getElementById(DATA_BLOCK_ID);
     if (!block) throw new Error('The application shell is missing its molhtml document block.');
     block.textContent = '\n' + JSON.stringify(doc, null, 2).replace(/</g, '\\u003c') + '\n';
     const title = clone.querySelector('title');
     if (title) title.textContent = `${doc.title} — mol.html`;
-    return '<!DOCTYPE html>\n' + clone.documentElement.outerHTML;
+    const html = '<!DOCTYPE html>\n' + clone.documentElement.outerHTML;
+    validateSerializedLicenseNotices(html);
+    return html;
   }
 
   function extractDocument(html) {
@@ -109,8 +145,15 @@
 
     async save(forcePicker = false) {
       const doc = this.getDocument();
+      let html;
+      try {
+        html = this.serialize();
+      } catch (error) {
+        this.callbacks.onStatus?.(`Save refused: ${error.message}`, 'error');
+        return 'failed';
+      }
       if (typeof globalThis.showSaveFilePicker !== 'function') {
-        download(this.serialize(), suggestedName(doc));
+        download(html, suggestedName(doc));
         this.callbacks.onStatus?.('Downloaded a new self-contained copy', 'success');
         return 'downloaded';
       }
@@ -127,10 +170,10 @@
         this.externalChange = false;
         this.callbacks.onHandle?.(this.fileHandle.name);
       }
-      return this.writeCurrent(true);
+      return this.writeCurrent(true, html);
     }
 
-    async writeCurrent(userInitiated) {
+    async writeCurrent(userInitiated, serializedHtml = null) {
       if (!this.fileHandle) return 'no-handle';
       if (this.externalChange && !userInitiated) return 'external-change';
       if (this.externalChange && userInitiated) {
@@ -138,7 +181,7 @@
         return 'external-change';
       }
       try {
-        const html = this.serialize();
+        const html = serializedHtml ?? this.serialize();
         const writable = await this.fileHandle.createWritable();
         await writable.write(new Blob([html], { type: 'text/html' }));
         await writable.close();
@@ -176,5 +219,7 @@
     }
   }
 
-  window.MolhtmlPersistence = { capturePristine, serializeDocument, extractDocument, PersistenceManager };
+  window.MolhtmlPersistence = {
+    capturePristine, serializeDocument, extractDocument, validateSerializedLicenseNotices, PersistenceManager
+  };
 })();

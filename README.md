@@ -9,14 +9,18 @@ selection, colors, camera, and agent-readable JSON state.
 Install the pinned dependency, then build and verify the standalone artifact:
 
 ```powershell
-pnpm install
+pnpm install --frozen-lockfile
 node scripts/build.mjs
 node scripts/verify.mjs
+node scripts/test-license-integrity.mjs
 ```
 
 The result is `dist/example.mol.html`. Open that file in a modern browser.
-The build embeds 3Dmol.js 2.5.5 and its license notices directly in that file,
-so the finished viewer does not need a network connection.
+The build embeds the project's MIT license and the complete notices for
+3Dmol.js 2.5.5 and its bundled dependencies directly in that file, so the
+finished viewer does not need a network connection. The build is pinned to the
+audited renderer bundle and fails if its code or dependency set changes without
+a corresponding license review.
 
 ## Use
 
@@ -57,3 +61,12 @@ supported by this PDB-format-only document version.
 
 See [AGENT_GUIDE.md](AGENT_GUIDE.md). Agents should edit only the plaintext
 `#molhtml-doc` JSON block, increment `revision`, and preserve unknown fields.
+
+## License
+
+The mol.html project code is available under the [MIT License](LICENSE).
+Third-party terms and attributions are recorded in
+[THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt). Every built `.mol.html`
+file embeds both texts in a canonical, integrity-checked notice block. Dependency
+or renderer-bundle changes require an explicit review and update of
+`legal/third-party-manifest.json`; otherwise the build fails.

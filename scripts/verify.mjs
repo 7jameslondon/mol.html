@@ -1,8 +1,10 @@
 import { readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { loadLegalNotices, validateBuiltLicenseNotices } from './legal-notices.mjs';
 
 const file = resolve('dist/example.mol.html');
 const html = await readFile(file, 'utf8');
+const legal = await loadLegalNotices(resolve('.'));
 const checks = [];
 const assert = (condition, message) => {
   checks.push({ condition, message });
@@ -15,7 +17,16 @@ assert(!/<script[^>]+src=/i.test(html), 'artifact has no external script depende
 assert(!/<link[^>]+href=/i.test(html), 'artifact has no external stylesheet dependencies');
 assert(!/__[A-Z_]+__/.test(html), 'artifact has no unreplaced build markers');
 assert(html.includes('3Dmol.js 2.5.5') && html.includes('["3Dmol"]'), '3Dmol.js 2.5.5 is bundled inline');
-assert(html.includes('id="third-party-notices"') && html.includes('Redistribution and use in source and binary forms'), '3Dmol.js license notices are embedded');
+assert(validateBuiltLicenseNotices(html, legal), 'artifact passes the build-time canonical license validation');
+assert((html.match(/id="molhtml-license-notices"/g) || []).length === 1, 'artifact has exactly one canonical license block');
+const licenseMatch = html.match(/<script type="text\/plain" id="molhtml-license-notices" data-notice-sha256="([a-f0-9]{64})">\n([\s\S]*?)\n<\/script>/);
+assert(Boolean(licenseMatch), 'canonical license block has the expected stable shape');
+assert(licenseMatch?.[1] === legal.canonicalSha256, 'license block identifies the reviewed canonical notice hash');
+assert(licenseMatch?.[2] === legal.canonicalNotices, 'license block exactly matches the reviewed project and third-party notices');
+assert(html.includes(`const CANONICAL_LICENSE_NOTICES_SHA256 = '${legal.canonicalSha256}'`), 'runtime embeds the reviewed license identifier');
+assert(html.includes('rebuildLicenseBlock(clone)') && html.includes('validateSerializedLicenseNotices(html)'), 'runtime reconstructs and validates notices before serialization');
+assert(!html.includes('id="third-party-notices"'), 'obsolete third-party-only notice block is absent');
+for (const marker of legal.manifest.notices.requiredMarkers) assert(licenseMatch?.[2].includes(marker), `license block includes ${marker}`);
 assert(html.includes('window.molhtml'), 'artifact exposes the agent/browser API');
 assert(html.includes('window.MolhtmlCore') && html.includes('window.MolhtmlPersistence'), 'artifact exposes the renamed internal globals');
 assert(html.includes('data-role="molhtml-app"'), 'artifact uses the renamed application data role');

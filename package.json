@@ -8,6 +8,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "verify": "node scripts/verify.mjs",
+    "test:licenses": "node scripts/test-license-integrity.mjs",
     "test:measurements": "node scripts/test-measurements.mjs",
     "test:saved-selections": "node scripts/test-saved-selections.mjs",
     "test:navigator": "node scripts/test-navigator.mjs",
