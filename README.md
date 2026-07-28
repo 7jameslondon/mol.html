@@ -46,7 +46,7 @@ runs keep screenshots and an HTML report without the trace/video overhead.
 ## Continuous integration
 
 GitHub Actions runs the same required `pnpm check` gate for pull requests and
-every commit to `master`. It uses read-only repository permission, immutable
+every commit to `main`. It uses read-only repository permission, immutable
 action SHAs, a frozen lockfile, and no release credentials. A weekly and manual
 job adds Firefox/WebKit smoke coverage, timing observations, and a masked
 Chromium UI snapshot.

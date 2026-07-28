@@ -9,5 +9,5 @@ This file is the project’s running to-do list. Agents should only edit it when
 - Add persistent visual annotations anchored to atoms or residues, including labels, callouts, arrows, regions, and free-text notes
 - Add publication and presentation exports, including high-resolution PNG, transparent backgrounds, copy image, turntable video, story autoplay, and read-only presentation output
 - Add PDBx/mmCIF support while keeping structure loading format-neutral: provide one Open action for all supported local files and one unified Fetch action for both exact RCSB IDs and descriptive searches; automatically detect or choose the coordinate format, use the same loading, validation, viewing, and saving experience for PDB and mmCIF, and expose format details only as provenance or troubleshooting information
-- Enable GitHub branch protection for `master` after the validation workflow lands: require the `validate` job and require the branch to be current before merge, or use a merge queue
+- Enable GitHub branch protection for `main` after the validation workflow lands: require the `validate` job and require the branch to be current before merge, or use a merge queue
 - Obtain the first Linux CI artifact-diff evidence by completing a successful `validate` run that confirms the Linux build leaves `dist/example.mol.html` unchanged

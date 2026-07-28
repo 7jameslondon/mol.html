@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 const workflow = await readFile(resolve('.github/workflows/ci.yml'), 'utf8');
 
 assert.match(workflow, /^\s*pull_request:\s*$/m, 'CI runs for pull requests');
-assert.match(workflow, /^\s*branches:\s*\[master\]\s*$/m, 'CI runs for master pushes');
+assert.match(workflow, /^\s*branches:\s*\[main\]\s*$/m, 'CI runs for main pushes');
 assert.doesNotMatch(workflow, /pull_request_target/, 'CI never executes pull_request_target code');
 assert.match(workflow, /permissions:\s*\n\s+contents:\s*read/, 'CI has read-only repository permission');
 assert.match(workflow, /persist-credentials:\s*false/g, 'checkout credentials are not persisted');
