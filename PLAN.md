@@ -29,9 +29,11 @@ Phase 6 scope.
 
 PR review hardening now also preserves column-aware PDB element inference, resolves explicit
 bonds independently for every coordinate model, renders multi-model text mmCIF as separate
-3Dmol models, and requires model-qualified atom references whenever a serial is ambiguous.
+3Dmol models, synchronizes multi-model PDB bonds into the renderer, distinguishes chemical
+mmCIF connections from noncovalent interactions, handles hydrogen isotope and atom-name
+inference, and requires model-qualified atom references whenever a serial is ambiguous.
 
-The final deterministic artifact is 935,879 bytes, leaving 14,121 bytes under the existing
+The final deterministic artifact is 936,370 bytes, leaving 13,630 bytes under the existing
 950,000-byte ceiling. Model/schema checks, 67 artifact invariants, all 28 Chromium regression
 tests, and the scheduled 5,000-atom performance case pass. Publication is performed from the
 dedicated branch through a review-ready pull request; merging is intentionally outside this

@@ -73,7 +73,14 @@ assert.equal(Structure.detectStructureFormat(pdb, 'mmcif'), 'pdb', 'PDB content 
 assert.equal(Structure.inferElement(' CA ', ''), 'C', 'right-aligned PDB alpha carbon remains carbon');
 assert.equal(Structure.inferElement('CA  ', ''), 'CA', 'left-aligned two-character PDB element remains calcium');
 assert.equal(Structure.inferElement('1HG ', ''), 'H', 'leading-digit PDB hydrogen names infer hydrogen');
+assert.equal(Structure.inferElement('HG11', ''), 'H', 'four-character side-chain hydrogen names remain hydrogen');
+assert.equal(Structure.inferElement('HE2', ''), 'H', 'digit-suffixed hydrogen names are not treated as helium');
+assert.equal(Structure.inferElement("HO2'", ''), 'H', 'nucleic-acid hydroxyl hydrogen names are not treated as holmium');
+assert.equal(Structure.inferElement(' D  ', 'D'), 'H', 'explicit deuterium uses hydrogen chemistry');
+assert.equal(Structure.inferElement(' T  ', 'T'), 'H', 'explicit tritium uses hydrogen chemistry');
 assert.equal(Structure.inferElement('CL  ', ''), 'CL', 'two-character element names retain both characters');
+assert.equal(Structure.inferElement('HG  ', ''), 'HG', 'properly aligned mercury remains mercury');
+assert.equal(Structure.inferElement('HE  ', ''), 'HE', 'properly aligned helium remains helium');
 assert.equal(Structure.inferElement(' CA ', 'ZN'), 'ZN', 'an explicit valid element takes precedence');
 
 const parsed = Core.parseStructure(mmcif, 'mmcif');
@@ -201,10 +208,7 @@ assert.equal(multiModel.coordinateSets.length, 2);
 assert.deepEqual(Array.from(multiModel.coordinateSets, set => set.modelNumber), [1, 2]);
 assert.equal(multiModel.atoms.length, 4);
 assert.equal(multiModel.topology.instances.length, 1, 'coordinate models share one inferred molecular instance');
-const explicitMultiModel = Core.parseStructure(
-  multiModelPdb.replaceAll('1.300', '4.000').replace(/END\s*$/, 'CONECT    1    2\nEND\n'), 'pdb'
-);
-assert.deepEqual(JSON.parse(JSON.stringify(explicitMultiModel.bonds)), [[0, 1], [2, 3]],
+assert.deepEqual(JSON.parse(JSON.stringify(multiModel.bonds)), [[0, 1], [2, 3]],
   'PDB CONECT records are resolved independently in every coordinate model');
 
 const multiModelMmcif = Core.parseStructure(multiModelCif, 'mmcif');
@@ -212,6 +216,17 @@ assertNormalizedInvariants(multiModelMmcif);
 assert.deepEqual(Array.from(multiModelMmcif.coordinateSets, set => set.modelNumber), [1, 2]);
 assert.deepEqual(JSON.parse(JSON.stringify(multiModelMmcif.bonds)), [[0, 1], [2, 3]],
   'mmCIF struct_conn records are resolved independently in every coordinate model');
+for (const connectionType of ['disulf', 'modres', 'metalc']) {
+  const connected = Core.parseStructure(multiModelCif.replace('covale', connectionType), 'mmcif');
+  assert.deepEqual(JSON.parse(JSON.stringify(connected.bonds)), [[0, 1], [2, 3]],
+    `mmCIF ${connectionType} connections contribute to chemical topology`);
+}
+for (const connectionType of ['hydrog', 'saltbr', 'mismat']) {
+  const interactionOnly = Core.parseStructure(multiModelCif.replace('covale', connectionType), 'mmcif');
+  assert.equal(interactionOnly.bonds.length, 0, `mmCIF ${connectionType} interactions are not chemical bonds`);
+  assert.equal(interactionOnly.topology.connectedComponents.length, 4,
+    `mmCIF ${connectionType} interactions do not merge connected components`);
+}
 
 const pdbAssembly = Core.parseStructure(pdbAssemblyText, 'pdb');
 assertNormalizedInvariants(pdbAssembly);

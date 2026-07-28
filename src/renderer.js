@@ -65,7 +65,7 @@
           this.model = this.models[0] || null;
           if (multipleMmcifModels) this.buildCoordinateSetAtomMapping();
           else this.buildAtomMapping();
-          if (multipleMmcifModels) this.applyNormalizedBonds();
+          if (this.parsed.coordinateSets.length > 1) this.applyNormalizedBonds();
           fit = true;
         }
 

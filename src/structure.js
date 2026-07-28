@@ -51,14 +51,17 @@
 
   function inferElement(rawName, explicit) {
     const provided = String(explicit || '').trim().toUpperCase();
+    if (provided === 'D' || provided === 'T') return 'H';
     if (ELEMENT_SYMBOLS.has(provided)) return provided;
     const source = String(rawName || '');
     const field = source.padEnd(4, ' ').slice(0, 4);
     let inferred = '';
     if (/^[0-9]/.test(field)) inferred = field[1];
     else if (field[0] === ' ') inferred = field[1];
+    else if (/^[HDT]/i.test(field) && /[0-9']/i.test(field.slice(1))) inferred = 'H';
     else inferred = field.slice(0, 2).replace(/[^A-Za-z]/g, '');
     inferred = String(inferred || source.match(/[A-Za-z]/)?.[0] || 'C').toUpperCase();
+    if (inferred === 'D' || inferred === 'T') return 'H';
     if (ELEMENT_SYMBOLS.has(inferred)) return inferred;
     return ELEMENT_SYMBOLS.has(inferred[0]) ? inferred[0] : 'C';
   }
@@ -813,6 +816,7 @@
     const bonds = [];
     const existing = new Set();
     for (const row of categories.struct_conn || []) {
+      if (!isTopologyConnectionType(row.conn_type_id)) continue;
       const leftAtoms = findStructConnAtoms(atoms, row, 'ptnr1');
       const rightAtoms = findStructConnAtoms(atoms, row, 'ptnr2');
       for (const left of leftAtoms) for (const right of rightAtoms) {
@@ -826,6 +830,11 @@
       }
     }
     return bonds;
+  }
+
+  function isTopologyConnectionType(value) {
+    const type = String(cifValue(value) || '').trim().toLowerCase();
+    return type.startsWith('covale') || ['disulf', 'modres', 'metalc'].includes(type);
   }
 
   function findStructConnAtoms(atoms, row, prefix) {
