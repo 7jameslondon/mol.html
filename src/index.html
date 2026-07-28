@@ -45,6 +45,10 @@ __DOCUMENT__
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17.5H5.8a3.8 3.8 0 0 1-.4-7.6A6 6 0 0 1 17 8.5a4.5 4.5 0 0 1 1.2 8.9H17M12 10v9m-3-3 3 3 3-3"/></svg>
             <span>Fetch</span><small>RCSB PDB</small>
           </button>
+          <button id="navigator-button" class="ribbon-button" type="button" data-inspector-target="navigator" aria-controls="inspector" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h4m-4 7h8m-8 7h12M9 5v7m4 0v7"/><circle cx="5" cy="5" r="1.5"/><circle cx="5" cy="12" r="1.5"/><circle cx="5" cy="19" r="1.5"/></svg>
+            <span>Navigator</span><small>Chains &amp; sequence</small>
+          </button>
         </div>
         <div class="ribbon-group-label">Structure</div>
       </div>
@@ -158,6 +162,21 @@ __DOCUMENT__
               <option value="surface">Molecular surface</option>
             </select>
             <button id="reset-appearance" class="button secondary full-width panel-action">Reset all appearance</button>
+          </section>
+
+          <section id="panel-navigator" class="inspector-panel" data-inspector-panel="navigator" hidden>
+            <p class="panel-intro">Browse chains and residues locally. Expand a residue only when you need its atoms.</p>
+            <label class="field-label navigator-search-label" for="navigator-search">Search structure</label>
+            <input id="navigator-search" class="navigator-search" type="search" placeholder="Chain, residue, atom, or serial" autocomplete="off" spellcheck="false" aria-describedby="navigator-status">
+            <div class="navigator-toolbar">
+              <span id="navigator-count">Building structure index…</span>
+              <button id="navigator-clear-search" class="text-button" type="button" hidden>Clear</button>
+            </div>
+            <div class="navigator-section-heading"><span>SEQUENCE</span><small>Choose a residue to select and focus it</small></div>
+            <div id="navigator-sequences" class="navigator-sequences" aria-label="Per-chain residue sequences"></div>
+            <div class="navigator-section-heading"><span>STRUCTURE</span><small>Chain → residue → atom</small></div>
+            <div id="navigator-tree" class="navigator-tree" role="tree" aria-label="Structure navigator"></div>
+            <p id="navigator-status" class="navigator-status" aria-live="polite"></p>
           </section>
 
           <section id="panel-color" class="inspector-panel" data-inspector-panel="color" hidden>

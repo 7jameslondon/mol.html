@@ -11,6 +11,17 @@
   const VDW_RADII = { H: 1.2, C: 1.7, N: 1.55, O: 1.52, F: 1.47, P: 1.8, S: 1.8, CL: 1.75, BR: 1.85, I: 1.98, FE: 1.8, MG: 1.73, ZN: 1.39, CA: 2.31 };
   const WATER_NAMES = new Set(['HOH', 'WAT', 'H2O', 'DOD']);
   const MEASUREMENT_ATOM_COUNTS = Object.freeze({ distance: 2, angle: 3, dihedral: 4 });
+  const AMINO_ACID_CODES = Object.freeze({
+    ALA: 'A', ARG: 'R', ASN: 'N', ASP: 'D', CYS: 'C', GLN: 'Q', GLU: 'E',
+    GLY: 'G', HIS: 'H', ILE: 'I', LEU: 'L', LYS: 'K', MET: 'M', PHE: 'F',
+    PRO: 'P', SER: 'S', THR: 'T', TRP: 'W', TYR: 'Y', VAL: 'V', SEC: 'U',
+    PYL: 'O', ASX: 'B', GLX: 'Z', MSE: 'M'
+  });
+  const NUCLEOTIDE_CODES = Object.freeze({
+    A: 'A', C: 'C', G: 'G', T: 'T', U: 'U', I: 'I',
+    DA: 'A', DC: 'C', DG: 'G', DT: 'T', DU: 'U', DI: 'I',
+    ADE: 'A', CYT: 'C', GUA: 'G', THY: 'T', URA: 'U'
+  });
 
   function uid(prefix = 'id') {
     if (globalThis.crypto?.randomUUID) return `${prefix}-${crypto.randomUUID()}`;
@@ -86,6 +97,67 @@
     }
     inferBonds(atoms, bonds);
     return { atoms, bonds, chains: [...new Set(atoms.map(a => a.chain))] };
+  }
+
+  function residueDescriptor(residueName) {
+    const name = String(residueName || 'UNK').trim().toUpperCase() || 'UNK';
+    if (AMINO_ACID_CODES[name]) return { symbol: AMINO_ACID_CODES[name], kind: 'protein' };
+    if (NUCLEOTIDE_CODES[name]) return { symbol: NUCLEOTIDE_CODES[name], kind: 'nucleic' };
+    return { symbol: name.slice(0, 3) || 'UNK', kind: 'other' };
+  }
+
+  function buildStructureHierarchy(value) {
+    const atoms = Array.isArray(value) ? value : value?.atoms;
+    if (!Array.isArray(atoms)) return [];
+    const chains = [];
+    const chainMap = new Map();
+    const residueMaps = new Map();
+
+    for (const atom of atoms) {
+      const chainKey = `${atom.model}|${atom.chain}`;
+      let chain = chainMap.get(chainKey);
+      if (!chain) {
+        chain = { key: chainKey, model: atom.model, chain: atom.chain, residues: [] };
+        chainMap.set(chainKey, chain);
+        residueMaps.set(chainKey, new Map());
+        chains.push(chain);
+      }
+
+      const residueKey = `${chainKey}|${atom.resi}|${atom.icode}|${atom.resn}`;
+      const residues = residueMaps.get(chainKey);
+      let residue = residues.get(residueKey);
+      if (!residue) {
+        const descriptor = residueDescriptor(atom.resn);
+        residue = {
+          key: residueKey, model: atom.model, chain: atom.chain,
+          resn: atom.resn, resi: atom.resi, icode: atom.icode,
+          symbol: descriptor.symbol, kind: descriptor.kind, atoms: []
+        };
+        residues.set(residueKey, residue);
+        chain.residues.push(residue);
+      }
+      residue.atoms.push(atom);
+    }
+    return chains;
+  }
+
+  function representativeAtom(residue) {
+    const atoms = residue?.atoms || [];
+    const preferred = residue?.kind === 'protein'
+      ? ['CA', 'C', 'N']
+      : residue?.kind === 'nucleic'
+        ? ['P', "C4'", "C1'", 'N1', 'N9']
+        : [];
+    for (const name of preferred) {
+      const primary = atoms.find(atom => atom.name === name && !atom.altLoc);
+      if (primary) return primary;
+      const alternate = atoms.find(atom => atom.name === name);
+      if (alternate) return alternate;
+    }
+    return atoms.find(atom => atom.element !== 'H' && !atom.altLoc)
+      || atoms.find(atom => atom.element !== 'H')
+      || atoms[0]
+      || null;
   }
 
   function inferBonds(atoms, bonds) {
@@ -278,6 +350,7 @@
     ELEMENT_COLORS, CHAIN_COLORS, parsePDB, normalizeDocument, selectorForAtom,
     atomMatchesSelector, atomIdentity, atomLabel, colorForAtom, isWater, vdwRadius, uid,
     MEASUREMENT_ATOM_COUNTS, normalizeMeasurements, measurementAtoms, measurementValue,
-    formatMeasurementValue
+    formatMeasurementValue,
+    residueDescriptor, buildStructureHierarchy, representativeAtom
   };
 })();

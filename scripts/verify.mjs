@@ -22,6 +22,8 @@ assert(html.includes('https://files.rcsb.org/download/') && html.includes('async
 assert(html.includes('https://search.rcsb.org/rcsbsearch/v2/query') && html.includes('https://data.rcsb.org/graphql'), 'artifact includes RCSB full-text search and metadata lookup');
 assert(html.includes('role="tab"') && html.includes('data-inspector-target="representation"'), 'artifact includes the ribbon and contextual inspector UI');
 assert(html.includes('data-inspector-target="measurements"') && html.includes('beginMeasurement(type)'), 'artifact includes persistent measurement UI and API');
+assert(html.includes('data-inspector-target="navigator"') && html.includes('id="navigator-tree"'), 'artifact includes the structure navigator command and tree');
+assert(html.includes('id="navigator-sequences"') && html.includes('buildStructureHierarchy'), 'artifact includes locally derived sequence navigation');
 
 const match = html.match(/<script type="application\/molview\+json" id="molview-doc">\s*([\s\S]*?)\s*<\/script>/i);
 assert(Boolean(match), 'document JSON can be extracted with a simple splice contract');

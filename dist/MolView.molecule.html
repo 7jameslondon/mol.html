@@ -153,6 +153,58 @@ select { width: 100%; height: 36px; padding: 0 32px 0 10px; font-size: 11px; }
 .pdb-result-meta span { padding: 3px 5px; border-radius: 5px; background: rgba(115, 144, 174, .09); color: #7891aa; font-size: 8px; }
 .pdb-result-load { min-height: 30px; padding-block: 5px; }
 
+.navigator-search-label { margin-top: 0; }
+.navigator-search {
+  width: 100%; height: 36px; padding: 0 10px 0 32px; border: 1px solid var(--line); border-radius: 8px;
+  background: rgba(10, 24, 40, .9) no-repeat 10px center / 13px 13px;
+  color: var(--ink);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%236f89a4' stroke-width='2'%3E%3Ccircle cx='8.5' cy='8.5' r='5.5'/%3E%3Cpath d='m13 13 4 4'/%3E%3C/svg%3E");
+}
+.navigator-search::placeholder { color: var(--muted-2); }
+.navigator-toolbar { min-height: 27px; display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted-2); font-size: 9px; }
+.navigator-section-heading { display: grid; gap: 2px; margin: 13px 0 7px; color: var(--muted-2); }
+.navigator-section-heading span { font-size: 9px; font-weight: 800; letter-spacing: .13em; }
+.navigator-section-heading small { font-size: 8px; line-height: 1.35; }
+.navigator-sequences, .navigator-tree { display: grid; gap: 6px; }
+.sequence-chain, .navigator-chain { overflow: hidden; border: 1px solid var(--line); border-radius: 9px; background: #0c1a2a; }
+.sequence-chain-toggle, .navigator-chain-toggle, .navigator-residue-button, .navigator-atom-button {
+  width: 100%; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: left;
+}
+.sequence-chain-toggle, .navigator-chain-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 9px; }
+.sequence-chain-toggle:hover, .navigator-chain-toggle:hover, .navigator-residue-button:hover, .navigator-atom-button:hover { background: rgba(88, 168, 255, .07); }
+.sequence-chain-toggle strong, .navigator-chain-toggle strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.sequence-chain-toggle span, .navigator-chain-toggle span { flex: 0 0 auto; color: var(--muted-2); font-size: 8px; }
+.sequence-chain-toggle strong::before, .navigator-chain-toggle strong::before, .navigator-residue-button .navigator-chevron::before {
+  content: "›"; display: inline-block; width: 12px; color: var(--muted-2); transform-origin: center; transition: transform .12s ease;
+}
+.sequence-chain-toggle[aria-expanded="true"] strong::before, .navigator-chain-toggle[aria-expanded="true"] strong::before, .navigator-residue-button[aria-expanded="true"] .navigator-chevron::before { transform: rotate(90deg); }
+.sequence-strip { display: flex; gap: 3px; overflow-x: auto; padding: 2px 8px 9px; scrollbar-width: thin; scrollbar-color: #29425b transparent; }
+.sequence-residue {
+  flex: 0 0 auto; min-width: 24px; height: 24px; padding: 0 5px; border: 1px solid var(--line); border-radius: 6px;
+  background: #101f31; color: #a9c1d9; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 9px; font-weight: 800; cursor: pointer;
+}
+.sequence-residue[data-kind="protein"] { color: #9dccff; }
+.sequence-residue[data-kind="nucleic"] { color: #ff9db0; }
+.sequence-residue:hover { border-color: rgba(88, 168, 255, .45); background: #172b42; color: white; }
+.sequence-residue[aria-current="true"] { border-color: #ffe66d; background: rgba(255, 230, 109, .13); color: #ffe66d; }
+.navigator-chain-body { border-top: 1px solid var(--line); }
+.navigator-residue { border-bottom: 1px solid rgba(164, 193, 226, .08); }
+.navigator-residue:last-child { border-bottom: 0; }
+.navigator-residue-button { display: grid; grid-template-columns: 13px minmax(0, 1fr) auto; align-items: center; gap: 4px; padding: 7px 8px; }
+.navigator-residue-button[aria-current="true"] { background: rgba(255, 230, 109, .08); }
+.navigator-residue-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
+.navigator-residue-label strong { color: var(--ink); }
+.navigator-residue-label small { margin-left: 5px; color: var(--muted-2); font-size: 8px; }
+.navigator-item-count { color: var(--muted-2); font-size: 8px; }
+.navigator-atoms { padding: 2px 7px 6px 24px; }
+.navigator-atom-button { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 6px; padding: 5px 7px; border-radius: 5px; }
+.navigator-atom-button[aria-current="true"] { background: rgba(255, 230, 109, .1); color: #ffe66d; }
+.navigator-element { color: var(--muted-2); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 8px; font-weight: 800; }
+.navigator-atom-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
+.navigator-serial { color: var(--muted-2); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 8px; }
+.navigator-empty { margin: 0; padding: 15px 10px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); font-size: 9px; line-height: 1.45; text-align: center; }
+.navigator-status { min-height: 16px; margin: 8px 0 0; color: var(--muted-2); font-size: 8px; line-height: 1.4; }
+
 .color-row { gap: 9px; }
 input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: #12243a; cursor: pointer; }
 .color-row code { flex: 1; color: var(--muted); font-size: 10px; }
@@ -268,7 +320,7 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
   "documentId": "document-starter-molecular-scene",
   "title": "Protein and DNA starter scene",
   "revision": 1,
-  "modified": "2026-07-28T00:03:26.154Z",
+  "modified": "2026-07-28T00:13:05.671Z",
   "modifiedBy": "build",
   "structure": {
     "id": "structure-starter-complex",
@@ -325,6 +377,10 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
           <button class="ribbon-button" type="button" data-inspector-target="fetch" aria-controls="inspector" aria-pressed="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17.5H5.8a3.8 3.8 0 0 1-.4-7.6A6 6 0 0 1 17 8.5a4.5 4.5 0 0 1 1.2 8.9H17M12 10v9m-3-3 3 3 3-3"/></svg>
             <span>Fetch</span><small>RCSB PDB</small>
+          </button>
+          <button id="navigator-button" class="ribbon-button" type="button" data-inspector-target="navigator" aria-controls="inspector" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h4m-4 7h8m-8 7h12M9 5v7m4 0v7"/><circle cx="5" cy="5" r="1.5"/><circle cx="5" cy="12" r="1.5"/><circle cx="5" cy="19" r="1.5"/></svg>
+            <span>Navigator</span><small>Chains &amp; sequence</small>
           </button>
         </div>
         <div class="ribbon-group-label">Structure</div>
@@ -439,6 +495,21 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
               <option value="surface">Molecular surface</option>
             </select>
             <button id="reset-appearance" class="button secondary full-width panel-action">Reset all appearance</button>
+          </section>
+
+          <section id="panel-navigator" class="inspector-panel" data-inspector-panel="navigator" hidden>
+            <p class="panel-intro">Browse chains and residues locally. Expand a residue only when you need its atoms.</p>
+            <label class="field-label navigator-search-label" for="navigator-search">Search structure</label>
+            <input id="navigator-search" class="navigator-search" type="search" placeholder="Chain, residue, atom, or serial" autocomplete="off" spellcheck="false" aria-describedby="navigator-status">
+            <div class="navigator-toolbar">
+              <span id="navigator-count">Building structure index…</span>
+              <button id="navigator-clear-search" class="text-button" type="button" hidden>Clear</button>
+            </div>
+            <div class="navigator-section-heading"><span>SEQUENCE</span><small>Choose a residue to select and focus it</small></div>
+            <div id="navigator-sequences" class="navigator-sequences" aria-label="Per-chain residue sequences"></div>
+            <div class="navigator-section-heading"><span>STRUCTURE</span><small>Chain → residue → atom</small></div>
+            <div id="navigator-tree" class="navigator-tree" role="tree" aria-label="Structure navigator"></div>
+            <p id="navigator-status" class="navigator-status" aria-live="polite"></p>
           </section>
 
           <section id="panel-color" class="inspector-panel" data-inspector-panel="color" hidden>
@@ -643,6 +714,17 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   const VDW_RADII = { H: 1.2, C: 1.7, N: 1.55, O: 1.52, F: 1.47, P: 1.8, S: 1.8, CL: 1.75, BR: 1.85, I: 1.98, FE: 1.8, MG: 1.73, ZN: 1.39, CA: 2.31 };
   const WATER_NAMES = new Set(['HOH', 'WAT', 'H2O', 'DOD']);
   const MEASUREMENT_ATOM_COUNTS = Object.freeze({ distance: 2, angle: 3, dihedral: 4 });
+  const AMINO_ACID_CODES = Object.freeze({
+    ALA: 'A', ARG: 'R', ASN: 'N', ASP: 'D', CYS: 'C', GLN: 'Q', GLU: 'E',
+    GLY: 'G', HIS: 'H', ILE: 'I', LEU: 'L', LYS: 'K', MET: 'M', PHE: 'F',
+    PRO: 'P', SER: 'S', THR: 'T', TRP: 'W', TYR: 'Y', VAL: 'V', SEC: 'U',
+    PYL: 'O', ASX: 'B', GLX: 'Z', MSE: 'M'
+  });
+  const NUCLEOTIDE_CODES = Object.freeze({
+    A: 'A', C: 'C', G: 'G', T: 'T', U: 'U', I: 'I',
+    DA: 'A', DC: 'C', DG: 'G', DT: 'T', DU: 'U', DI: 'I',
+    ADE: 'A', CYT: 'C', GUA: 'G', THY: 'T', URA: 'U'
+  });
 
   function uid(prefix = 'id') {
     if (globalThis.crypto?.randomUUID) return `${prefix}-${crypto.randomUUID()}`;
@@ -718,6 +800,67 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     }
     inferBonds(atoms, bonds);
     return { atoms, bonds, chains: [...new Set(atoms.map(a => a.chain))] };
+  }
+
+  function residueDescriptor(residueName) {
+    const name = String(residueName || 'UNK').trim().toUpperCase() || 'UNK';
+    if (AMINO_ACID_CODES[name]) return { symbol: AMINO_ACID_CODES[name], kind: 'protein' };
+    if (NUCLEOTIDE_CODES[name]) return { symbol: NUCLEOTIDE_CODES[name], kind: 'nucleic' };
+    return { symbol: name.slice(0, 3) || 'UNK', kind: 'other' };
+  }
+
+  function buildStructureHierarchy(value) {
+    const atoms = Array.isArray(value) ? value : value?.atoms;
+    if (!Array.isArray(atoms)) return [];
+    const chains = [];
+    const chainMap = new Map();
+    const residueMaps = new Map();
+
+    for (const atom of atoms) {
+      const chainKey = `${atom.model}|${atom.chain}`;
+      let chain = chainMap.get(chainKey);
+      if (!chain) {
+        chain = { key: chainKey, model: atom.model, chain: atom.chain, residues: [] };
+        chainMap.set(chainKey, chain);
+        residueMaps.set(chainKey, new Map());
+        chains.push(chain);
+      }
+
+      const residueKey = `${chainKey}|${atom.resi}|${atom.icode}|${atom.resn}`;
+      const residues = residueMaps.get(chainKey);
+      let residue = residues.get(residueKey);
+      if (!residue) {
+        const descriptor = residueDescriptor(atom.resn);
+        residue = {
+          key: residueKey, model: atom.model, chain: atom.chain,
+          resn: atom.resn, resi: atom.resi, icode: atom.icode,
+          symbol: descriptor.symbol, kind: descriptor.kind, atoms: []
+        };
+        residues.set(residueKey, residue);
+        chain.residues.push(residue);
+      }
+      residue.atoms.push(atom);
+    }
+    return chains;
+  }
+
+  function representativeAtom(residue) {
+    const atoms = residue?.atoms || [];
+    const preferred = residue?.kind === 'protein'
+      ? ['CA', 'C', 'N']
+      : residue?.kind === 'nucleic'
+        ? ['P', "C4'", "C1'", 'N1', 'N9']
+        : [];
+    for (const name of preferred) {
+      const primary = atoms.find(atom => atom.name === name && !atom.altLoc);
+      if (primary) return primary;
+      const alternate = atoms.find(atom => atom.name === name);
+      if (alternate) return alternate;
+    }
+    return atoms.find(atom => atom.element !== 'H' && !atom.altLoc)
+      || atoms.find(atom => atom.element !== 'H')
+      || atoms[0]
+      || null;
   }
 
   function inferBonds(atoms, bonds) {
@@ -910,7 +1053,8 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     ELEMENT_COLORS, CHAIN_COLORS, parsePDB, normalizeDocument, selectorForAtom,
     atomMatchesSelector, atomIdentity, atomLabel, colorForAtom, isWater, vdwRadius, uid,
     MEASUREMENT_ATOM_COUNTS, normalizeMeasurements, measurementAtoms, measurementValue,
-    formatMeasurementValue
+    formatMeasurementValue,
+    residueDescriptor, buildStructureHierarchy, representativeAtom
   };
 })();
 </script>
@@ -1182,6 +1326,18 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       if (notify) this.callbacks.onCamera?.(structuredClone(this.doc.scene.camera));
     }
 
+    focusSelector(selector, notify = true) {
+      if (!this.doc || !selector) return;
+      const selection = this.to3DSelection(selector);
+      this.applyingDocument = true;
+      this.viewer.zoomTo(selection);
+      this.viewer.render();
+      this.doc.scene.camera = { view: this.viewer.getView() };
+      this.lastReportedView = JSON.stringify(this.doc.scene.camera.view);
+      requestAnimationFrame(() => { this.applyingDocument = false; });
+      if (notify) this.callbacks.onCamera?.(structuredClone(this.doc.scene.camera));
+    }
+
     render() {
       if (!this.doc) return;
       this.viewer.setBackgroundColor(this.doc.scene.background, 1);
@@ -1439,7 +1595,8 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     'color-ribbon-value', 'show-ribbon-value', 'measurements-button', 'measurements-ribbon-value',
     'measurement-type', 'start-measurement', 'measurement-pick-progress', 'measurement-pick-status',
     'measurement-pick-atoms', 'cancel-measurement', 'clear-measurements', 'empty-measurements',
-    'measurement-list'
+    'measurement-list', 'navigator-button', 'navigator-search',
+    'navigator-clear-search', 'navigator-count', 'navigator-sequences', 'navigator-tree', 'navigator-status'
   ].map(id => [id, document.getElementById(id)]));
 
   const undoStack = [];
@@ -1452,11 +1609,17 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   let activeInspector = null;
   let measurementDraft = null;
   let activeMeasurementId = null;
+  const navigatorState = {
+    structureKey: '', chains: [], residueByKey: new Map(),
+    expandedChains: new Set(), expandedResidues: new Set(), query: ''
+  };
+  const MAX_NAVIGATOR_SEARCH_ATOMS = 300;
   const inspectorButtons = [...document.querySelectorAll('[data-inspector-target]')];
   const inspectorPanels = [...document.querySelectorAll('[data-inspector-panel]')];
   const inspectorTitles = {
     fetch: 'Find structure', representation: 'Representation', color: 'Color',
-    show: 'Show and hide', inspect: 'Selection inspector', measurements: 'Measurements'
+    show: 'Show and hide', inspect: 'Selection inspector', measurements: 'Measurements',
+    navigator: 'Structure navigator'
   };
 
   const renderer = new window.MoleculeRenderer(elements['molecule-viewer'], {
@@ -1548,6 +1711,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     syncControls();
     syncSelection();
     syncMeasurements();
+    syncNavigator();
   }
 
   function syncControls() {
@@ -1830,6 +1994,288 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     if (atom && elements['inspector'].hidden) openInspector('inspect');
   }
 
+  function syncNavigator() {
+    if (!elements['navigator-tree'] || !parsed) return;
+    const structureKey = `${doc.structure.id}:${doc.structure.data.length}:${doc.structure.data.slice(0, 60)}`;
+    if (structureKey !== navigatorState.structureKey) {
+      navigatorState.structureKey = structureKey;
+      navigatorState.chains = Core.buildStructureHierarchy(parsed);
+      navigatorState.residueByKey = new Map();
+      for (const chain of navigatorState.chains) {
+        for (const residue of chain.residues) navigatorState.residueByKey.set(residue.key, residue);
+      }
+      navigatorState.expandedChains.clear();
+      navigatorState.expandedResidues.clear();
+      navigatorState.query = '';
+      elements['navigator-search'].value = '';
+      if (navigatorState.chains[0]) navigatorState.expandedChains.add(navigatorState.chains[0].key);
+      revealNavigatorSelection();
+    }
+    renderNavigator();
+  }
+
+  function revealNavigatorSelection() {
+    const atom = selectedAtom();
+    if (!atom) return;
+    const chainKey = `${atom.model}|${atom.chain}`;
+    const residueKey = `${chainKey}|${atom.resi}|${atom.icode}|${atom.resn}`;
+    if (!navigatorState.residueByKey.has(residueKey)) return;
+    navigatorState.expandedChains.add(chainKey);
+    navigatorState.expandedResidues.add(residueKey);
+  }
+
+  function chainDisplayName(chain) {
+    const name = chain.chain === '_' ? 'No chain' : `Chain ${chain.chain}`;
+    const models = new Set(navigatorState.chains.map(candidate => candidate.model));
+    return models.size > 1 ? `${name} · model ${chain.model}` : name;
+  }
+
+  function residueDisplayName(residue) {
+    return `${residue.resn} ${residue.resi}${residue.icode || ''}`;
+  }
+
+  function atomBelongsToResidue(atom, residue) {
+    return Boolean(atom) && atom.model === residue.model && atom.chain === residue.chain
+      && atom.resi === residue.resi && atom.icode === residue.icode && atom.resn === residue.resn;
+  }
+
+  function renderNavigator() {
+    if (!elements['navigator-tree']) return;
+    const residueCount = navigatorState.chains.reduce((sum, chain) => sum + chain.residues.length, 0);
+    elements['navigator-count'].textContent = `${navigatorState.chains.length.toLocaleString()} chain${navigatorState.chains.length === 1 ? '' : 's'} · ${residueCount.toLocaleString()} residue${residueCount === 1 ? '' : 's'}`;
+    elements['navigator-clear-search'].hidden = !navigatorState.query;
+    renderNavigatorSequences();
+    renderNavigatorTree();
+  }
+
+  function renderNavigatorSequences() {
+    const selected = selectedAtom();
+    const fragment = document.createDocumentFragment();
+    for (const chain of navigatorState.chains) {
+      const expanded = navigatorState.expandedChains.has(chain.key);
+      const section = document.createElement('section');
+      section.className = 'sequence-chain';
+
+      const toggle = document.createElement('button');
+      toggle.className = 'sequence-chain-toggle';
+      toggle.type = 'button';
+      toggle.dataset.navigatorKind = 'chain';
+      toggle.dataset.chainKey = chain.key;
+      toggle.setAttribute('aria-expanded', String(expanded));
+      const label = document.createElement('strong');
+      label.textContent = chainDisplayName(chain);
+      const count = document.createElement('span');
+      count.textContent = `${chain.residues.length.toLocaleString()} residues`;
+      toggle.append(label, count);
+      section.appendChild(toggle);
+
+      if (expanded) {
+        const strip = document.createElement('div');
+        strip.className = 'sequence-strip';
+        strip.setAttribute('aria-label', `${chainDisplayName(chain)} residue sequence`);
+        for (const residue of chain.residues) {
+          const button = document.createElement('button');
+          button.className = 'sequence-residue';
+          button.type = 'button';
+          button.dataset.navigatorKind = 'sequence-residue';
+          button.dataset.residueKey = residue.key;
+          button.dataset.kind = residue.kind;
+          button.textContent = residue.symbol;
+          button.title = residueDisplayName(residue);
+          button.setAttribute('aria-label', `${residueDisplayName(residue)}, ${residue.atoms.length} atoms`);
+          button.setAttribute('aria-current', String(atomBelongsToResidue(selected, residue)));
+          strip.appendChild(button);
+        }
+        section.appendChild(strip);
+      }
+      fragment.appendChild(section);
+    }
+    elements['navigator-sequences'].replaceChildren(fragment);
+  }
+
+  function renderNavigatorTree() {
+    const selected = selectedAtom();
+    const query = navigatorState.query;
+    const fragment = document.createDocumentFragment();
+    const budget = { renderedResidues: 0, renderedSearchAtoms: 0, totalAtomMatches: 0, truncated: false };
+
+    for (const chain of navigatorState.chains) {
+      const chainText = `${chainDisplayName(chain)} ${chain.chain}`.toLowerCase();
+      const chainMatches = Boolean(query) && chainText.includes(query);
+      const expanded = navigatorState.expandedChains.has(chain.key) || Boolean(query);
+      const matches = [];
+
+      if (expanded) {
+        for (const residue of chain.residues) {
+          const residueText = `${residue.symbol} ${residueDisplayName(residue)} ${chainDisplayName(chain)}`.toLowerCase();
+          const residueMatches = Boolean(query) && residueText.includes(query);
+          const atomMatches = query
+            ? residue.atoms.filter(atom => `${atom.name} ${atom.element} ${atom.serial}`.toLowerCase().includes(query))
+            : [];
+          budget.totalAtomMatches += atomMatches.length;
+          if (!query || chainMatches || residueMatches || atomMatches.length) {
+            matches.push({ residue, residueMatches, atomMatches });
+          }
+        }
+      }
+      if (query && !chainMatches && !matches.length) continue;
+
+      const chainNode = document.createElement('section');
+      chainNode.className = 'navigator-chain';
+      chainNode.setAttribute('role', 'treeitem');
+      chainNode.setAttribute('aria-expanded', String(expanded));
+      const toggle = document.createElement('button');
+      toggle.className = 'navigator-chain-toggle';
+      toggle.type = 'button';
+      toggle.dataset.navigatorKind = 'chain';
+      toggle.dataset.chainKey = chain.key;
+      toggle.setAttribute('aria-expanded', String(expanded));
+      const label = document.createElement('strong');
+      label.textContent = chainDisplayName(chain);
+      const count = document.createElement('span');
+      count.textContent = `${chain.residues.length.toLocaleString()} residues`;
+      toggle.append(label, count);
+      chainNode.appendChild(toggle);
+
+      if (expanded) {
+        const group = document.createElement('div');
+        group.className = 'navigator-chain-body';
+        group.setAttribute('role', 'group');
+        for (const match of matches) {
+          if (query && budget.renderedResidues >= 600) {
+            budget.truncated = true;
+            break;
+          }
+          group.appendChild(renderNavigatorResidue(match, selected, query, chainMatches, budget));
+          budget.renderedResidues += 1;
+        }
+        chainNode.appendChild(group);
+      }
+      fragment.appendChild(chainNode);
+    }
+
+    if (!fragment.childNodes.length) {
+      const empty = document.createElement('p');
+      empty.className = 'navigator-empty';
+      empty.textContent = `No chains, residues, or atoms match “${elements['navigator-search'].value.trim()}”.`;
+      fragment.appendChild(empty);
+    }
+    elements['navigator-tree'].replaceChildren(fragment);
+
+    if (!query) {
+      elements['navigator-status'].textContent = 'Atom rows are loaded only when a residue is expanded.';
+    } else if (budget.truncated || budget.totalAtomMatches > MAX_NAVIGATOR_SEARCH_ATOMS) {
+      elements['navigator-status'].textContent = `Showing a bounded set of matches. Refine “${elements['navigator-search'].value.trim()}” to see more.`;
+    } else {
+      elements['navigator-status'].textContent = `${budget.renderedResidues.toLocaleString()} matching residue${budget.renderedResidues === 1 ? '' : 's'}${budget.totalAtomMatches ? ` · ${budget.totalAtomMatches.toLocaleString()} matching atom${budget.totalAtomMatches === 1 ? '' : 's'}` : ''}.`;
+    }
+  }
+
+  function renderNavigatorResidue(match, selected, query, chainMatches, budget) {
+    const { residue, residueMatches, atomMatches } = match;
+    const expanded = navigatorState.expandedResidues.has(residue.key);
+    const current = atomBelongsToResidue(selected, residue);
+    const node = document.createElement('div');
+    node.className = 'navigator-residue';
+    node.setAttribute('role', 'treeitem');
+    node.setAttribute('aria-expanded', String(expanded));
+
+    const button = document.createElement('button');
+    button.className = 'navigator-residue-button';
+    button.type = 'button';
+    button.dataset.navigatorKind = 'residue';
+    button.dataset.residueKey = residue.key;
+    button.setAttribute('aria-expanded', String(expanded));
+    button.setAttribute('aria-current', String(current));
+    button.setAttribute('aria-label', `${residueDisplayName(residue)}, ${residue.atoms.length} atoms. Select, focus, and ${expanded ? 'collapse' : 'expand'}.`);
+    const chevron = document.createElement('span');
+    chevron.className = 'navigator-chevron';
+    chevron.setAttribute('aria-hidden', 'true');
+    const label = document.createElement('span');
+    label.className = 'navigator-residue-label';
+    const name = document.createElement('strong');
+    name.textContent = residueDisplayName(residue);
+    const symbol = document.createElement('small');
+    symbol.textContent = residue.kind === 'other' ? residue.symbol : `${residue.symbol} · ${residue.kind === 'protein' ? 'protein' : 'nucleic acid'}`;
+    label.append(name, symbol);
+    const count = document.createElement('span');
+    count.className = 'navigator-item-count';
+    count.textContent = residue.atoms.length;
+    button.append(chevron, label, count);
+    node.appendChild(button);
+
+    let atoms = [];
+    if (expanded) {
+      atoms = query && !chainMatches && !residueMatches && atomMatches.length ? atomMatches : residue.atoms;
+    } else if (query && atomMatches.length) {
+      const remaining = Math.max(0, MAX_NAVIGATOR_SEARCH_ATOMS - budget.renderedSearchAtoms);
+      atoms = atomMatches.slice(0, remaining);
+      budget.renderedSearchAtoms += atoms.length;
+      if (atoms.length < atomMatches.length) budget.truncated = true;
+    }
+    if (atoms.length) {
+      const group = document.createElement('div');
+      group.className = 'navigator-atoms';
+      group.setAttribute('role', 'group');
+      for (const atom of atoms) {
+        const atomButton = document.createElement('button');
+        atomButton.className = 'navigator-atom-button';
+        atomButton.type = 'button';
+        atomButton.setAttribute('role', 'treeitem');
+        atomButton.dataset.navigatorKind = 'atom';
+        atomButton.dataset.atomIndex = atom.index;
+        atomButton.setAttribute('aria-current', String(selected?.index === atom.index));
+        atomButton.setAttribute('aria-label', `${atom.name}, ${atom.element}, serial ${atom.serial}, ${residueDisplayName(residue)}`);
+        const element = document.createElement('span');
+        element.className = 'navigator-element';
+        element.textContent = atom.element;
+        const name = document.createElement('span');
+        name.className = 'navigator-atom-name';
+        name.textContent = atom.name;
+        const serial = document.createElement('span');
+        serial.className = 'navigator-serial';
+        serial.textContent = `#${atom.serial}`;
+        atomButton.append(element, name, serial);
+        group.appendChild(atomButton);
+      }
+      node.appendChild(group);
+    }
+    return node;
+  }
+
+  function toggleNavigatorChain(chainKey) {
+    if (navigatorState.expandedChains.has(chainKey)) navigatorState.expandedChains.delete(chainKey);
+    else navigatorState.expandedChains.add(chainKey);
+    renderNavigator();
+  }
+
+  function selectNavigatorResidue(residue, toggleAtoms) {
+    if (!residue) return;
+    navigatorState.expandedChains.add(`${residue.model}|${residue.chain}`);
+    if (toggleAtoms) {
+      if (navigatorState.expandedResidues.has(residue.key)) navigatorState.expandedResidues.delete(residue.key);
+      else navigatorState.expandedResidues.add(residue.key);
+    }
+    const atom = Core.representativeAtom(residue);
+    if (!atom) return;
+    selectAtom(atom);
+    renderer.focusSelector(Core.selectorForAtom(atom, 'residue', doc.structure.id));
+  }
+
+  function handleNavigatorClick(event) {
+    const button = event.target.closest('button[data-navigator-kind]');
+    if (!button || !event.currentTarget.contains(button)) return;
+    const kind = button.dataset.navigatorKind;
+    if (kind === 'chain') {
+      toggleNavigatorChain(button.dataset.chainKey);
+    } else if (kind === 'residue' || kind === 'sequence-residue') {
+      selectNavigatorResidue(navigatorState.residueByKey.get(button.dataset.residueKey), kind === 'residue');
+    } else if (kind === 'atom') {
+      const atom = parsed?.atoms[Number(button.dataset.atomIndex)];
+      if (atom) selectAtom(atom);
+    }
+  }
+
   function openInspector(name) {
     if (!inspectorTitles[name]) return;
     if (measurementDraft && name !== 'measurements') cancelMeasurement();
@@ -1839,6 +2285,10 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     elements['workspace'].classList.add('inspector-open');
     for (const panel of inspectorPanels) panel.hidden = panel.dataset.inspectorPanel !== name;
     for (const button of inspectorButtons) button.setAttribute('aria-pressed', String(button.dataset.inspectorTarget === name));
+    if (name === 'navigator') {
+      revealNavigatorSelection();
+      renderNavigator();
+    }
   }
 
   function closeInspector() {
@@ -2183,6 +2633,18 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   elements['clear-measurements'].addEventListener('click', () => {
     if (doc.scene.measurements.length && confirm('Delete all saved measurements?')) clearMeasurements();
   });
+  elements['navigator-search'].addEventListener('input', event => {
+    navigatorState.query = event.target.value.trim().toLowerCase();
+    renderNavigator();
+  });
+  elements['navigator-clear-search'].addEventListener('click', () => {
+    navigatorState.query = '';
+    elements['navigator-search'].value = '';
+    renderNavigator();
+    elements['navigator-search'].focus();
+  });
+  elements['navigator-sequences'].addEventListener('click', handleNavigatorClick);
+  elements['navigator-tree'].addEventListener('click', handleNavigatorClick);
   elements['open-file-button'].addEventListener('click', () => elements['file-input'].click());
   elements['close-inspector'].addEventListener('click', closeInspector);
   for (const button of inspectorButtons) {

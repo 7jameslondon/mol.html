@@ -266,6 +266,18 @@
       if (notify) this.callbacks.onCamera?.(structuredClone(this.doc.scene.camera));
     }
 
+    focusSelector(selector, notify = true) {
+      if (!this.doc || !selector) return;
+      const selection = this.to3DSelection(selector);
+      this.applyingDocument = true;
+      this.viewer.zoomTo(selection);
+      this.viewer.render();
+      this.doc.scene.camera = { view: this.viewer.getView() };
+      this.lastReportedView = JSON.stringify(this.doc.scene.camera.view);
+      requestAnimationFrame(() => { this.applyingDocument = false; });
+      if (notify) this.callbacks.onCamera?.(structuredClone(this.doc.scene.camera));
+    }
+
     render() {
       if (!this.doc) return;
       this.viewer.setBackgroundColor(this.doc.scene.background, 1);
