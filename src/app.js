@@ -26,7 +26,10 @@
     'apply-color', 'copy-selection', 'fit-button', 'external-banner', 'reload-button', 'toast-region',
     'molecule-viewer', 'canvas-message', 'workspace', 'inspector', 'inspector-title', 'close-inspector',
     'open-file-button', 'inspect-button', 'clear-selection-panel', 'representation-ribbon-value',
-    'color-ribbon-value', 'show-ribbon-value'
+    'color-ribbon-value', 'show-ribbon-value', 'measurements-button', 'measurements-ribbon-value',
+    'measurement-type', 'start-measurement', 'measurement-pick-progress', 'measurement-pick-status',
+    'measurement-pick-atoms', 'cancel-measurement', 'clear-measurements', 'empty-measurements',
+    'measurement-list'
   ].map(id => [id, document.getElementById(id)]));
 
   const undoStack = [];
@@ -37,15 +40,17 @@
   let fetchController = null;
   let searchController = null;
   let activeInspector = null;
+  let measurementDraft = null;
+  let activeMeasurementId = null;
   const inspectorButtons = [...document.querySelectorAll('[data-inspector-target]')];
   const inspectorPanels = [...document.querySelectorAll('[data-inspector-panel]')];
   const inspectorTitles = {
     fetch: 'Find structure', representation: 'Representation', color: 'Color',
-    show: 'Show and hide', inspect: 'Selection inspector'
+    show: 'Show and hide', inspect: 'Selection inspector', measurements: 'Measurements'
   };
 
   const renderer = new window.MoleculeRenderer(elements['molecule-viewer'], {
-    onPick: atom => selectAtom(atom),
+    onPick: atom => handleAtomPick(atom),
     onCamera: camera => {
       doc.scene.camera = camera;
       touchDocument('browser', false);
@@ -102,6 +107,7 @@
 
   function undo() {
     if (!undoStack.length) return;
+    resetMeasurementInteraction(false);
     redoStack.push(snapshot());
     restoreSnapshot(undoStack.pop());
     touchDocument('browser');
@@ -110,6 +116,7 @@
 
   function redo() {
     if (!redoStack.length) return;
+    resetMeasurementInteraction(false);
     undoStack.push(snapshot());
     restoreSnapshot(redoStack.pop());
     touchDocument('browser');
@@ -118,6 +125,8 @@
 
   function refresh({ fit = false } = {}) {
     try {
+      renderer.measurementDraft = measurementDraft?.atoms ? [...measurementDraft.atoms] : [];
+      renderer.activeMeasurementId = activeMeasurementId;
       renderer.setDocument(doc, { fit });
       parsed = renderer.parsed;
       syncLiveDataBlock();
@@ -128,6 +137,7 @@
     }
     syncControls();
     syncSelection();
+    syncMeasurements();
   }
 
   function syncControls() {
@@ -153,6 +163,9 @@
     })[doc.scene.colorMode] || doc.scene.colorMode;
     elements['show-ribbon-value'].textContent = doc.scene.showHydrogens && doc.scene.showWater
       ? 'H + water' : doc.scene.showHydrogens ? 'Hydrogens' : doc.scene.showWater ? 'Water' : 'Standard';
+    const measurementCount = doc.scene.measurements.length;
+    elements['measurements-ribbon-value'].textContent = measurementCount
+      ? `${measurementCount} saved` : 'None';
     elements['undo-button'].disabled = !undoStack.length;
     elements['redo-button'].disabled = !redoStack.length;
   }
@@ -178,6 +191,224 @@
     elements['selected-coordinates'].textContent = `${atom.x.toFixed(2)}, ${atom.y.toFixed(2)}, ${atom.z.toFixed(2)}`;
   }
 
+  function syncMeasurements() {
+    const measurements = doc.scene.measurements || [];
+    if (activeMeasurementId && !measurements.some(measurement => measurement.id === activeMeasurementId)) {
+      activeMeasurementId = null;
+      renderer.activeMeasurementId = null;
+    }
+    elements['measurement-list'].replaceChildren();
+    elements['empty-measurements'].hidden = Boolean(measurements.length);
+    elements['clear-measurements'].disabled = !measurements.length;
+    elements['measurement-type'].disabled = Boolean(measurementDraft);
+    elements['start-measurement'].disabled = Boolean(measurementDraft);
+    elements['measurement-pick-progress'].hidden = !measurementDraft;
+    elements['measurement-pick-atoms'].replaceChildren();
+
+    if (measurementDraft) {
+      const expected = Core.MEASUREMENT_ATOM_COUNTS[measurementDraft.type];
+      const next = Math.min(expected, measurementDraft.atoms.length + 1);
+      elements['measurement-pick-status'].textContent = `Pick atom ${next} of ${expected}`;
+      for (let index = 0; index < measurementDraft.atoms.length; index++) {
+        const row = document.createElement('div');
+        row.className = 'measurement-pick-atom';
+        const number = document.createElement('b');
+        number.textContent = String(index + 1);
+        row.append(number, document.createTextNode(Core.atomLabel(measurementDraft.atoms[index])));
+        elements['measurement-pick-atoms'].appendChild(row);
+      }
+    }
+
+    for (const measurement of measurements) {
+      const atoms = Core.measurementAtoms(measurement, parsed?.atoms || [], doc.structure.id);
+      const value = Core.formatMeasurementValue(measurement.type, Core.measurementValue(measurement.type, atoms));
+      const typeName = measurementTypeName(measurement.type);
+      const card = document.createElement('article');
+      card.className = `measurement-card${measurement.id === activeMeasurementId ? ' active' : ''}`;
+      card.dataset.measurementId = measurement.id;
+
+      const header = document.createElement('div');
+      header.className = 'measurement-card-header';
+      const focus = document.createElement('button');
+      focus.className = 'measurement-focus';
+      focus.type = 'button';
+      focus.setAttribute('aria-pressed', String(measurement.id === activeMeasurementId));
+      focus.title = 'Highlight this measurement in the viewer';
+      const heading = document.createElement('strong');
+      heading.textContent = String(measurement.label || '').trim() || typeName;
+      const reading = document.createElement('span');
+      reading.textContent = value;
+      focus.append(heading, reading);
+      focus.addEventListener('click', () => selectMeasurement(measurement.id));
+      const remove = document.createElement('button');
+      remove.className = 'measurement-delete';
+      remove.type = 'button';
+      remove.textContent = '×';
+      remove.title = `Delete ${typeName.toLowerCase()}`;
+      remove.setAttribute('aria-label', `Delete ${typeName.toLowerCase()}`);
+      remove.addEventListener('click', () => deleteMeasurement(measurement.id));
+      header.append(focus, remove);
+
+      const atomSummary = document.createElement('p');
+      atomSummary.className = 'measurement-atoms';
+      atomSummary.textContent = atoms ? atoms.map(Core.atomLabel).join(' → ') : 'Atom selectors are unavailable for this structure.';
+
+      const labelField = document.createElement('label');
+      labelField.className = 'measurement-field-label';
+      labelField.appendChild(document.createTextNode('Label'));
+      const labelInput = document.createElement('input');
+      labelInput.className = 'measurement-label-input';
+      labelInput.type = 'text';
+      labelInput.maxLength = 80;
+      labelInput.placeholder = typeName;
+      labelInput.value = measurement.label || '';
+      labelInput.addEventListener('change', () => updateMeasurement(measurement.id, { label: labelInput.value }));
+      labelField.appendChild(labelInput);
+
+      const noteField = document.createElement('label');
+      noteField.className = 'measurement-field-label';
+      noteField.appendChild(document.createTextNode('Note'));
+      const noteInput = document.createElement('textarea');
+      noteInput.className = 'measurement-note-input';
+      noteInput.maxLength = 500;
+      noteInput.placeholder = 'Optional annotation';
+      noteInput.value = measurement.note || '';
+      noteInput.addEventListener('change', () => updateMeasurement(measurement.id, { note: noteInput.value }));
+      noteField.appendChild(noteInput);
+
+      card.append(header, atomSummary, labelField, noteField);
+      elements['measurement-list'].appendChild(card);
+    }
+  }
+
+  function measurementTypeName(type) {
+    return ({ distance: 'Distance', angle: 'Angle', dihedral: 'Dihedral' })[type] || 'Unknown measurement';
+  }
+
+  function startMeasurement(type = elements['measurement-type'].value) {
+    const expected = Core.MEASUREMENT_ATOM_COUNTS[type];
+    if (!expected) throw new Error(`Unsupported measurement type: ${type}`);
+    if (measurementDraft) cancelMeasurement(false);
+    measurementDraft = { type, atoms: [] };
+    elements['measurement-type'].value = type;
+    activeMeasurementId = null;
+    renderer.setActiveMeasurement(null);
+    renderer.setMeasurementDraft([]);
+    syncMeasurements();
+    elements['molecule-viewer'].focus();
+    return { type, requiredAtoms: expected };
+  }
+
+  function cancelMeasurement(render = true) {
+    if (!measurementDraft) return false;
+    measurementDraft = null;
+    if (render) renderer.setMeasurementDraft([]);
+    else renderer.measurementDraft = [];
+    syncMeasurements();
+    return true;
+  }
+
+  function resetMeasurementInteraction(render = true) {
+    measurementDraft = null;
+    activeMeasurementId = null;
+    if (render) {
+      renderer.setMeasurementDraft([]);
+      renderer.setActiveMeasurement(null);
+    } else {
+      renderer.measurementDraft = [];
+      renderer.activeMeasurementId = null;
+    }
+  }
+
+  function handleAtomPick(atom) {
+    if (!measurementDraft) {
+      selectAtom(atom);
+      return;
+    }
+    const duplicate = measurementDraft.atoms.some(candidate =>
+      candidate.model === atom.model && candidate.serial === atom.serial
+    );
+    if (duplicate) {
+      toast('Pick a different atom for this measurement.', 'warning');
+      return;
+    }
+    measurementDraft.atoms.push(atom);
+    const expected = Core.MEASUREMENT_ATOM_COUNTS[measurementDraft.type];
+    if (measurementDraft.atoms.length < expected) {
+      renderer.setMeasurementDraft(measurementDraft.atoms);
+      syncMeasurements();
+      return;
+    }
+
+    const type = measurementDraft.type;
+    const atoms = [...measurementDraft.atoms];
+    const id = Core.uid('measurement');
+    measurementDraft = null;
+    activeMeasurementId = id;
+    commit(() => {
+      doc.scene.measurements.push({
+        id, type,
+        atoms: atoms.map(atom => Core.selectorForAtom(atom, 'atom', doc.structure.id))
+      });
+    });
+    toast(`${measurementTypeName(type)} added`, 'success');
+  }
+
+  function selectMeasurement(id) {
+    activeMeasurementId = activeMeasurementId === id ? null : id;
+    renderer.setActiveMeasurement(activeMeasurementId);
+    syncMeasurements();
+  }
+
+  function updateMeasurement(id, changes, source = 'browser') {
+    const allowed = {};
+    if ('label' in changes) allowed.label = String(changes.label ?? '').slice(0, 80);
+    if ('note' in changes) allowed.note = String(changes.note ?? '').slice(0, 500);
+    const target = doc.scene.measurements.find(measurement => measurement.id === id);
+    if (!target) throw new Error(`Measurement ${id} was not found.`);
+    commit(() => Object.assign(target, allowed), { source });
+    return structuredClone(doc.scene.measurements.find(measurement => measurement.id === id));
+  }
+
+  function deleteMeasurement(id, source = 'browser') {
+    if (!doc.scene.measurements.some(measurement => measurement.id === id)) return false;
+    if (activeMeasurementId === id) activeMeasurementId = null;
+    commit(() => {
+      doc.scene.measurements = doc.scene.measurements.filter(measurement => measurement.id !== id);
+    }, { source });
+    return true;
+  }
+
+  function clearMeasurements(source = 'browser') {
+    if (!doc.scene.measurements.length) return false;
+    activeMeasurementId = null;
+    commit(() => { doc.scene.measurements = []; }, { source });
+    return true;
+  }
+
+  function addMeasurement(type, serials, options = {}, source = 'agent') {
+    const expected = Core.MEASUREMENT_ATOM_COUNTS[type];
+    if (!expected) throw new Error(`Unsupported measurement type: ${type}`);
+    if (!Array.isArray(serials) || serials.length !== expected) {
+      throw new Error(`${measurementTypeName(type)} requires ${expected} atom serials.`);
+    }
+    const atoms = serials.map(serial => parsed?.atoms.find(atom => atom.serial === Number(serial)));
+    if (!atoms.every(Boolean)) throw new Error('One or more atom serials were not found.');
+    if (new Set(atoms.map(atom => `${atom.model}:${atom.serial}`)).size !== atoms.length) {
+      throw new Error('Each measurement atom must be distinct.');
+    }
+    const record = {
+      id: typeof options.id === 'string' && options.id.trim() ? options.id : Core.uid('measurement'),
+      type,
+      atoms: atoms.map(atom => Core.selectorForAtom(atom, 'atom', doc.structure.id))
+    };
+    if (options.label != null) record.label = String(options.label).slice(0, 80);
+    if (options.note != null) record.note = String(options.note).slice(0, 500);
+    activeMeasurementId = record.id;
+    commit(() => { doc.scene.measurements.push(record); }, { source });
+    return structuredClone(record);
+  }
+
   function selectAtom(atom) {
     commit(() => {
       doc.scene.selection = atom ? {
@@ -191,6 +422,7 @@
 
   function openInspector(name) {
     if (!inspectorTitles[name]) return;
+    if (measurementDraft && name !== 'measurements') cancelMeasurement();
     activeInspector = name;
     elements['inspector-title'].textContent = inspectorTitles[name];
     elements['inspector'].hidden = false;
@@ -200,6 +432,7 @@
   }
 
   function closeInspector() {
+    if (measurementDraft) cancelMeasurement();
     activeInspector = null;
     elements['inspector'].hidden = true;
     elements['workspace'].classList.remove('inspector-open');
@@ -250,12 +483,14 @@
   async function importPDB(name, text, options = {}) {
     const parsedCandidate = Core.parsePDB(text);
     const displayName = options.displayName || name.replace(/\.(pdb|ent|txt)$/i, '') || 'Imported molecule';
+    resetMeasurementInteraction(false);
     commit(() => {
       doc.title = displayName;
       doc.structure = { id: Core.uid('structure'), name: displayName, format: 'pdb', data: text };
       if (options.source) doc.structure.source = structuredClone(options.source);
       doc.scene.selection = null;
       doc.scene.customColors = [];
+      doc.scene.measurements = [];
       doc.scene.camera = { view: null };
     }, { history: false, fit: true });
     undoStack.length = 0; redoStack.length = 0;
@@ -530,6 +765,14 @@
   }));
   elements['clear-selection'].addEventListener('click', () => selectAtom(null));
   elements['clear-selection-panel'].addEventListener('click', () => selectAtom(null));
+  elements['start-measurement'].addEventListener('click', () => {
+    try { startMeasurement(); }
+    catch (error) { toast(error.message, 'error'); }
+  });
+  elements['cancel-measurement'].addEventListener('click', () => cancelMeasurement());
+  elements['clear-measurements'].addEventListener('click', () => {
+    if (doc.scene.measurements.length && confirm('Delete all saved measurements?')) clearMeasurements();
+  });
   elements['open-file-button'].addEventListener('click', () => elements['file-input'].click());
   elements['close-inspector'].addEventListener('click', closeInspector);
   for (const button of inspectorButtons) {
@@ -607,15 +850,17 @@
     if (command && event.key.toLowerCase() === 's') { event.preventDefault(); persistence.save(event.shiftKey); }
     else if (command && event.key.toLowerCase() === 'z' && !event.shiftKey) { event.preventDefault(); undo(); }
     else if ((command && event.key.toLowerCase() === 'y') || (command && event.shiftKey && event.key.toLowerCase() === 'z')) { event.preventDefault(); redo(); }
+    else if (event.key === 'Escape' && measurementDraft) cancelMeasurement();
     else if (event.key === 'Escape' && !elements['inspector'].hidden) closeInspector();
     else if (event.key === 'Escape') selectAtom(null);
     else if (event.key.toLowerCase() === 'r' && (document.activeElement === elements['molecule-viewer'] || elements['molecule-viewer'].contains(document.activeElement))) elements['fit-button'].click();
   });
 
   window.molview = Object.freeze({
-    version: '0.5.0',
+    version: '0.6.0',
     get document() { return structuredClone(doc); },
     getSelection() { return structuredClone(doc.scene.selection); },
+    getMeasurements() { return structuredClone(doc.scene.measurements); },
     serialize() { return persistence.serialize(); },
     async save() { return persistence.save(false); },
     async importPDB(name, text) { return importPDB(name, text); },
@@ -628,8 +873,18 @@
       return structuredClone(doc.scene.selection);
     },
     colorSelection(color, scope = 'atom') { applySelectionColor(color, scope); },
+    beginMeasurement(type) {
+      openInspector('measurements');
+      return startMeasurement(type);
+    },
+    cancelMeasurement() { return cancelMeasurement(); },
+    addMeasurement(type, serials, options) { return addMeasurement(type, serials, options, 'agent'); },
+    updateMeasurement(id, changes) { return updateMeasurement(id, changes || {}, 'agent'); },
+    removeMeasurement(id) { return deleteMeasurement(id, 'agent'); },
+    clearMeasurements() { return clearMeasurements('agent'); },
     loadDocument(value, modifiedBy = 'agent') {
       const next = Core.normalizeDocument(typeof value === 'string' ? JSON.parse(value) : value);
+      resetMeasurementInteraction(false);
       undoStack.push(snapshot()); redoStack.length = 0;
       doc = next;
       touchDocument(modifiedBy);

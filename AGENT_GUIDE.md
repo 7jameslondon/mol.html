@@ -87,6 +87,51 @@ For a residue rule, omit atom-specific fields and retain `chain`, `resi`,
 `icode`, and optionally `resn`. For a chain rule, retain only `structureId`,
 `model`, and `chain`.
 
+## Measurements and annotations
+
+Persistent geometric annotations live in `scene.measurements`. Each record has
+a stable `id`, a `type` (`distance`, `angle`, or `dihedral`), and an ordered
+`atoms` array containing 2, 3, or 4 atom selectors respectively. `label` and
+`note` are optional editable strings. Values are intentionally not persisted;
+the viewer recomputes them from the embedded coordinates whenever it loads.
+
+```json
+{
+  "id": "measurement-active-site-distance",
+  "type": "distance",
+  "atoms": [
+    {
+      "structureId": "structure-id",
+      "model": 1,
+      "chain": "A",
+      "resi": 42,
+      "icode": "",
+      "atom": "CA",
+      "altLoc": "",
+      "serial": 317
+    },
+    {
+      "structureId": "structure-id",
+      "model": 1,
+      "chain": "A",
+      "resi": 57,
+      "icode": "",
+      "atom": "O",
+      "altLoc": "",
+      "serial": 441
+    }
+  ],
+  "label": "Active-site span",
+  "note": "Compare after mutation."
+}
+```
+
+Atom order matters for angles and dihedrals. Use the complete atom selector
+shape shown above, keep every selector tied to the current `structure.id`, and
+preserve unknown fields on both the record and document. When replacing the
+embedded structure, remove measurements whose selectors refer to the old
+structure; the browser's structure import workflow clears them automatically.
+
 Valid `scene.representation` values are `cartoon`, `ball-and-stick`, `sticks`,
 `spacefill`, `lines`, and `surface`. Valid `scene.colorMode` values are `element`,
 `chain`, `residue`, and `uniform`. CSS hex colors are recommended.
@@ -102,10 +147,17 @@ When operating the open page directly:
 ```js
 window.molview.document
 window.molview.getSelection()
+window.molview.getMeasurements()
 window.molview.fetchPDB('4HHB')
 window.molview.searchPDB('human hemoglobin')
 window.molview.selectAtom(317)
 window.molview.colorSelection('#ff0000', 'atom')
+window.molview.beginMeasurement('distance')
+window.molview.cancelMeasurement()
+window.molview.addMeasurement('distance', [317, 441], { label: 'Active-site span' })
+window.molview.updateMeasurement('measurement-id', { note: 'Reviewed' })
+window.molview.removeMeasurement('measurement-id')
+window.molview.clearMeasurements()
 window.molview.loadDocument(updatedDocument, 'agent')
 window.molview.serialize()
 window.molview.save()

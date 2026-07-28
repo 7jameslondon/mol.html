@@ -77,6 +77,16 @@ __DOCUMENT__
         <div class="ribbon-group-label">View</div>
       </div>
 
+      <div class="ribbon-group" aria-label="Analysis commands">
+        <div class="ribbon-buttons">
+          <button id="measurements-button" class="ribbon-button" type="button" data-inspector-target="measurements" aria-controls="inspector" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18 18 4m-2-1 5 5M3 16l5 5m2-8 2 2m1-5 2 2"/></svg>
+            <span>Measurements</span><small id="measurements-ribbon-value">None</small>
+          </button>
+        </div>
+        <div class="ribbon-group-label">Analyze</div>
+      </div>
+
       <div class="ribbon-group" aria-label="Selection commands">
         <div class="ribbon-buttons">
           <button id="inspect-button" class="ribbon-button" type="button" data-inspector-target="inspect" aria-controls="inspector" aria-pressed="false" disabled>
@@ -170,6 +180,33 @@ __DOCUMENT__
               <label class="visibility-option"><span><strong>Hydrogens</strong><small>Show hydrogen atoms when present</small></span><span class="toggle"><input id="show-hydrogens" type="checkbox"><i></i></span></label>
               <label class="visibility-option"><span><strong>Water</strong><small>Show crystallographic water molecules</small></span><span class="toggle"><input id="show-water" type="checkbox"><i></i></span></label>
             </div>
+          </section>
+
+          <section id="panel-measurements" class="inspector-panel" data-inspector-panel="measurements" hidden>
+            <p class="panel-intro">Create persistent geometric annotations. Picking is only active after you press Start.</p>
+            <div class="measurement-creator">
+              <label class="field-label" for="measurement-type">Measurement type</label>
+              <select id="measurement-type">
+                <option value="distance">Distance (2 atoms)</option>
+                <option value="angle">Angle (3 atoms)</option>
+                <option value="dihedral">Dihedral (4 atoms)</option>
+              </select>
+              <button id="start-measurement" class="button accent full-width panel-action" type="button">Start picking atoms</button>
+              <div id="measurement-pick-progress" class="measurement-pick-progress" hidden aria-live="polite">
+                <strong id="measurement-pick-status">Pick atom 1 of 2</strong>
+                <div id="measurement-pick-atoms" class="measurement-pick-atoms"></div>
+                <button id="cancel-measurement" class="button secondary full-width" type="button">Cancel picking</button>
+              </div>
+            </div>
+            <div class="measurement-list-heading">
+              <span>SAVED MEASUREMENTS</span>
+              <button id="clear-measurements" class="text-button" type="button" disabled>Clear all</button>
+            </div>
+            <div id="empty-measurements" class="empty-measurements">
+              <strong>No measurements yet</strong>
+              <span>Start a distance, angle, or dihedral and pick atoms in the viewer.</span>
+            </div>
+            <div id="measurement-list" class="measurement-list" aria-label="Saved measurements"></div>
           </section>
 
           <section id="panel-inspect" class="inspector-panel" data-inspector-panel="inspect" hidden>

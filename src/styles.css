@@ -20,9 +20,9 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { height: 100%; margin: 0; overflow: hidden; background: #06101c; color: var(--ink); }
-button, input, select { font: inherit; }
+button, input, select, textarea { font: inherit; }
 button, select, input[type="color"] { -webkit-tap-highlight-color: transparent; }
-button:focus-visible, input:focus-visible, select:focus-visible, #molecule-viewer:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, #molecule-viewer:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
 .app-shell { height: 100%; display: grid; grid-template-rows: 58px 34px 82px minmax(0, 1fr); }
 .topbar {
@@ -182,6 +182,33 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
 .inline-fields { gap: 8px; }
 .inline-fields select { flex: 1; }
 .selection-details .button { margin-top: 8px; }
+
+.measurement-creator { margin-bottom: 18px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: #0c1a2a; }
+.measurement-creator .field-label { margin-top: 0; }
+.measurement-pick-progress { display: grid; gap: 9px; margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--line); }
+.measurement-pick-progress > strong { color: #ffc6d3; font-size: 11px; }
+.measurement-pick-atoms { display: grid; gap: 5px; }
+.measurement-pick-atom { padding: 6px 8px; border-radius: 7px; background: rgba(255, 76, 112, .08); color: var(--muted); font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.measurement-pick-atom b { margin-right: 5px; color: #ff7b99; }
+.measurement-list-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; color: var(--muted-2); font-size: 9px; font-weight: 800; letter-spacing: .13em; }
+.empty-measurements { display: grid; gap: 5px; padding: 28px 16px; border: 1px dashed var(--line-strong); border-radius: 10px; color: var(--muted); text-align: center; }
+.empty-measurements strong { color: var(--ink); font-size: 11px; }
+.empty-measurements span { font-size: 9px; line-height: 1.5; }
+.measurement-list { display: grid; gap: 9px; }
+.measurement-card { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: #0c1a2a; }
+.measurement-card.active { border-color: rgba(255, 207, 90, .52); box-shadow: inset 0 0 0 1px rgba(255, 207, 90, .09); }
+.measurement-card-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px; }
+.measurement-focus { min-width: 0; display: grid; gap: 2px; padding: 0; border: 0; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.measurement-focus strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; text-transform: capitalize; }
+.measurement-focus span { color: #71ddf8; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; font-weight: 750; }
+.measurement-delete { width: 26px; height: 26px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; }
+.measurement-delete:hover { border-color: rgba(255, 107, 127, .4); color: var(--danger); }
+.measurement-field-label { display: grid; gap: 4px; color: var(--muted-2); font-size: 8px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.measurement-label-input, .measurement-note-input { width: 100%; border: 1px solid var(--line); border-radius: 7px; background: rgba(7, 17, 31, .72); color: var(--ink); font-size: 10px; }
+.measurement-label-input { height: 31px; padding: 0 8px; }
+.measurement-note-input { min-height: 52px; padding: 7px 8px; resize: vertical; line-height: 1.4; }
+.measurement-label-input::placeholder, .measurement-note-input::placeholder { color: var(--muted-2); }
+.measurement-atoms { margin: 0; color: var(--muted-2); font-size: 8px; line-height: 1.45; }
 
 .viewer-stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--canvas); }
 #molecule-viewer { position: absolute; inset: 0; cursor: grab; touch-action: none; }

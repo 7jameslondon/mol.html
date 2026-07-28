@@ -16,6 +16,8 @@
       this.surfaceGeneration = 0;
       this.applyingDocument = false;
       this.lastReportedView = '';
+      this.measurementDraft = [];
+      this.activeMeasurementId = null;
       this.viewer = ThreeDmol.createViewer(container, {
         backgroundColor: '#07111f',
         antialias: true
@@ -42,6 +44,7 @@
           this.surfaceGeneration += 1;
           this.viewer.removeAllSurfaces();
           this.viewer.removeAllLabels();
+          this.viewer.removeAllShapes();
           this.viewer.removeAllModels();
           this.model = this.viewer.addModel(doc.structure.data, doc.structure.format);
           fit = true;
@@ -70,6 +73,7 @@
 
       this.viewer.setBackgroundColor(this.doc.scene.background, 1);
       this.viewer.removeAllLabels();
+      this.viewer.removeAllShapes();
       this.viewer.removeAllSurfaces();
       this.viewer.setStyle({}, {});
       this.model?.setColorByFunction({}, colorfunc);
@@ -108,6 +112,8 @@
       }
 
       this.applySelectionHighlight();
+      this.applyMeasurements();
+      this.applyMeasurementDraft();
       this.viewer.setClickable({}, false);
       this.viewer.setClickable(visible, true, atom => {
         const selected = this.serialAtoms.get(Number(atom.serial)) || this.normalizeAtom(atom);
@@ -137,6 +143,67 @@
         padding: 4,
         inFront: true
       });
+    }
+
+    applyMeasurements() {
+      for (const measurement of this.doc.scene.measurements || []) {
+        const atoms = Core.measurementAtoms(measurement, this.parsed.atoms, this.doc.structure.id);
+        if (!atoms) continue;
+        const active = measurement.id === this.activeMeasurementId;
+        const color = active ? '#ffcf5a' : '#49d7ff';
+        for (let index = 1; index < atoms.length; index++) {
+          this.viewer.addLine({
+            start: point(atoms[index - 1]), end: point(atoms[index]),
+            color, dashed: true, linewidth: active ? 3 : 2
+          });
+        }
+        for (const atom of atoms) {
+          this.viewer.addSphere({ center: point(atom), radius: active ? .18 : .13, color, opacity: .94 });
+        }
+        const value = Core.formatMeasurementValue(measurement.type, Core.measurementValue(measurement.type, atoms));
+        const label = String(measurement.label || '').trim();
+        this.viewer.addLabel(label ? `${label}: ${value}` : value, {
+          position: measurementLabelPosition(measurement.type, atoms),
+          fontColor: '#07111f', backgroundColor: color, backgroundOpacity: .92,
+          borderColor: '#ffffff', borderThickness: active ? 2 : 1,
+          fontSize: active ? 13 : 11, padding: 4, inFront: true
+        });
+      }
+    }
+
+    applyMeasurementDraft() {
+      if (!this.measurementDraft.length) return;
+      for (let index = 0; index < this.measurementDraft.length; index++) {
+        const atom = this.measurementDraft[index];
+        this.viewer.addStyle(this.to3DSelection(Core.selectorForAtom(atom, 'atom', this.doc.structure.id)), {
+          stick: { radius: .3, color: '#ff5e83' }, sphere: { scale: .54, color: '#ff5e83' }
+        });
+        this.viewer.addLabel(String(index + 1), {
+          position: point(atom), fontColor: '#ffffff', backgroundColor: '#d92d57',
+          backgroundOpacity: .96, borderColor: '#ffffff', borderThickness: 1,
+          fontSize: 12, padding: 4, inFront: true
+        });
+        if (index > 0) {
+          this.viewer.addLine({
+            start: point(this.measurementDraft[index - 1]), end: point(atom),
+            color: '#ff5e83', dashed: true, linewidth: 3
+          });
+        }
+      }
+    }
+
+    setMeasurementDraft(atoms) {
+      this.measurementDraft = Array.isArray(atoms) ? [...atoms] : [];
+      if (!this.doc) return;
+      this.applyAppearance();
+      this.viewer.render();
+    }
+
+    setActiveMeasurement(id) {
+      this.activeMeasurementId = id || null;
+      if (!this.doc) return;
+      this.applyAppearance();
+      this.viewer.render();
     }
 
     visibleSelection() {
@@ -221,6 +288,24 @@
 
   function validView(view) {
     return Array.isArray(view) && view.length === 8 && view.every(Number.isFinite);
+  }
+
+  function point(atom) {
+    return { x: Number(atom.x), y: Number(atom.y), z: Number(atom.z) };
+  }
+
+  function measurementLabelPosition(type, atoms) {
+    if (type === 'angle') return point(atoms[1]);
+    if (type === 'dihedral') return {
+      x: (atoms[1].x + atoms[2].x) / 2,
+      y: (atoms[1].y + atoms[2].y) / 2,
+      z: (atoms[1].z + atoms[2].z) / 2
+    };
+    return {
+      x: (atoms[0].x + atoms[1].x) / 2,
+      y: (atoms[0].y + atoms[1].y) / 2,
+      z: (atoms[0].z + atoms[1].z) / 2
+    };
   }
 
   window.MoleculeRenderer = MoleculeRenderer;

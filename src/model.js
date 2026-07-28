@@ -10,6 +10,7 @@
   const COVALENT_RADII = { H: .31, C: .76, N: .71, O: .66, F: .57, P: 1.07, S: 1.05, CL: 1.02, BR: 1.2, I: 1.39, FE: 1.24, MG: 1.3, ZN: 1.22, CA: 1.76 };
   const VDW_RADII = { H: 1.2, C: 1.7, N: 1.55, O: 1.52, F: 1.47, P: 1.8, S: 1.8, CL: 1.75, BR: 1.85, I: 1.98, FE: 1.8, MG: 1.73, ZN: 1.39, CA: 2.31 };
   const WATER_NAMES = new Set(['HOH', 'WAT', 'H2O', 'DOD']);
+  const MEASUREMENT_ATOM_COUNTS = Object.freeze({ distance: 2, angle: 3, dihedral: 4 });
 
   function uid(prefix = 'id') {
     if (globalThis.crypto?.randomUUID) return `${prefix}-${crypto.randomUUID()}`;
@@ -146,9 +147,25 @@
       showWater: Boolean(doc.scene.showWater),
       selection: doc.scene.selection || null,
       customColors: Array.isArray(doc.scene.customColors) ? doc.scene.customColors : [],
+      measurements: normalizeMeasurements(doc.scene.measurements),
       camera: validCamera(doc.scene.camera) ? { view: doc.scene.camera.view.map(Number) } : { view: null }
     });
     return doc;
+  }
+
+  function normalizeMeasurements(value) {
+    if (!Array.isArray(value)) return [];
+    return value.filter(record => record && typeof record === 'object' && !Array.isArray(record)).map(record => {
+      const measurement = { ...record };
+      measurement.id = typeof record.id === 'string' && record.id.trim() ? record.id : uid('measurement');
+      measurement.type = String(record.type || '').trim().toLowerCase();
+      measurement.atoms = Array.isArray(record.atoms)
+        ? record.atoms.filter(selector => selector && typeof selector === 'object' && !Array.isArray(selector)).map(selector => ({ ...selector }))
+        : [];
+      if ('label' in record) measurement.label = String(record.label ?? '');
+      if ('note' in record) measurement.note = String(record.note ?? '');
+      return measurement;
+    });
   }
 
   function validCamera(camera) {
@@ -185,6 +202,51 @@
     };
   }
 
+  function measurementAtoms(measurement, atoms, structureId) {
+    const expected = MEASUREMENT_ATOM_COUNTS[measurement?.type];
+    if (!expected || !Array.isArray(measurement.atoms) || measurement.atoms.length !== expected) return null;
+    const resolved = measurement.atoms.map(selector => atoms.find(atom => atomMatchesSelector(atom, selector, structureId)));
+    return resolved.every(Boolean) ? resolved : null;
+  }
+
+  function measurementValue(type, atoms) {
+    const expected = MEASUREMENT_ATOM_COUNTS[type];
+    if (!expected || !Array.isArray(atoms) || atoms.length !== expected) return NaN;
+    if (type === 'distance') return magnitude(subtract(atoms[1], atoms[0]));
+    if (type === 'angle') {
+      const left = subtract(atoms[0], atoms[1]);
+      const right = subtract(atoms[2], atoms[1]);
+      const denominator = magnitude(left) * magnitude(right);
+      if (denominator < 1e-12) return NaN;
+      return Math.acos(clamp(dot(left, right) / denominator, -1, 1)) * 180 / Math.PI;
+    }
+    if (type === 'dihedral') {
+      const b0 = subtract(atoms[0], atoms[1]);
+      const b1 = subtract(atoms[2], atoms[1]);
+      const b2 = subtract(atoms[3], atoms[2]);
+      const b1Length = magnitude(b1);
+      if (b1Length < 1e-12) return NaN;
+      const axis = scale(b1, 1 / b1Length);
+      const v = subtract(b0, scale(axis, dot(b0, axis)));
+      const w = subtract(b2, scale(axis, dot(b2, axis)));
+      if (magnitude(v) < 1e-12 || magnitude(w) < 1e-12) return NaN;
+      return Math.atan2(dot(cross(axis, v), w), dot(v, w)) * 180 / Math.PI;
+    }
+    return NaN;
+  }
+
+  function formatMeasurementValue(type, value) {
+    if (!Number.isFinite(value)) return 'Unavailable';
+    return type === 'distance' ? `${value.toFixed(2)} Å` : `${value.toFixed(1)}°`;
+  }
+
+  function subtract(a, b) { return { x: Number(a.x) - Number(b.x), y: Number(a.y) - Number(b.y), z: Number(a.z) - Number(b.z) }; }
+  function scale(a, amount) { return { x: a.x * amount, y: a.y * amount, z: a.z * amount }; }
+  function dot(a, b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+  function cross(a, b) { return { x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x }; }
+  function magnitude(a) { return Math.hypot(a.x, a.y, a.z); }
+  function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
+
   function atomLabel(atom) {
     const chain = atom.chain === '_' ? 'no chain' : `chain ${atom.chain}`;
     return `${atom.resn} ${atom.resi}${atom.icode || ''} · ${atom.name} · ${chain}`;
@@ -214,6 +276,8 @@
 
   window.MolViewCore = {
     ELEMENT_COLORS, CHAIN_COLORS, parsePDB, normalizeDocument, selectorForAtom,
-    atomMatchesSelector, atomIdentity, atomLabel, colorForAtom, isWater, vdwRadius, uid
+    atomMatchesSelector, atomIdentity, atomLabel, colorForAtom, isWater, vdwRadius, uid,
+    MEASUREMENT_ATOM_COUNTS, normalizeMeasurements, measurementAtoms, measurementValue,
+    formatMeasurementValue
   };
 })();

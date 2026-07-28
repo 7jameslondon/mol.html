@@ -7,6 +7,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "verify": "node scripts/verify.mjs",
+    "test:measurements": "node scripts/test-measurements.mjs",
     "test:roundtrip": "node scripts/test-roundtrip.mjs",
     "test:save-harness": "node scripts/test-save-harness.mjs"
   },

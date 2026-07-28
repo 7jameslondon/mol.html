@@ -21,13 +21,14 @@ assert(html.includes('showSaveFilePicker'), 'artifact includes in-place self-sav
 assert(html.includes('https://files.rcsb.org/download/') && html.includes('async fetchPDB(id)'), 'artifact includes RCSB PDB fetching');
 assert(html.includes('https://search.rcsb.org/rcsbsearch/v2/query') && html.includes('https://data.rcsb.org/graphql'), 'artifact includes RCSB full-text search and metadata lookup');
 assert(html.includes('role="tab"') && html.includes('data-inspector-target="representation"'), 'artifact includes the ribbon and contextual inspector UI');
+assert(html.includes('data-inspector-target="measurements"') && html.includes('beginMeasurement(type)'), 'artifact includes persistent measurement UI and API');
 
 const match = html.match(/<script type="application\/molview\+json" id="molview-doc">\s*([\s\S]*?)\s*<\/script>/i);
 assert(Boolean(match), 'document JSON can be extracted with a simple splice contract');
 const doc = JSON.parse(match[1]);
 assert(doc.format === 'molview/document' && doc.version === 1, 'document format is molview/document version 1');
 assert(doc.structure?.format === 'pdb' && doc.structure.data.includes('\nATOM'), 'PDB coordinates are embedded in the file');
-assert(doc.scene?.camera && 'view' in doc.scene.camera && Array.isArray(doc.scene.customColors), 'scene state is embedded and editable');
+assert(doc.scene?.camera && 'view' in doc.scene.camera && Array.isArray(doc.scene.customColors) && Array.isArray(doc.scene.measurements), 'scene state is embedded and editable');
 
 const info = await stat(file);
 console.log(`Verified ${checks.length} invariants in ${file} (${(info.size / 1024).toFixed(1)} KB)`);

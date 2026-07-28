@@ -41,6 +41,7 @@ const document = {
     showWater: false,
     selection: null,
     customColors: [],
+    measurements: [],
     camera: { view: null }
   }
 };
