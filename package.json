@@ -8,6 +8,7 @@
     "build": "node scripts/build.mjs",
     "verify": "node scripts/verify.mjs",
     "test:measurements": "node scripts/test-measurements.mjs",
+    "test:saved-selections": "node scripts/test-saved-selections.mjs",
     "test:navigator": "node scripts/test-navigator.mjs",
     "test:roundtrip": "node scripts/test-roundtrip.mjs",
     "test:save-harness": "node scripts/test-save-harness.mjs"

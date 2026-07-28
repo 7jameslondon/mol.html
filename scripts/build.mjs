@@ -42,6 +42,7 @@ const document = {
     selection: null,
     customColors: [],
     measurements: [],
+    savedSelections: [],
     camera: { view: null }
   }
 };

@@ -220,6 +220,7 @@
       selection: doc.scene.selection || null,
       customColors: Array.isArray(doc.scene.customColors) ? doc.scene.customColors : [],
       measurements: normalizeMeasurements(doc.scene.measurements),
+      savedSelections: normalizeSavedSelections(doc.scene.savedSelections),
       camera: validCamera(doc.scene.camera) ? { view: doc.scene.camera.view.map(Number) } : { view: null }
     });
     return doc;
@@ -238,6 +239,177 @@
       if ('note' in record) measurement.note = String(record.note ?? '');
       return measurement;
     });
+  }
+
+  function normalizeSavedSelections(value) {
+    if (!Array.isArray(value)) return [];
+    return value.filter(record => record && typeof record === 'object' && !Array.isArray(record)).map((record, index) => {
+      const saved = { ...record };
+      saved.id = typeof record.id === 'string' && record.id.trim() ? record.id : uid('selection');
+      saved.name = typeof record.name === 'string' && record.name.trim()
+        ? record.name.trim().slice(0, 80)
+        : `Saved selection ${index + 1}`;
+      saved.selector = normalizeCompoundSelector(record.selector);
+      return saved;
+    });
+  }
+
+  function normalizeCompoundSelector(value, depth = 0) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    const selector = { ...value };
+    selector.kind = String(value.kind || '').trim().toLowerCase();
+    for (const key of ['structureId', 'chain', 'icode', 'resn', 'atom', 'altLoc']) {
+      if (key in value && value[key] != null) selector[key] = String(value[key]);
+    }
+    for (const key of ['model', 'resi', 'serial', 'cutoff']) {
+      if (!(key in value)) continue;
+      const number = Number(value[key]);
+      selector[key] = Number.isFinite(number) ? number : value[key];
+    }
+    for (const key of ['start', 'end']) {
+      if (!value[key] || typeof value[key] !== 'object' || Array.isArray(value[key])) continue;
+      selector[key] = { ...value[key] };
+      const resi = Number(value[key].resi);
+      if (Number.isFinite(resi)) selector[key].resi = resi;
+      if ('icode' in value[key] && value[key].icode != null) selector[key].icode = String(value[key].icode);
+    }
+    if (depth < 2 && value.target && typeof value.target === 'object' && !Array.isArray(value.target)) {
+      selector.target = normalizeCompoundSelector(value.target, depth + 1);
+    }
+    return selector;
+  }
+
+  function matchSavedSelection(value, atoms, structureId) {
+    const selector = value?.selector && typeof value.selector === 'object' ? value.selector : value;
+    const candidates = Array.isArray(atoms) ? atoms : [];
+    if (!selector || typeof selector !== 'object' || Array.isArray(selector)) {
+      return selectionMatchError('Selector must be an object.');
+    }
+    if (!selector.structureId) return selectionMatchError('Selector is missing structureId.');
+    if (selector.structureId !== structureId) {
+      return selectionMatchError('Selector belongs to a different structure.');
+    }
+
+    const kind = String(selector.kind || '').toLowerCase();
+    let matched;
+    if (kind === 'atom') {
+      if (!validRequiredSelectorFields(selector, ['model', 'chain', 'resi', 'atom'])) {
+        return selectionMatchError('Atom selector is missing model, chain, residue, or atom name.');
+      }
+      matched = candidates.filter(atom => atomMatchesSelector(atom, selector, structureId));
+    } else if (kind === 'residue') {
+      if (!validRequiredSelectorFields(selector, ['model', 'chain', 'resi'])) {
+        return selectionMatchError('Residue selector is missing model, chain, or residue number.');
+      }
+      matched = candidates.filter(atom =>
+        atom.model === Number(selector.model) && atom.chain === selector.chain
+        && atom.resi === Number(selector.resi)
+        && (selector.icode == null || atom.icode === selector.icode)
+        && (selector.resn == null || atom.resn === selector.resn)
+      );
+    } else if (kind === 'chain') {
+      if (!validRequiredSelectorFields(selector, ['model', 'chain'])) {
+        return selectionMatchError('Chain selector is missing model or chain.');
+      }
+      matched = candidates.filter(atom => atom.model === Number(selector.model) && atom.chain === selector.chain);
+    } else if (kind === 'residue-range') {
+      const start = Number(selector.start?.resi);
+      const end = Number(selector.end?.resi);
+      if (!validRequiredSelectorFields(selector, ['model', 'chain']) || !Number.isFinite(start) || !Number.isFinite(end)) {
+        return selectionMatchError('Residue range needs a model, chain, start, and end.');
+      }
+      if (start > end) return selectionMatchError('Residue range start must not exceed its end.');
+      matched = candidates.filter(atom =>
+        atom.model === Number(selector.model) && atom.chain === selector.chain
+        && atom.resi >= start && atom.resi <= end
+        && (atom.resi !== start || selector.start.icode == null || atom.icode >= selector.start.icode)
+        && (atom.resi !== end || selector.end.icode == null || atom.icode <= selector.end.icode)
+      );
+    } else if (kind === 'ligands') {
+      if (selector.model != null && !Number.isFinite(Number(selector.model))) {
+        return selectionMatchError('Ligand selector model must be a number.');
+      }
+      matched = candidates.filter(atom =>
+        atom.het && !isWater(atom)
+        && (selector.model == null || atom.model === Number(selector.model))
+      );
+    } else if (kind === 'within') {
+      const cutoff = Number(selector.cutoff);
+      if (!Number.isFinite(cutoff) || cutoff <= 0 || cutoff > 100) {
+        return selectionMatchError('Proximity cutoff must be greater than 0 and at most 100 Å.');
+      }
+      const targetKind = String(selector.target?.kind || '').toLowerCase();
+      if (!['atom', 'residue', 'ligands'].includes(targetKind)) {
+        return selectionMatchError('Proximity target must be an atom, residue, or ligand selector.');
+      }
+      const target = matchSavedSelection(selector.target, candidates, structureId);
+      if (!target.valid) return selectionMatchError(`Invalid proximity target: ${target.error}`);
+      matched = atomsWithin(candidates, target.atoms, cutoff);
+    } else {
+      return selectionMatchError(`Unsupported selector kind: ${kind || '(missing)'}.`);
+    }
+
+    return {
+      valid: true,
+      error: null,
+      atoms: matched,
+      atomCount: matched.length,
+      residueCount: countMatchedResidues(matched)
+    };
+  }
+
+  function validRequiredSelectorFields(selector, keys) {
+    return keys.every(key => {
+      if (selector[key] == null || selector[key] === '') return false;
+      if (key === 'model' || key === 'resi') return Number.isFinite(Number(selector[key]));
+      return true;
+    });
+  }
+
+  function selectionMatchError(error) {
+    return { valid: false, error, atoms: [], atomCount: 0, residueCount: 0 };
+  }
+
+  function countMatchedResidues(atoms) {
+    return new Set(atoms.map(atom => `${atom.model}|${atom.chain}|${atom.resi}|${atom.icode}|${atom.resn}`)).size;
+  }
+
+  function atomsWithin(atoms, targets, cutoff) {
+    if (!targets.length) return [];
+    const cellSize = cutoff;
+    const cells = new Map();
+    const keyFor = (atom, x, y, z) => `${atom.model}|${x}|${y}|${z}`;
+    for (const atom of targets) {
+      const cell = [Math.floor(atom.x / cellSize), Math.floor(atom.y / cellSize), Math.floor(atom.z / cellSize)];
+      const key = keyFor(atom, ...cell);
+      if (!cells.has(key)) cells.set(key, []);
+      cells.get(key).push(atom);
+    }
+    const cutoff2 = cutoff * cutoff;
+    return atoms.filter(atom => {
+      const [cx, cy, cz] = [Math.floor(atom.x / cellSize), Math.floor(atom.y / cellSize), Math.floor(atom.z / cellSize)];
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+        const nearby = cells.get(keyFor(atom, cx + dx, cy + dy, cz + dz));
+        if (!nearby) continue;
+        for (const target of nearby) {
+          const x = atom.x - target.x, y = atom.y - target.y, z = atom.z - target.z;
+          if (x * x + y * y + z * z <= cutoff2) return true;
+        }
+      }
+      return false;
+    });
+  }
+
+  function describeSavedSelector(selector) {
+    const kind = String(selector?.kind || '').toLowerCase();
+    const chain = selector?.chain === '_' ? 'no chain' : `chain ${selector?.chain}`;
+    if (kind === 'atom') return `${selector.resn || 'Residue'} ${selector.resi}${selector.icode || ''} · ${selector.atom} · ${chain}`;
+    if (kind === 'residue') return `${selector.resn || 'Residue'} ${selector.resi}${selector.icode || ''} · ${chain}`;
+    if (kind === 'chain') return `${chain} · model ${selector.model}`;
+    if (kind === 'residue-range') return `${chain} · residues ${selector.start?.resi ?? '?'}–${selector.end?.resi ?? '?'}`;
+    if (kind === 'ligands') return selector.model == null ? 'All non-water ligands' : `Non-water ligands · model ${selector.model}`;
+    if (kind === 'within') return `Within ${selector.cutoff ?? '?'} Å of ${describeSavedSelector(selector.target)}`;
+    return 'Invalid or unsupported selector';
   }
 
   function validCamera(camera) {
@@ -351,6 +523,7 @@
     atomMatchesSelector, atomIdentity, atomLabel, colorForAtom, isWater, vdwRadius, uid,
     MEASUREMENT_ATOM_COUNTS, normalizeMeasurements, measurementAtoms, measurementValue,
     formatMeasurementValue,
+    normalizeSavedSelections, normalizeCompoundSelector, matchSavedSelection, describeSavedSelector,
     residueDescriptor, buildStructureHierarchy, representativeAtom
   };
 })();

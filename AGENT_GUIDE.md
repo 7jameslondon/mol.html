@@ -87,6 +87,60 @@ For a residue rule, omit atom-specific fields and retain `chain`, `resi`,
 `icode`, and optionally `resn`. For a chain rule, retain only `structureId`,
 `model`, and `chain`.
 
+## Named and compound selections
+
+Reusable queries live in `scene.savedSelections`. Each record has a stable
+`id`, a user-editable `name`, and one `selector`. Selector records use
+molecular identity rather than array indices. Every selector, including a
+nested proximity target, must use the current `structure.id` as its
+`structureId`.
+
+```json
+{
+  "id": "selection-active-site-neighborhood",
+  "name": "Active-site neighborhood",
+  "selector": {
+    "kind": "within",
+    "structureId": "structure-id",
+    "cutoff": 4,
+    "target": {
+      "kind": "residue",
+      "structureId": "structure-id",
+      "model": 1,
+      "chain": "A",
+      "resi": 42,
+      "icode": "",
+      "resn": "GLY"
+    }
+  }
+}
+```
+
+Supported selector shapes are:
+
+- `atom`: `kind`, `structureId`, `model`, `chain`, `resi`, `icode`, `atom`,
+  `altLoc`, and `serial`, with optional `resn`; use the complete shape written
+  by `scene.selection.selector`.
+- `residue`: `kind`, `structureId`, `model`, `chain`, `resi`, and optionally
+  `icode` and `resn`.
+- `chain`: `kind`, `structureId`, `model`, and `chain`.
+- `residue-range`: `kind`, `structureId`, `model`, `chain`, plus inclusive
+  `start` and `end` objects such as `{ "resi": 10 }`. An optional `icode` on
+  an endpoint narrows that boundary.
+- `ligands`: `kind` and `structureId`, with optional `model`. This matches all
+  `HETATM` atoms except common water residue names (`HOH`, `WAT`, `H2O`, and
+  `DOD`).
+- `within`: `kind`, `structureId`, a positive `cutoff` in Å (at most 100), and
+  a `target` whose kind is `atom`, `residue`, or `ligands`. Matching is based
+  on coordinates in the same model and includes target atoms themselves.
+
+Queries can be valid but empty. A selector with a missing/unsupported field or
+a stale `structureId` is retained in the document and shown as invalid so an
+agent can repair it. The browser clears `scene.savedSelections` when its own
+PDB import/fetch workflow replaces the structure. If an agent replaces
+`structure`, it should likewise remove or rewrite selectors tied to the old
+structure. Preserve unknown fields on selection records and selectors.
+
 ## Measurements and annotations
 
 Persistent geometric annotations live in `scene.measurements`. Each record has
@@ -148,6 +202,7 @@ When operating the open page directly:
 window.molview.document
 window.molview.getSelection()
 window.molview.getMeasurements()
+window.molview.getSavedSelections()
 window.molview.fetchPDB('4HHB')
 window.molview.searchPDB('human hemoglobin')
 window.molview.selectAtom(317)
@@ -158,6 +213,17 @@ window.molview.addMeasurement('distance', [317, 441], { label: 'Active-site span
 window.molview.updateMeasurement('measurement-id', { note: 'Reviewed' })
 window.molview.removeMeasurement('measurement-id')
 window.molview.clearMeasurements()
+window.molview.saveCurrentSelection('Catalytic residue', 'residue')
+window.molview.addSavedSelection('Chain A range', {
+  kind: 'residue-range', structureId: window.molview.document.structure.id,
+  model: 1, chain: 'A', start: { resi: 20 }, end: { resi: 40 }
+})
+window.molview.renameSavedSelection('selection-id', 'New name')
+window.molview.getSavedSelectionMatch('selection-id')
+window.molview.highlightSavedSelection('selection-id', true)
+window.molview.clearSavedSelectionHighlight()
+window.molview.removeSavedSelection('selection-id')
+window.molview.clearSavedSelections()
 window.molview.loadDocument(updatedDocument, 'agent')
 window.molview.serialize()
 window.molview.save()

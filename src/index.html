@@ -93,6 +93,10 @@ __DOCUMENT__
 
       <div class="ribbon-group" aria-label="Selection commands">
         <div class="ribbon-buttons">
+          <button id="saved-selections-button" class="ribbon-button" type="button" data-inspector-target="saved-selections" aria-controls="inspector" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v14H5zM8 9h8m-8 3h8m-8 3h5"/><path d="m15.5 16.5 1.5 1.5 3-3"/></svg>
+            <span>Saved</span><small id="saved-selections-ribbon-value">None</small>
+          </button>
           <button id="inspect-button" class="ribbon-button" type="button" data-inspector-target="inspect" aria-controls="inspector" aria-pressed="false" disabled>
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 5 5m-9.5-12v5m-2.5-2.5h5"/></svg>
             <span>Inspect</span><small>Selection</small>
@@ -226,6 +230,67 @@ __DOCUMENT__
               <span>Start a distance, angle, or dihedral and pick atoms in the viewer.</span>
             </div>
             <div id="measurement-list" class="measurement-list" aria-label="Saved measurements"></div>
+          </section>
+
+          <section id="panel-saved-selections" class="inspector-panel" data-inspector-panel="saved-selections" hidden>
+            <p class="panel-intro">Save stable molecular queries without changing the exact atom selected by a click.</p>
+
+            <div class="saved-selection-builder">
+              <div class="saved-selection-builder-heading">FROM CURRENT ATOM</div>
+              <input id="saved-selection-name" type="text" maxlength="80" placeholder="Selection name" aria-label="Current selection name">
+              <div class="inline-fields">
+                <select id="saved-selection-scope" aria-label="Current selection scope">
+                  <option value="atom">This atom</option>
+                  <option value="residue">This residue</option>
+                  <option value="chain">This chain</option>
+                </select>
+                <button id="create-current-selection" class="button accent" type="button">Save</button>
+              </div>
+              <p id="saved-selection-current-status" class="saved-selection-builder-status">Select an atom first.</p>
+            </div>
+
+            <div class="saved-selection-builder">
+              <div class="saved-selection-builder-heading">RESIDUE RANGE</div>
+              <input id="saved-range-name" type="text" maxlength="80" placeholder="Range name" aria-label="Residue range name">
+              <select id="saved-range-chain" aria-label="Residue range chain"></select>
+              <div class="inline-fields">
+                <input id="saved-range-start" type="number" step="1" placeholder="Start" aria-label="First residue number">
+                <input id="saved-range-end" type="number" step="1" placeholder="End" aria-label="Last residue number">
+              </div>
+              <button id="create-range-selection" class="button secondary full-width" type="button">Save residue range</button>
+            </div>
+
+            <div class="saved-selection-builder">
+              <div class="saved-selection-builder-heading">LIGANDS</div>
+              <input id="saved-ligand-name" type="text" maxlength="80" placeholder="All non-water ligands" aria-label="Ligand selection name">
+              <button id="create-ligand-selection" class="button secondary full-width" type="button">Save all ligands</button>
+            </div>
+
+            <div class="saved-selection-builder">
+              <div class="saved-selection-builder-heading">PROXIMITY</div>
+              <input id="saved-proximity-name" type="text" maxlength="80" placeholder="Nearby atoms" aria-label="Proximity selection name">
+              <label class="saved-selection-compact-field" for="saved-proximity-target"><span>Target</span>
+                <select id="saved-proximity-target">
+                  <option value="current-atom">Current atom</option>
+                  <option value="current-residue">Current residue</option>
+                  <option value="ligands">All ligands</option>
+                </select>
+              </label>
+              <label class="saved-selection-compact-field" for="saved-proximity-cutoff"><span>Cutoff (Å)</span>
+                <input id="saved-proximity-cutoff" type="number" min="0.1" max="100" step="0.1" value="4">
+              </label>
+              <button id="create-proximity-selection" class="button secondary full-width" type="button">Save proximity query</button>
+            </div>
+
+            <div class="saved-selection-list-heading">
+              <span>NAMED SELECTIONS</span>
+              <button id="clear-saved-selection-highlight" class="text-button" type="button" disabled>Clear highlight</button>
+            </div>
+            <div id="empty-saved-selections" class="empty-saved-selections">
+              <strong>No named selections</strong>
+              <span>Save an atom, residue, chain, range, ligand set, or proximity query.</span>
+            </div>
+            <div id="saved-selection-list" class="saved-selection-list" aria-label="Named selections"></div>
           </section>
 
           <section id="panel-inspect" class="inspector-panel" data-inspector-panel="inspect" hidden>

@@ -18,6 +18,7 @@
       this.lastReportedView = '';
       this.measurementDraft = [];
       this.activeMeasurementId = null;
+      this.activeSavedSelectionId = null;
       this.viewer = ThreeDmol.createViewer(container, {
         backgroundColor: '#07111f',
         antialias: true
@@ -111,6 +112,7 @@
           break;
       }
 
+      this.applySavedSelectionHighlight();
       this.applySelectionHighlight();
       this.applyMeasurements();
       this.applyMeasurementDraft();
@@ -142,6 +144,23 @@
         fontSize: 12,
         padding: 4,
         inFront: true
+      });
+    }
+
+    applySavedSelectionHighlight() {
+      if (!this.activeSavedSelectionId) return;
+      const saved = (this.doc.scene.savedSelections || []).find(record => record.id === this.activeSavedSelectionId);
+      if (!saved) return;
+      const match = Core.matchSavedSelection(saved, this.parsed.atoms, this.doc.structure.id);
+      if (!match.valid) return;
+      const atoms = match.atoms.filter(atom =>
+        (this.doc.scene.showHydrogens || atom.element !== 'H')
+        && (this.doc.scene.showWater || !Core.isWater(atom))
+      );
+      if (!atoms.length) return;
+      this.viewer.addStyle({ serial: atoms.map(atom => atom.serial) }, {
+        stick: { radius: .25, color: '#30e3d2' },
+        sphere: { scale: .38, color: '#30e3d2', opacity: .72 }
       });
     }
 
@@ -204,6 +223,29 @@
       if (!this.doc) return;
       this.applyAppearance();
       this.viewer.render();
+    }
+
+    setActiveSavedSelection(id) {
+      this.activeSavedSelectionId = id || null;
+      if (!this.doc) return;
+      this.applyAppearance();
+      this.viewer.render();
+    }
+
+    focusSavedSelection(id, notify = true) {
+      if (!this.doc) return false;
+      const saved = (this.doc.scene.savedSelections || []).find(record => record.id === id);
+      if (!saved) return false;
+      const match = Core.matchSavedSelection(saved, this.parsed.atoms, this.doc.structure.id);
+      if (!match.valid || !match.atoms.length) return false;
+      this.applyingDocument = true;
+      this.viewer.zoomTo({ serial: match.atoms.map(atom => atom.serial) });
+      this.viewer.render();
+      this.doc.scene.camera = { view: this.viewer.getView() };
+      this.lastReportedView = JSON.stringify(this.doc.scene.camera.view);
+      requestAnimationFrame(() => { this.applyingDocument = false; });
+      if (notify) this.callbacks.onCamera?.(structuredClone(this.doc.scene.camera));
+      return true;
     }
 
     visibleSelection() {

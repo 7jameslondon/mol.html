@@ -24,13 +24,15 @@ assert(html.includes('role="tab"') && html.includes('data-inspector-target="repr
 assert(html.includes('data-inspector-target="measurements"') && html.includes('beginMeasurement(type)'), 'artifact includes persistent measurement UI and API');
 assert(html.includes('data-inspector-target="navigator"') && html.includes('id="navigator-tree"'), 'artifact includes the structure navigator command and tree');
 assert(html.includes('id="navigator-sequences"') && html.includes('buildStructureHierarchy'), 'artifact includes locally derived sequence navigation');
+assert(html.includes('data-inspector-target="saved-selections"') && html.includes('id="saved-selection-list"'), 'artifact includes named selection builder and list UI');
+assert(html.includes('getSavedSelections()') && html.includes('highlightSavedSelection(id, focus = false)'), 'artifact exposes named selection browser APIs');
 
 const match = html.match(/<script type="application\/molview\+json" id="molview-doc">\s*([\s\S]*?)\s*<\/script>/i);
 assert(Boolean(match), 'document JSON can be extracted with a simple splice contract');
 const doc = JSON.parse(match[1]);
 assert(doc.format === 'molview/document' && doc.version === 1, 'document format is molview/document version 1');
 assert(doc.structure?.format === 'pdb' && doc.structure.data.includes('\nATOM'), 'PDB coordinates are embedded in the file');
-assert(doc.scene?.camera && 'view' in doc.scene.camera && Array.isArray(doc.scene.customColors) && Array.isArray(doc.scene.measurements), 'scene state is embedded and editable');
+assert(doc.scene?.camera && 'view' in doc.scene.camera && Array.isArray(doc.scene.customColors) && Array.isArray(doc.scene.measurements) && Array.isArray(doc.scene.savedSelections), 'scene state is embedded and editable');
 
 const info = await stat(file);
 console.log(`Verified ${checks.length} invariants in ${file} (${(info.size / 1024).toFixed(1)} KB)`);

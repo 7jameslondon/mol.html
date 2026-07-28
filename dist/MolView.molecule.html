@@ -243,6 +243,36 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
 .inline-fields select { flex: 1; }
 .selection-details .button { margin-top: 8px; }
 
+.saved-selection-builder { display: grid; gap: 8px; margin-bottom: 11px; padding: 11px; border: 1px solid var(--line); border-radius: 10px; background: #0c1a2a; }
+.saved-selection-builder-heading, .saved-selection-list-heading { color: var(--muted-2); font-size: 9px; font-weight: 800; letter-spacing: .13em; }
+.saved-selection-builder input[type="text"], .saved-selection-builder input[type="number"] {
+  width: 100%; min-width: 0; height: 34px; padding: 0 9px; border: 1px solid var(--line); border-radius: 8px;
+  background: rgba(7, 17, 31, .72); color: var(--ink); font-size: 10px;
+}
+.saved-selection-builder input::placeholder { color: var(--muted-2); }
+.saved-selection-builder select { height: 34px; font-size: 10px; }
+.saved-selection-builder .inline-fields > * { min-width: 0; flex: 1; }
+.saved-selection-builder-status { min-height: 13px; margin: 0; color: var(--muted-2); font-size: 8px; line-height: 1.4; }
+.saved-selection-compact-field { display: grid; grid-template-columns: 68px minmax(0, 1fr); align-items: center; gap: 7px; color: var(--muted); font-size: 9px; }
+.saved-selection-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 17px 0 9px; }
+.empty-saved-selections { display: grid; gap: 5px; padding: 26px 14px; border: 1px dashed var(--line-strong); border-radius: 10px; color: var(--muted); text-align: center; }
+.empty-saved-selections strong { color: var(--ink); font-size: 11px; }
+.empty-saved-selections span { font-size: 9px; line-height: 1.5; }
+.saved-selection-list { display: grid; gap: 9px; }
+.saved-selection-card { display: grid; gap: 7px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: #0c1a2a; }
+.saved-selection-card.active { border-color: rgba(48, 227, 210, .55); box-shadow: inset 0 0 0 1px rgba(48, 227, 210, .08); }
+.saved-selection-card.invalid { border-color: rgba(255, 107, 127, .4); }
+.saved-selection-card-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; }
+.saved-selection-name-input { width: 100%; min-width: 0; height: 31px; padding: 0 8px; border: 1px solid var(--line); border-radius: 7px; background: rgba(7, 17, 31, .72); color: var(--ink); font-size: 10px; font-weight: 700; }
+.saved-selection-delete { width: 29px; height: 29px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; }
+.saved-selection-delete:hover { border-color: rgba(255, 107, 127, .4); color: var(--danger); }
+.saved-selection-summary { margin: 0; color: var(--muted); font-size: 9px; line-height: 1.45; overflow-wrap: anywhere; }
+.saved-selection-match { margin: 0; color: #75d9cf; font-size: 9px; font-weight: 720; }
+.saved-selection-match.empty { color: var(--warning); }
+.saved-selection-match.invalid { color: var(--danger); }
+.saved-selection-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.saved-selection-actions .button { min-height: 30px; padding: 5px 8px; font-size: 9px; }
+
 .measurement-creator { margin-bottom: 18px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: #0c1a2a; }
 .measurement-creator .field-label { margin-top: 0; }
 .measurement-pick-progress { display: grid; gap: 9px; margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--line); }
@@ -320,7 +350,7 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
   "documentId": "document-starter-molecular-scene",
   "title": "Protein and DNA starter scene",
   "revision": 1,
-  "modified": "2026-07-28T00:13:05.671Z",
+  "modified": "2026-07-28T01:26:41.206Z",
   "modifiedBy": "build",
   "structure": {
     "id": "structure-starter-complex",
@@ -337,6 +367,7 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
     "selection": null,
     "customColors": [],
     "measurements": [],
+    "savedSelections": [],
     "camera": {
       "view": null
     }
@@ -426,6 +457,10 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
 
       <div class="ribbon-group" aria-label="Selection commands">
         <div class="ribbon-buttons">
+          <button id="saved-selections-button" class="ribbon-button" type="button" data-inspector-target="saved-selections" aria-controls="inspector" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v14H5zM8 9h8m-8 3h8m-8 3h5"/><path d="m15.5 16.5 1.5 1.5 3-3"/></svg>
+            <span>Saved</span><small id="saved-selections-ribbon-value">None</small>
+          </button>
           <button id="inspect-button" class="ribbon-button" type="button" data-inspector-target="inspect" aria-controls="inspector" aria-pressed="false" disabled>
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 5 5m-9.5-12v5m-2.5-2.5h5"/></svg>
             <span>Inspect</span><small>Selection</small>
@@ -559,6 +594,67 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
               <span>Start a distance, angle, or dihedral and pick atoms in the viewer.</span>
             </div>
             <div id="measurement-list" class="measurement-list" aria-label="Saved measurements"></div>
+          </section>
+
+          <section id="panel-saved-selections" class="inspector-panel" data-inspector-panel="saved-selections" hidden>
+            <p class="panel-intro">Save stable molecular queries without changing the exact atom selected by a click.</p>
+
+            <div class="saved-selection-builder">
+              <div class="saved-selection-builder-heading">FROM CURRENT ATOM</div>
+              <input id="saved-selection-name" type="text" maxlength="80" placeholder="Selection name" aria-label="Current selection name">
+              <div class="inline-fields">
+                <select id="saved-selection-scope" aria-label="Current selection scope">
+                  <option value="atom">This atom</option>
+                  <option value="residue">This residue</option>
+                  <option value="chain">This chain</option>
+                </select>
+                <button id="create-current-selection" class="button accent" type="button">Save</button>
+              </div>
+              <p id="saved-selection-current-status" class="saved-selection-builder-status">Select an atom first.</p>
+            </div>
+
+            <div class="saved-selection-builder">
+              <div class="saved-selection-builder-heading">RESIDUE RANGE</div>
+              <input id="saved-range-name" type="text" maxlength="80" placeholder="Range name" aria-label="Residue range name">
+              <select id="saved-range-chain" aria-label="Residue range chain"></select>
+              <div class="inline-fields">
+                <input id="saved-range-start" type="number" step="1" placeholder="Start" aria-label="First residue number">
+                <input id="saved-range-end" type="number" step="1" placeholder="End" aria-label="Last residue number">
+              </div>
+              <button id="create-range-selection" class="button secondary full-width" type="button">Save residue range</button>
+            </div>
+
+            <div class="saved-selection-builder">
+              <div class="saved-selection-builder-heading">LIGANDS</div>
+              <input id="saved-ligand-name" type="text" maxlength="80" placeholder="All non-water ligands" aria-label="Ligand selection name">
+              <button id="create-ligand-selection" class="button secondary full-width" type="button">Save all ligands</button>
+            </div>
+
+            <div class="saved-selection-builder">
+              <div class="saved-selection-builder-heading">PROXIMITY</div>
+              <input id="saved-proximity-name" type="text" maxlength="80" placeholder="Nearby atoms" aria-label="Proximity selection name">
+              <label class="saved-selection-compact-field" for="saved-proximity-target"><span>Target</span>
+                <select id="saved-proximity-target">
+                  <option value="current-atom">Current atom</option>
+                  <option value="current-residue">Current residue</option>
+                  <option value="ligands">All ligands</option>
+                </select>
+              </label>
+              <label class="saved-selection-compact-field" for="saved-proximity-cutoff"><span>Cutoff (Å)</span>
+                <input id="saved-proximity-cutoff" type="number" min="0.1" max="100" step="0.1" value="4">
+              </label>
+              <button id="create-proximity-selection" class="button secondary full-width" type="button">Save proximity query</button>
+            </div>
+
+            <div class="saved-selection-list-heading">
+              <span>NAMED SELECTIONS</span>
+              <button id="clear-saved-selection-highlight" class="text-button" type="button" disabled>Clear highlight</button>
+            </div>
+            <div id="empty-saved-selections" class="empty-saved-selections">
+              <strong>No named selections</strong>
+              <span>Save an atom, residue, chain, range, ligand set, or proximity query.</span>
+            </div>
+            <div id="saved-selection-list" class="saved-selection-list" aria-label="Named selections"></div>
           </section>
 
           <section id="panel-inspect" class="inspector-panel" data-inspector-panel="inspect" hidden>
@@ -923,6 +1019,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       selection: doc.scene.selection || null,
       customColors: Array.isArray(doc.scene.customColors) ? doc.scene.customColors : [],
       measurements: normalizeMeasurements(doc.scene.measurements),
+      savedSelections: normalizeSavedSelections(doc.scene.savedSelections),
       camera: validCamera(doc.scene.camera) ? { view: doc.scene.camera.view.map(Number) } : { view: null }
     });
     return doc;
@@ -941,6 +1038,177 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       if ('note' in record) measurement.note = String(record.note ?? '');
       return measurement;
     });
+  }
+
+  function normalizeSavedSelections(value) {
+    if (!Array.isArray(value)) return [];
+    return value.filter(record => record && typeof record === 'object' && !Array.isArray(record)).map((record, index) => {
+      const saved = { ...record };
+      saved.id = typeof record.id === 'string' && record.id.trim() ? record.id : uid('selection');
+      saved.name = typeof record.name === 'string' && record.name.trim()
+        ? record.name.trim().slice(0, 80)
+        : `Saved selection ${index + 1}`;
+      saved.selector = normalizeCompoundSelector(record.selector);
+      return saved;
+    });
+  }
+
+  function normalizeCompoundSelector(value, depth = 0) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    const selector = { ...value };
+    selector.kind = String(value.kind || '').trim().toLowerCase();
+    for (const key of ['structureId', 'chain', 'icode', 'resn', 'atom', 'altLoc']) {
+      if (key in value && value[key] != null) selector[key] = String(value[key]);
+    }
+    for (const key of ['model', 'resi', 'serial', 'cutoff']) {
+      if (!(key in value)) continue;
+      const number = Number(value[key]);
+      selector[key] = Number.isFinite(number) ? number : value[key];
+    }
+    for (const key of ['start', 'end']) {
+      if (!value[key] || typeof value[key] !== 'object' || Array.isArray(value[key])) continue;
+      selector[key] = { ...value[key] };
+      const resi = Number(value[key].resi);
+      if (Number.isFinite(resi)) selector[key].resi = resi;
+      if ('icode' in value[key] && value[key].icode != null) selector[key].icode = String(value[key].icode);
+    }
+    if (depth < 2 && value.target && typeof value.target === 'object' && !Array.isArray(value.target)) {
+      selector.target = normalizeCompoundSelector(value.target, depth + 1);
+    }
+    return selector;
+  }
+
+  function matchSavedSelection(value, atoms, structureId) {
+    const selector = value?.selector && typeof value.selector === 'object' ? value.selector : value;
+    const candidates = Array.isArray(atoms) ? atoms : [];
+    if (!selector || typeof selector !== 'object' || Array.isArray(selector)) {
+      return selectionMatchError('Selector must be an object.');
+    }
+    if (!selector.structureId) return selectionMatchError('Selector is missing structureId.');
+    if (selector.structureId !== structureId) {
+      return selectionMatchError('Selector belongs to a different structure.');
+    }
+
+    const kind = String(selector.kind || '').toLowerCase();
+    let matched;
+    if (kind === 'atom') {
+      if (!validRequiredSelectorFields(selector, ['model', 'chain', 'resi', 'atom'])) {
+        return selectionMatchError('Atom selector is missing model, chain, residue, or atom name.');
+      }
+      matched = candidates.filter(atom => atomMatchesSelector(atom, selector, structureId));
+    } else if (kind === 'residue') {
+      if (!validRequiredSelectorFields(selector, ['model', 'chain', 'resi'])) {
+        return selectionMatchError('Residue selector is missing model, chain, or residue number.');
+      }
+      matched = candidates.filter(atom =>
+        atom.model === Number(selector.model) && atom.chain === selector.chain
+        && atom.resi === Number(selector.resi)
+        && (selector.icode == null || atom.icode === selector.icode)
+        && (selector.resn == null || atom.resn === selector.resn)
+      );
+    } else if (kind === 'chain') {
+      if (!validRequiredSelectorFields(selector, ['model', 'chain'])) {
+        return selectionMatchError('Chain selector is missing model or chain.');
+      }
+      matched = candidates.filter(atom => atom.model === Number(selector.model) && atom.chain === selector.chain);
+    } else if (kind === 'residue-range') {
+      const start = Number(selector.start?.resi);
+      const end = Number(selector.end?.resi);
+      if (!validRequiredSelectorFields(selector, ['model', 'chain']) || !Number.isFinite(start) || !Number.isFinite(end)) {
+        return selectionMatchError('Residue range needs a model, chain, start, and end.');
+      }
+      if (start > end) return selectionMatchError('Residue range start must not exceed its end.');
+      matched = candidates.filter(atom =>
+        atom.model === Number(selector.model) && atom.chain === selector.chain
+        && atom.resi >= start && atom.resi <= end
+        && (atom.resi !== start || selector.start.icode == null || atom.icode >= selector.start.icode)
+        && (atom.resi !== end || selector.end.icode == null || atom.icode <= selector.end.icode)
+      );
+    } else if (kind === 'ligands') {
+      if (selector.model != null && !Number.isFinite(Number(selector.model))) {
+        return selectionMatchError('Ligand selector model must be a number.');
+      }
+      matched = candidates.filter(atom =>
+        atom.het && !isWater(atom)
+        && (selector.model == null || atom.model === Number(selector.model))
+      );
+    } else if (kind === 'within') {
+      const cutoff = Number(selector.cutoff);
+      if (!Number.isFinite(cutoff) || cutoff <= 0 || cutoff > 100) {
+        return selectionMatchError('Proximity cutoff must be greater than 0 and at most 100 Å.');
+      }
+      const targetKind = String(selector.target?.kind || '').toLowerCase();
+      if (!['atom', 'residue', 'ligands'].includes(targetKind)) {
+        return selectionMatchError('Proximity target must be an atom, residue, or ligand selector.');
+      }
+      const target = matchSavedSelection(selector.target, candidates, structureId);
+      if (!target.valid) return selectionMatchError(`Invalid proximity target: ${target.error}`);
+      matched = atomsWithin(candidates, target.atoms, cutoff);
+    } else {
+      return selectionMatchError(`Unsupported selector kind: ${kind || '(missing)'}.`);
+    }
+
+    return {
+      valid: true,
+      error: null,
+      atoms: matched,
+      atomCount: matched.length,
+      residueCount: countMatchedResidues(matched)
+    };
+  }
+
+  function validRequiredSelectorFields(selector, keys) {
+    return keys.every(key => {
+      if (selector[key] == null || selector[key] === '') return false;
+      if (key === 'model' || key === 'resi') return Number.isFinite(Number(selector[key]));
+      return true;
+    });
+  }
+
+  function selectionMatchError(error) {
+    return { valid: false, error, atoms: [], atomCount: 0, residueCount: 0 };
+  }
+
+  function countMatchedResidues(atoms) {
+    return new Set(atoms.map(atom => `${atom.model}|${atom.chain}|${atom.resi}|${atom.icode}|${atom.resn}`)).size;
+  }
+
+  function atomsWithin(atoms, targets, cutoff) {
+    if (!targets.length) return [];
+    const cellSize = cutoff;
+    const cells = new Map();
+    const keyFor = (atom, x, y, z) => `${atom.model}|${x}|${y}|${z}`;
+    for (const atom of targets) {
+      const cell = [Math.floor(atom.x / cellSize), Math.floor(atom.y / cellSize), Math.floor(atom.z / cellSize)];
+      const key = keyFor(atom, ...cell);
+      if (!cells.has(key)) cells.set(key, []);
+      cells.get(key).push(atom);
+    }
+    const cutoff2 = cutoff * cutoff;
+    return atoms.filter(atom => {
+      const [cx, cy, cz] = [Math.floor(atom.x / cellSize), Math.floor(atom.y / cellSize), Math.floor(atom.z / cellSize)];
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+        const nearby = cells.get(keyFor(atom, cx + dx, cy + dy, cz + dz));
+        if (!nearby) continue;
+        for (const target of nearby) {
+          const x = atom.x - target.x, y = atom.y - target.y, z = atom.z - target.z;
+          if (x * x + y * y + z * z <= cutoff2) return true;
+        }
+      }
+      return false;
+    });
+  }
+
+  function describeSavedSelector(selector) {
+    const kind = String(selector?.kind || '').toLowerCase();
+    const chain = selector?.chain === '_' ? 'no chain' : `chain ${selector?.chain}`;
+    if (kind === 'atom') return `${selector.resn || 'Residue'} ${selector.resi}${selector.icode || ''} · ${selector.atom} · ${chain}`;
+    if (kind === 'residue') return `${selector.resn || 'Residue'} ${selector.resi}${selector.icode || ''} · ${chain}`;
+    if (kind === 'chain') return `${chain} · model ${selector.model}`;
+    if (kind === 'residue-range') return `${chain} · residues ${selector.start?.resi ?? '?'}–${selector.end?.resi ?? '?'}`;
+    if (kind === 'ligands') return selector.model == null ? 'All non-water ligands' : `Non-water ligands · model ${selector.model}`;
+    if (kind === 'within') return `Within ${selector.cutoff ?? '?'} Å of ${describeSavedSelector(selector.target)}`;
+    return 'Invalid or unsupported selector';
   }
 
   function validCamera(camera) {
@@ -1054,6 +1322,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     atomMatchesSelector, atomIdentity, atomLabel, colorForAtom, isWater, vdwRadius, uid,
     MEASUREMENT_ATOM_COUNTS, normalizeMeasurements, measurementAtoms, measurementValue,
     formatMeasurementValue,
+    normalizeSavedSelections, normalizeCompoundSelector, matchSavedSelection, describeSavedSelector,
     residueDescriptor, buildStructureHierarchy, representativeAtom
   };
 })();
@@ -1078,6 +1347,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       this.lastReportedView = '';
       this.measurementDraft = [];
       this.activeMeasurementId = null;
+      this.activeSavedSelectionId = null;
       this.viewer = ThreeDmol.createViewer(container, {
         backgroundColor: '#07111f',
         antialias: true
@@ -1171,6 +1441,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
           break;
       }
 
+      this.applySavedSelectionHighlight();
       this.applySelectionHighlight();
       this.applyMeasurements();
       this.applyMeasurementDraft();
@@ -1202,6 +1473,23 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         fontSize: 12,
         padding: 4,
         inFront: true
+      });
+    }
+
+    applySavedSelectionHighlight() {
+      if (!this.activeSavedSelectionId) return;
+      const saved = (this.doc.scene.savedSelections || []).find(record => record.id === this.activeSavedSelectionId);
+      if (!saved) return;
+      const match = Core.matchSavedSelection(saved, this.parsed.atoms, this.doc.structure.id);
+      if (!match.valid) return;
+      const atoms = match.atoms.filter(atom =>
+        (this.doc.scene.showHydrogens || atom.element !== 'H')
+        && (this.doc.scene.showWater || !Core.isWater(atom))
+      );
+      if (!atoms.length) return;
+      this.viewer.addStyle({ serial: atoms.map(atom => atom.serial) }, {
+        stick: { radius: .25, color: '#30e3d2' },
+        sphere: { scale: .38, color: '#30e3d2', opacity: .72 }
       });
     }
 
@@ -1264,6 +1552,29 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       if (!this.doc) return;
       this.applyAppearance();
       this.viewer.render();
+    }
+
+    setActiveSavedSelection(id) {
+      this.activeSavedSelectionId = id || null;
+      if (!this.doc) return;
+      this.applyAppearance();
+      this.viewer.render();
+    }
+
+    focusSavedSelection(id, notify = true) {
+      if (!this.doc) return false;
+      const saved = (this.doc.scene.savedSelections || []).find(record => record.id === id);
+      if (!saved) return false;
+      const match = Core.matchSavedSelection(saved, this.parsed.atoms, this.doc.structure.id);
+      if (!match.valid || !match.atoms.length) return false;
+      this.applyingDocument = true;
+      this.viewer.zoomTo({ serial: match.atoms.map(atom => atom.serial) });
+      this.viewer.render();
+      this.doc.scene.camera = { view: this.viewer.getView() };
+      this.lastReportedView = JSON.stringify(this.doc.scene.camera.view);
+      requestAnimationFrame(() => { this.applyingDocument = false; });
+      if (notify) this.callbacks.onCamera?.(structuredClone(this.doc.scene.camera));
+      return true;
     }
 
     visibleSelection() {
@@ -1596,7 +1907,14 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     'measurement-type', 'start-measurement', 'measurement-pick-progress', 'measurement-pick-status',
     'measurement-pick-atoms', 'cancel-measurement', 'clear-measurements', 'empty-measurements',
     'measurement-list', 'navigator-button', 'navigator-search',
-    'navigator-clear-search', 'navigator-count', 'navigator-sequences', 'navigator-tree', 'navigator-status'
+    'navigator-clear-search', 'navigator-count', 'navigator-sequences', 'navigator-tree', 'navigator-status',
+    'saved-selections-button', 'saved-selections-ribbon-value', 'saved-selection-name',
+    'saved-selection-scope', 'create-current-selection', 'saved-selection-current-status',
+    'saved-range-name', 'saved-range-chain', 'saved-range-start', 'saved-range-end',
+    'create-range-selection', 'saved-ligand-name', 'create-ligand-selection',
+    'saved-proximity-name', 'saved-proximity-target', 'saved-proximity-cutoff',
+    'create-proximity-selection', 'clear-saved-selection-highlight',
+    'empty-saved-selections', 'saved-selection-list'
   ].map(id => [id, document.getElementById(id)]));
 
   const undoStack = [];
@@ -1609,6 +1927,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   let activeInspector = null;
   let measurementDraft = null;
   let activeMeasurementId = null;
+  let activeSavedSelectionId = null;
   const navigatorState = {
     structureKey: '', chains: [], residueByKey: new Map(),
     expandedChains: new Set(), expandedResidues: new Set(), query: ''
@@ -1619,7 +1938,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   const inspectorTitles = {
     fetch: 'Find structure', representation: 'Representation', color: 'Color',
     show: 'Show and hide', inspect: 'Selection inspector', measurements: 'Measurements',
-    navigator: 'Structure navigator'
+    navigator: 'Structure navigator', 'saved-selections': 'Named selections'
   };
 
   const renderer = new window.MoleculeRenderer(elements['molecule-viewer'], {
@@ -1700,6 +2019,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     try {
       renderer.measurementDraft = measurementDraft?.atoms ? [...measurementDraft.atoms] : [];
       renderer.activeMeasurementId = activeMeasurementId;
+      renderer.activeSavedSelectionId = activeSavedSelectionId;
       renderer.setDocument(doc, { fit });
       parsed = renderer.parsed;
       syncLiveDataBlock();
@@ -1711,6 +2031,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     syncControls();
     syncSelection();
     syncMeasurements();
+    syncSavedSelections();
     syncNavigator();
   }
 
@@ -1740,6 +2061,9 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     const measurementCount = doc.scene.measurements.length;
     elements['measurements-ribbon-value'].textContent = measurementCount
       ? `${measurementCount} saved` : 'None';
+    const savedSelectionCount = doc.scene.savedSelections.length;
+    elements['saved-selections-ribbon-value'].textContent = savedSelectionCount
+      ? `${savedSelectionCount} saved` : 'None';
     elements['undo-button'].disabled = !undoStack.length;
     elements['redo-button'].disabled = !redoStack.length;
   }
@@ -1756,6 +2080,12 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     elements['clear-selection'].disabled = !atom;
     elements['clear-selection-panel'].disabled = !atom;
     elements['inspect-button'].disabled = !atom;
+    elements['create-current-selection'].disabled = !atom;
+    const proximityNeedsCurrent = elements['saved-proximity-target'].value !== 'ligands';
+    elements['create-proximity-selection'].disabled = proximityNeedsCurrent && !atom;
+    elements['saved-selection-current-status'].textContent = atom
+      ? `Current atom: ${Core.atomLabel(atom)}`
+      : 'Select an atom first.';
     if (!atom) return;
     elements['selected-element'].textContent = atom.element;
     elements['selected-element'].style.background = Core.ELEMENT_COLORS[atom.element] || '#8795a7';
@@ -1763,6 +2093,189 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     elements['selected-path'].textContent = `${atom.chain === '_' ? 'No chain' : `Chain ${atom.chain}`} · ${atom.resn} ${atom.resi}${atom.icode || ''}`;
     elements['selected-serial'].textContent = atom.serial;
     elements['selected-coordinates'].textContent = `${atom.x.toFixed(2)}, ${atom.y.toFixed(2)}, ${atom.z.toFixed(2)}`;
+  }
+
+  function selectorForCurrent(scope) {
+    const atom = selectedAtom();
+    if (!atom) throw new Error('Select an atom first.');
+    if (!['atom', 'residue', 'chain'].includes(scope)) throw new Error(`Unsupported current selection scope: ${scope}`);
+    const selector = { kind: scope, ...Core.selectorForAtom(atom, scope, doc.structure.id) };
+    if (scope === 'atom') selector.resn = atom.resn;
+    return selector;
+  }
+
+  function syncSavedSelections() {
+    const savedSelections = doc.scene.savedSelections || [];
+    if (activeSavedSelectionId && !savedSelections.some(saved => saved.id === activeSavedSelectionId)) {
+      activeSavedSelectionId = null;
+      renderer.activeSavedSelectionId = null;
+    }
+    elements['saved-selection-list'].replaceChildren();
+    elements['empty-saved-selections'].hidden = Boolean(savedSelections.length);
+    elements['clear-saved-selection-highlight'].disabled = !activeSavedSelectionId;
+    syncSavedSelectionRangeChains();
+
+    for (const saved of savedSelections) {
+      const match = Core.matchSavedSelection(saved, parsed?.atoms || [], doc.structure.id);
+      const card = document.createElement('article');
+      card.className = `saved-selection-card${saved.id === activeSavedSelectionId ? ' active' : ''}${match.valid ? '' : ' invalid'}`;
+      card.dataset.savedSelectionId = saved.id;
+
+      const header = document.createElement('div');
+      header.className = 'saved-selection-card-header';
+      const name = document.createElement('input');
+      name.className = 'saved-selection-name-input';
+      name.type = 'text';
+      name.maxLength = 80;
+      name.value = saved.name;
+      name.setAttribute('aria-label', `Rename ${saved.name}`);
+      name.addEventListener('change', () => {
+        try { renameSavedSelection(saved.id, name.value); }
+        catch (error) { name.value = saved.name; toast(error.message, 'error'); }
+      });
+      const remove = document.createElement('button');
+      remove.className = 'saved-selection-delete';
+      remove.type = 'button';
+      remove.textContent = '×';
+      remove.title = `Delete ${saved.name}`;
+      remove.setAttribute('aria-label', `Delete ${saved.name}`);
+      remove.addEventListener('click', () => removeSavedSelection(saved.id));
+      header.append(name, remove);
+
+      const summary = document.createElement('p');
+      summary.className = 'saved-selection-summary';
+      summary.textContent = Core.describeSavedSelector(saved.selector);
+      const counts = document.createElement('p');
+      counts.className = `saved-selection-match${match.valid ? (match.atomCount ? '' : ' empty') : ' invalid'}`;
+      counts.textContent = match.valid
+        ? match.atomCount
+          ? `${match.atomCount.toLocaleString()} atom${match.atomCount === 1 ? '' : 's'} · ${match.residueCount.toLocaleString()} residue${match.residueCount === 1 ? '' : 's'}`
+          : 'Valid query · no matching atoms'
+        : `Invalid · ${match.error}`;
+
+      const actions = document.createElement('div');
+      actions.className = 'saved-selection-actions';
+      const highlight = document.createElement('button');
+      highlight.className = saved.id === activeSavedSelectionId ? 'button accent' : 'button secondary';
+      highlight.type = 'button';
+      highlight.disabled = !match.valid || !match.atomCount;
+      highlight.textContent = saved.id === activeSavedSelectionId ? 'Highlighted' : 'Highlight & focus';
+      highlight.addEventListener('click', () => toggleSavedSelectionHighlight(saved.id));
+      const copy = document.createElement('button');
+      copy.className = 'button secondary';
+      copy.type = 'button';
+      copy.textContent = 'Copy JSON';
+      copy.addEventListener('click', async () => {
+        await copyText(JSON.stringify(saved, null, 2));
+        toast('Named selection JSON copied', 'success');
+      });
+      actions.append(highlight, copy);
+      card.append(header, summary, counts, actions);
+      elements['saved-selection-list'].appendChild(card);
+    }
+  }
+
+  function syncSavedSelectionRangeChains() {
+    const previous = elements['saved-range-chain'].value;
+    const chains = parsed ? Core.buildStructureHierarchy(parsed) : [];
+    const multipleModels = new Set(chains.map(chain => chain.model)).size > 1;
+    const options = chains.map(chain => {
+      const option = document.createElement('option');
+      option.value = JSON.stringify([chain.model, chain.chain]);
+      const chainName = chain.chain === '_' ? 'No chain' : `Chain ${chain.chain}`;
+      option.textContent = `${chainName}${multipleModels ? ` · model ${chain.model}` : ''} · ${chain.residues.length} residues`;
+      return option;
+    });
+    elements['saved-range-chain'].replaceChildren(...options);
+    if (options.some(option => option.value === previous)) elements['saved-range-chain'].value = previous;
+    const disabled = !options.length;
+    elements['saved-range-chain'].disabled = disabled;
+    elements['create-range-selection'].disabled = disabled;
+  }
+
+  function addSavedSelection(name, selector, options = {}, source = 'agent') {
+    const record = Core.normalizeSavedSelections([{
+      ...(options.record || {}),
+      id: typeof options.id === 'string' && options.id.trim() ? options.id : Core.uid('selection'),
+      name: String(name || '').trim() || Core.describeSavedSelector(selector),
+      selector
+    }])[0];
+    if (doc.scene.savedSelections.some(saved => saved.id === record.id)) {
+      throw new Error(`Named selection ${record.id} already exists.`);
+    }
+    const match = Core.matchSavedSelection(record, parsed?.atoms || [], doc.structure.id);
+    if (!match.valid) throw new Error(match.error);
+    activeSavedSelectionId = record.id;
+    commit(() => { doc.scene.savedSelections.push(record); }, { source });
+    return structuredClone(record);
+  }
+
+  function renameSavedSelection(id, value, source = 'browser') {
+    const name = String(value || '').trim().slice(0, 80);
+    if (!name) throw new Error('Named selections need a name.');
+    const saved = doc.scene.savedSelections.find(record => record.id === id);
+    if (!saved) throw new Error(`Named selection ${id} was not found.`);
+    if (saved.name === name) return structuredClone(saved);
+    commit(() => { saved.name = name; }, { source });
+    return structuredClone(doc.scene.savedSelections.find(record => record.id === id));
+  }
+
+  function removeSavedSelection(id, source = 'browser') {
+    if (!doc.scene.savedSelections.some(saved => saved.id === id)) return false;
+    if (activeSavedSelectionId === id) activeSavedSelectionId = null;
+    commit(() => {
+      doc.scene.savedSelections = doc.scene.savedSelections.filter(saved => saved.id !== id);
+    }, { source });
+    return true;
+  }
+
+  function clearSavedSelections(source = 'agent') {
+    if (!doc.scene.savedSelections.length) return false;
+    activeSavedSelectionId = null;
+    commit(() => { doc.scene.savedSelections = []; }, { source });
+    return true;
+  }
+
+  function setSavedSelectionHighlight(id, { focus = false } = {}) {
+    if (id == null) {
+      activeSavedSelectionId = null;
+      renderer.setActiveSavedSelection(null);
+      syncSavedSelections();
+      return null;
+    }
+    const saved = doc.scene.savedSelections.find(record => record.id === id);
+    if (!saved) throw new Error(`Named selection ${id} was not found.`);
+    const match = Core.matchSavedSelection(saved, parsed?.atoms || [], doc.structure.id);
+    if (!match.valid) throw new Error(match.error);
+    if (!match.atomCount) throw new Error('This named selection currently matches no atoms.');
+    activeSavedSelectionId = id;
+    renderer.setActiveSavedSelection(id);
+    if (focus) renderer.focusSavedSelection(id);
+    syncSavedSelections();
+    return {
+      id, valid: true, atomCount: match.atomCount, residueCount: match.residueCount,
+      serials: match.atoms.map(atom => atom.serial)
+    };
+  }
+
+  function toggleSavedSelectionHighlight(id) {
+    try {
+      if (activeSavedSelectionId === id) setSavedSelectionHighlight(null);
+      else setSavedSelectionHighlight(id, { focus: true });
+    } catch (error) {
+      toast(error.message, 'error');
+    }
+  }
+
+  function savedSelectionMatch(id) {
+    const saved = doc.scene.savedSelections.find(record => record.id === id);
+    if (!saved) throw new Error(`Named selection ${id} was not found.`);
+    const match = Core.matchSavedSelection(saved, parsed?.atoms || [], doc.structure.id);
+    return {
+      valid: match.valid, error: match.error, atomCount: match.atomCount,
+      residueCount: match.residueCount,
+      atoms: match.atoms.map(atom => Core.atomIdentity(atom, doc.structure.id))
+    };
   }
 
   function syncMeasurements() {
@@ -2344,6 +2857,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     const parsedCandidate = Core.parsePDB(text);
     const displayName = options.displayName || name.replace(/\.(pdb|ent|txt)$/i, '') || 'Imported molecule';
     resetMeasurementInteraction(false);
+    activeSavedSelectionId = null;
     commit(() => {
       doc.title = displayName;
       doc.structure = { id: Core.uid('structure'), name: displayName, format: 'pdb', data: text };
@@ -2351,6 +2865,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       doc.scene.selection = null;
       doc.scene.customColors = [];
       doc.scene.measurements = [];
+      doc.scene.savedSelections = [];
       doc.scene.camera = { view: null };
     }, { history: false, fit: true });
     undoStack.length = 0; redoStack.length = 0;
@@ -2633,6 +3148,58 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   elements['clear-measurements'].addEventListener('click', () => {
     if (doc.scene.measurements.length && confirm('Delete all saved measurements?')) clearMeasurements();
   });
+  elements['create-current-selection'].addEventListener('click', () => {
+    try {
+      const scope = elements['saved-selection-scope'].value;
+      const record = addSavedSelection(
+        elements['saved-selection-name'].value,
+        selectorForCurrent(scope),
+        {},
+        'browser'
+      );
+      elements['saved-selection-name'].value = '';
+      toast(`Saved “${record.name}”`, 'success');
+    } catch (error) { toast(error.message, 'error'); }
+  });
+  elements['create-range-selection'].addEventListener('click', () => {
+    try {
+      const [model, chain] = JSON.parse(elements['saved-range-chain'].value);
+      const start = Number(elements['saved-range-start'].value);
+      const end = Number(elements['saved-range-end'].value);
+      if (!Number.isInteger(start) || !Number.isInteger(end)) throw new Error('Enter integer start and end residue numbers.');
+      const selector = {
+        kind: 'residue-range', structureId: doc.structure.id, model, chain,
+        start: { resi: start }, end: { resi: end }
+      };
+      const record = addSavedSelection(elements['saved-range-name'].value, selector, {}, 'browser');
+      elements['saved-range-name'].value = '';
+      toast(`Saved “${record.name}”`, 'success');
+    } catch (error) { toast(error.message, 'error'); }
+  });
+  elements['create-ligand-selection'].addEventListener('click', () => {
+    try {
+      const record = addSavedSelection(elements['saved-ligand-name'].value, {
+        kind: 'ligands', structureId: doc.structure.id
+      }, {}, 'browser');
+      elements['saved-ligand-name'].value = '';
+      toast(`Saved “${record.name}”`, 'success');
+    } catch (error) { toast(error.message, 'error'); }
+  });
+  elements['saved-proximity-target'].addEventListener('change', syncSelection);
+  elements['create-proximity-selection'].addEventListener('click', () => {
+    try {
+      const targetType = elements['saved-proximity-target'].value;
+      const target = targetType === 'ligands'
+        ? { kind: 'ligands', structureId: doc.structure.id }
+        : selectorForCurrent(targetType === 'current-residue' ? 'residue' : 'atom');
+      const cutoff = Number(elements['saved-proximity-cutoff'].value);
+      const selector = { kind: 'within', structureId: doc.structure.id, cutoff, target };
+      const record = addSavedSelection(elements['saved-proximity-name'].value, selector, {}, 'browser');
+      elements['saved-proximity-name'].value = '';
+      toast(`Saved “${record.name}”`, 'success');
+    } catch (error) { toast(error.message, 'error'); }
+  });
+  elements['clear-saved-selection-highlight'].addEventListener('click', () => setSavedSelectionHighlight(null));
   elements['navigator-search'].addEventListener('input', event => {
     navigatorState.query = event.target.value.trim().toLowerCase();
     renderNavigator();
@@ -2729,10 +3296,11 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   });
 
   window.molview = Object.freeze({
-    version: '0.6.0',
+    version: '0.7.0',
     get document() { return structuredClone(doc); },
     getSelection() { return structuredClone(doc.scene.selection); },
     getMeasurements() { return structuredClone(doc.scene.measurements); },
+    getSavedSelections() { return structuredClone(doc.scene.savedSelections); },
     serialize() { return persistence.serialize(); },
     async save() { return persistence.save(false); },
     async importPDB(name, text) { return importPDB(name, text); },
@@ -2754,9 +3322,20 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     updateMeasurement(id, changes) { return updateMeasurement(id, changes || {}, 'agent'); },
     removeMeasurement(id) { return deleteMeasurement(id, 'agent'); },
     clearMeasurements() { return clearMeasurements('agent'); },
+    addSavedSelection(name, selector, options) { return addSavedSelection(name, selector, options || {}, 'agent'); },
+    saveCurrentSelection(name, scope = 'atom', options) {
+      return addSavedSelection(name, selectorForCurrent(scope), options || {}, 'agent');
+    },
+    renameSavedSelection(id, name) { return renameSavedSelection(id, name, 'agent'); },
+    removeSavedSelection(id) { return removeSavedSelection(id, 'agent'); },
+    clearSavedSelections() { return clearSavedSelections('agent'); },
+    getSavedSelectionMatch(id) { return savedSelectionMatch(id); },
+    highlightSavedSelection(id, focus = false) { return setSavedSelectionHighlight(id, { focus }); },
+    clearSavedSelectionHighlight() { return setSavedSelectionHighlight(null); },
     loadDocument(value, modifiedBy = 'agent') {
       const next = Core.normalizeDocument(typeof value === 'string' ? JSON.parse(value) : value);
       resetMeasurementInteraction(false);
+      activeSavedSelectionId = null;
       undoStack.push(snapshot()); redoStack.length = 0;
       doc = next;
       touchDocument(modifiedBy);

@@ -30,7 +30,14 @@
     'measurement-type', 'start-measurement', 'measurement-pick-progress', 'measurement-pick-status',
     'measurement-pick-atoms', 'cancel-measurement', 'clear-measurements', 'empty-measurements',
     'measurement-list', 'navigator-button', 'navigator-search',
-    'navigator-clear-search', 'navigator-count', 'navigator-sequences', 'navigator-tree', 'navigator-status'
+    'navigator-clear-search', 'navigator-count', 'navigator-sequences', 'navigator-tree', 'navigator-status',
+    'saved-selections-button', 'saved-selections-ribbon-value', 'saved-selection-name',
+    'saved-selection-scope', 'create-current-selection', 'saved-selection-current-status',
+    'saved-range-name', 'saved-range-chain', 'saved-range-start', 'saved-range-end',
+    'create-range-selection', 'saved-ligand-name', 'create-ligand-selection',
+    'saved-proximity-name', 'saved-proximity-target', 'saved-proximity-cutoff',
+    'create-proximity-selection', 'clear-saved-selection-highlight',
+    'empty-saved-selections', 'saved-selection-list'
   ].map(id => [id, document.getElementById(id)]));
 
   const undoStack = [];
@@ -43,6 +50,7 @@
   let activeInspector = null;
   let measurementDraft = null;
   let activeMeasurementId = null;
+  let activeSavedSelectionId = null;
   const navigatorState = {
     structureKey: '', chains: [], residueByKey: new Map(),
     expandedChains: new Set(), expandedResidues: new Set(), query: ''
@@ -53,7 +61,7 @@
   const inspectorTitles = {
     fetch: 'Find structure', representation: 'Representation', color: 'Color',
     show: 'Show and hide', inspect: 'Selection inspector', measurements: 'Measurements',
-    navigator: 'Structure navigator'
+    navigator: 'Structure navigator', 'saved-selections': 'Named selections'
   };
 
   const renderer = new window.MoleculeRenderer(elements['molecule-viewer'], {
@@ -134,6 +142,7 @@
     try {
       renderer.measurementDraft = measurementDraft?.atoms ? [...measurementDraft.atoms] : [];
       renderer.activeMeasurementId = activeMeasurementId;
+      renderer.activeSavedSelectionId = activeSavedSelectionId;
       renderer.setDocument(doc, { fit });
       parsed = renderer.parsed;
       syncLiveDataBlock();
@@ -145,6 +154,7 @@
     syncControls();
     syncSelection();
     syncMeasurements();
+    syncSavedSelections();
     syncNavigator();
   }
 
@@ -174,6 +184,9 @@
     const measurementCount = doc.scene.measurements.length;
     elements['measurements-ribbon-value'].textContent = measurementCount
       ? `${measurementCount} saved` : 'None';
+    const savedSelectionCount = doc.scene.savedSelections.length;
+    elements['saved-selections-ribbon-value'].textContent = savedSelectionCount
+      ? `${savedSelectionCount} saved` : 'None';
     elements['undo-button'].disabled = !undoStack.length;
     elements['redo-button'].disabled = !redoStack.length;
   }
@@ -190,6 +203,12 @@
     elements['clear-selection'].disabled = !atom;
     elements['clear-selection-panel'].disabled = !atom;
     elements['inspect-button'].disabled = !atom;
+    elements['create-current-selection'].disabled = !atom;
+    const proximityNeedsCurrent = elements['saved-proximity-target'].value !== 'ligands';
+    elements['create-proximity-selection'].disabled = proximityNeedsCurrent && !atom;
+    elements['saved-selection-current-status'].textContent = atom
+      ? `Current atom: ${Core.atomLabel(atom)}`
+      : 'Select an atom first.';
     if (!atom) return;
     elements['selected-element'].textContent = atom.element;
     elements['selected-element'].style.background = Core.ELEMENT_COLORS[atom.element] || '#8795a7';
@@ -197,6 +216,189 @@
     elements['selected-path'].textContent = `${atom.chain === '_' ? 'No chain' : `Chain ${atom.chain}`} · ${atom.resn} ${atom.resi}${atom.icode || ''}`;
     elements['selected-serial'].textContent = atom.serial;
     elements['selected-coordinates'].textContent = `${atom.x.toFixed(2)}, ${atom.y.toFixed(2)}, ${atom.z.toFixed(2)}`;
+  }
+
+  function selectorForCurrent(scope) {
+    const atom = selectedAtom();
+    if (!atom) throw new Error('Select an atom first.');
+    if (!['atom', 'residue', 'chain'].includes(scope)) throw new Error(`Unsupported current selection scope: ${scope}`);
+    const selector = { kind: scope, ...Core.selectorForAtom(atom, scope, doc.structure.id) };
+    if (scope === 'atom') selector.resn = atom.resn;
+    return selector;
+  }
+
+  function syncSavedSelections() {
+    const savedSelections = doc.scene.savedSelections || [];
+    if (activeSavedSelectionId && !savedSelections.some(saved => saved.id === activeSavedSelectionId)) {
+      activeSavedSelectionId = null;
+      renderer.activeSavedSelectionId = null;
+    }
+    elements['saved-selection-list'].replaceChildren();
+    elements['empty-saved-selections'].hidden = Boolean(savedSelections.length);
+    elements['clear-saved-selection-highlight'].disabled = !activeSavedSelectionId;
+    syncSavedSelectionRangeChains();
+
+    for (const saved of savedSelections) {
+      const match = Core.matchSavedSelection(saved, parsed?.atoms || [], doc.structure.id);
+      const card = document.createElement('article');
+      card.className = `saved-selection-card${saved.id === activeSavedSelectionId ? ' active' : ''}${match.valid ? '' : ' invalid'}`;
+      card.dataset.savedSelectionId = saved.id;
+
+      const header = document.createElement('div');
+      header.className = 'saved-selection-card-header';
+      const name = document.createElement('input');
+      name.className = 'saved-selection-name-input';
+      name.type = 'text';
+      name.maxLength = 80;
+      name.value = saved.name;
+      name.setAttribute('aria-label', `Rename ${saved.name}`);
+      name.addEventListener('change', () => {
+        try { renameSavedSelection(saved.id, name.value); }
+        catch (error) { name.value = saved.name; toast(error.message, 'error'); }
+      });
+      const remove = document.createElement('button');
+      remove.className = 'saved-selection-delete';
+      remove.type = 'button';
+      remove.textContent = '×';
+      remove.title = `Delete ${saved.name}`;
+      remove.setAttribute('aria-label', `Delete ${saved.name}`);
+      remove.addEventListener('click', () => removeSavedSelection(saved.id));
+      header.append(name, remove);
+
+      const summary = document.createElement('p');
+      summary.className = 'saved-selection-summary';
+      summary.textContent = Core.describeSavedSelector(saved.selector);
+      const counts = document.createElement('p');
+      counts.className = `saved-selection-match${match.valid ? (match.atomCount ? '' : ' empty') : ' invalid'}`;
+      counts.textContent = match.valid
+        ? match.atomCount
+          ? `${match.atomCount.toLocaleString()} atom${match.atomCount === 1 ? '' : 's'} · ${match.residueCount.toLocaleString()} residue${match.residueCount === 1 ? '' : 's'}`
+          : 'Valid query · no matching atoms'
+        : `Invalid · ${match.error}`;
+
+      const actions = document.createElement('div');
+      actions.className = 'saved-selection-actions';
+      const highlight = document.createElement('button');
+      highlight.className = saved.id === activeSavedSelectionId ? 'button accent' : 'button secondary';
+      highlight.type = 'button';
+      highlight.disabled = !match.valid || !match.atomCount;
+      highlight.textContent = saved.id === activeSavedSelectionId ? 'Highlighted' : 'Highlight & focus';
+      highlight.addEventListener('click', () => toggleSavedSelectionHighlight(saved.id));
+      const copy = document.createElement('button');
+      copy.className = 'button secondary';
+      copy.type = 'button';
+      copy.textContent = 'Copy JSON';
+      copy.addEventListener('click', async () => {
+        await copyText(JSON.stringify(saved, null, 2));
+        toast('Named selection JSON copied', 'success');
+      });
+      actions.append(highlight, copy);
+      card.append(header, summary, counts, actions);
+      elements['saved-selection-list'].appendChild(card);
+    }
+  }
+
+  function syncSavedSelectionRangeChains() {
+    const previous = elements['saved-range-chain'].value;
+    const chains = parsed ? Core.buildStructureHierarchy(parsed) : [];
+    const multipleModels = new Set(chains.map(chain => chain.model)).size > 1;
+    const options = chains.map(chain => {
+      const option = document.createElement('option');
+      option.value = JSON.stringify([chain.model, chain.chain]);
+      const chainName = chain.chain === '_' ? 'No chain' : `Chain ${chain.chain}`;
+      option.textContent = `${chainName}${multipleModels ? ` · model ${chain.model}` : ''} · ${chain.residues.length} residues`;
+      return option;
+    });
+    elements['saved-range-chain'].replaceChildren(...options);
+    if (options.some(option => option.value === previous)) elements['saved-range-chain'].value = previous;
+    const disabled = !options.length;
+    elements['saved-range-chain'].disabled = disabled;
+    elements['create-range-selection'].disabled = disabled;
+  }
+
+  function addSavedSelection(name, selector, options = {}, source = 'agent') {
+    const record = Core.normalizeSavedSelections([{
+      ...(options.record || {}),
+      id: typeof options.id === 'string' && options.id.trim() ? options.id : Core.uid('selection'),
+      name: String(name || '').trim() || Core.describeSavedSelector(selector),
+      selector
+    }])[0];
+    if (doc.scene.savedSelections.some(saved => saved.id === record.id)) {
+      throw new Error(`Named selection ${record.id} already exists.`);
+    }
+    const match = Core.matchSavedSelection(record, parsed?.atoms || [], doc.structure.id);
+    if (!match.valid) throw new Error(match.error);
+    activeSavedSelectionId = record.id;
+    commit(() => { doc.scene.savedSelections.push(record); }, { source });
+    return structuredClone(record);
+  }
+
+  function renameSavedSelection(id, value, source = 'browser') {
+    const name = String(value || '').trim().slice(0, 80);
+    if (!name) throw new Error('Named selections need a name.');
+    const saved = doc.scene.savedSelections.find(record => record.id === id);
+    if (!saved) throw new Error(`Named selection ${id} was not found.`);
+    if (saved.name === name) return structuredClone(saved);
+    commit(() => { saved.name = name; }, { source });
+    return structuredClone(doc.scene.savedSelections.find(record => record.id === id));
+  }
+
+  function removeSavedSelection(id, source = 'browser') {
+    if (!doc.scene.savedSelections.some(saved => saved.id === id)) return false;
+    if (activeSavedSelectionId === id) activeSavedSelectionId = null;
+    commit(() => {
+      doc.scene.savedSelections = doc.scene.savedSelections.filter(saved => saved.id !== id);
+    }, { source });
+    return true;
+  }
+
+  function clearSavedSelections(source = 'agent') {
+    if (!doc.scene.savedSelections.length) return false;
+    activeSavedSelectionId = null;
+    commit(() => { doc.scene.savedSelections = []; }, { source });
+    return true;
+  }
+
+  function setSavedSelectionHighlight(id, { focus = false } = {}) {
+    if (id == null) {
+      activeSavedSelectionId = null;
+      renderer.setActiveSavedSelection(null);
+      syncSavedSelections();
+      return null;
+    }
+    const saved = doc.scene.savedSelections.find(record => record.id === id);
+    if (!saved) throw new Error(`Named selection ${id} was not found.`);
+    const match = Core.matchSavedSelection(saved, parsed?.atoms || [], doc.structure.id);
+    if (!match.valid) throw new Error(match.error);
+    if (!match.atomCount) throw new Error('This named selection currently matches no atoms.');
+    activeSavedSelectionId = id;
+    renderer.setActiveSavedSelection(id);
+    if (focus) renderer.focusSavedSelection(id);
+    syncSavedSelections();
+    return {
+      id, valid: true, atomCount: match.atomCount, residueCount: match.residueCount,
+      serials: match.atoms.map(atom => atom.serial)
+    };
+  }
+
+  function toggleSavedSelectionHighlight(id) {
+    try {
+      if (activeSavedSelectionId === id) setSavedSelectionHighlight(null);
+      else setSavedSelectionHighlight(id, { focus: true });
+    } catch (error) {
+      toast(error.message, 'error');
+    }
+  }
+
+  function savedSelectionMatch(id) {
+    const saved = doc.scene.savedSelections.find(record => record.id === id);
+    if (!saved) throw new Error(`Named selection ${id} was not found.`);
+    const match = Core.matchSavedSelection(saved, parsed?.atoms || [], doc.structure.id);
+    return {
+      valid: match.valid, error: match.error, atomCount: match.atomCount,
+      residueCount: match.residueCount,
+      atoms: match.atoms.map(atom => Core.atomIdentity(atom, doc.structure.id))
+    };
   }
 
   function syncMeasurements() {
@@ -778,6 +980,7 @@
     const parsedCandidate = Core.parsePDB(text);
     const displayName = options.displayName || name.replace(/\.(pdb|ent|txt)$/i, '') || 'Imported molecule';
     resetMeasurementInteraction(false);
+    activeSavedSelectionId = null;
     commit(() => {
       doc.title = displayName;
       doc.structure = { id: Core.uid('structure'), name: displayName, format: 'pdb', data: text };
@@ -785,6 +988,7 @@
       doc.scene.selection = null;
       doc.scene.customColors = [];
       doc.scene.measurements = [];
+      doc.scene.savedSelections = [];
       doc.scene.camera = { view: null };
     }, { history: false, fit: true });
     undoStack.length = 0; redoStack.length = 0;
@@ -1067,6 +1271,58 @@
   elements['clear-measurements'].addEventListener('click', () => {
     if (doc.scene.measurements.length && confirm('Delete all saved measurements?')) clearMeasurements();
   });
+  elements['create-current-selection'].addEventListener('click', () => {
+    try {
+      const scope = elements['saved-selection-scope'].value;
+      const record = addSavedSelection(
+        elements['saved-selection-name'].value,
+        selectorForCurrent(scope),
+        {},
+        'browser'
+      );
+      elements['saved-selection-name'].value = '';
+      toast(`Saved “${record.name}”`, 'success');
+    } catch (error) { toast(error.message, 'error'); }
+  });
+  elements['create-range-selection'].addEventListener('click', () => {
+    try {
+      const [model, chain] = JSON.parse(elements['saved-range-chain'].value);
+      const start = Number(elements['saved-range-start'].value);
+      const end = Number(elements['saved-range-end'].value);
+      if (!Number.isInteger(start) || !Number.isInteger(end)) throw new Error('Enter integer start and end residue numbers.');
+      const selector = {
+        kind: 'residue-range', structureId: doc.structure.id, model, chain,
+        start: { resi: start }, end: { resi: end }
+      };
+      const record = addSavedSelection(elements['saved-range-name'].value, selector, {}, 'browser');
+      elements['saved-range-name'].value = '';
+      toast(`Saved “${record.name}”`, 'success');
+    } catch (error) { toast(error.message, 'error'); }
+  });
+  elements['create-ligand-selection'].addEventListener('click', () => {
+    try {
+      const record = addSavedSelection(elements['saved-ligand-name'].value, {
+        kind: 'ligands', structureId: doc.structure.id
+      }, {}, 'browser');
+      elements['saved-ligand-name'].value = '';
+      toast(`Saved “${record.name}”`, 'success');
+    } catch (error) { toast(error.message, 'error'); }
+  });
+  elements['saved-proximity-target'].addEventListener('change', syncSelection);
+  elements['create-proximity-selection'].addEventListener('click', () => {
+    try {
+      const targetType = elements['saved-proximity-target'].value;
+      const target = targetType === 'ligands'
+        ? { kind: 'ligands', structureId: doc.structure.id }
+        : selectorForCurrent(targetType === 'current-residue' ? 'residue' : 'atom');
+      const cutoff = Number(elements['saved-proximity-cutoff'].value);
+      const selector = { kind: 'within', structureId: doc.structure.id, cutoff, target };
+      const record = addSavedSelection(elements['saved-proximity-name'].value, selector, {}, 'browser');
+      elements['saved-proximity-name'].value = '';
+      toast(`Saved “${record.name}”`, 'success');
+    } catch (error) { toast(error.message, 'error'); }
+  });
+  elements['clear-saved-selection-highlight'].addEventListener('click', () => setSavedSelectionHighlight(null));
   elements['navigator-search'].addEventListener('input', event => {
     navigatorState.query = event.target.value.trim().toLowerCase();
     renderNavigator();
@@ -1163,10 +1419,11 @@
   });
 
   window.molview = Object.freeze({
-    version: '0.6.0',
+    version: '0.7.0',
     get document() { return structuredClone(doc); },
     getSelection() { return structuredClone(doc.scene.selection); },
     getMeasurements() { return structuredClone(doc.scene.measurements); },
+    getSavedSelections() { return structuredClone(doc.scene.savedSelections); },
     serialize() { return persistence.serialize(); },
     async save() { return persistence.save(false); },
     async importPDB(name, text) { return importPDB(name, text); },
@@ -1188,9 +1445,20 @@
     updateMeasurement(id, changes) { return updateMeasurement(id, changes || {}, 'agent'); },
     removeMeasurement(id) { return deleteMeasurement(id, 'agent'); },
     clearMeasurements() { return clearMeasurements('agent'); },
+    addSavedSelection(name, selector, options) { return addSavedSelection(name, selector, options || {}, 'agent'); },
+    saveCurrentSelection(name, scope = 'atom', options) {
+      return addSavedSelection(name, selectorForCurrent(scope), options || {}, 'agent');
+    },
+    renameSavedSelection(id, name) { return renameSavedSelection(id, name, 'agent'); },
+    removeSavedSelection(id) { return removeSavedSelection(id, 'agent'); },
+    clearSavedSelections() { return clearSavedSelections('agent'); },
+    getSavedSelectionMatch(id) { return savedSelectionMatch(id); },
+    highlightSavedSelection(id, focus = false) { return setSavedSelectionHighlight(id, { focus }); },
+    clearSavedSelectionHighlight() { return setSavedSelectionHighlight(null); },
     loadDocument(value, modifiedBy = 'agent') {
       const next = Core.normalizeDocument(typeof value === 'string' ? JSON.parse(value) : value);
       resetMeasurementInteraction(false);
+      activeSavedSelectionId = null;
       undoStack.push(snapshot()); redoStack.length = 0;
       doc = next;
       touchDocument(modifiedBy);

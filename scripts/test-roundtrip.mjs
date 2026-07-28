@@ -33,6 +33,14 @@ doc.scene.measurements.push({
   label: 'Backbone bond', note: 'Agent-authored annotation'
 });
 
+doc.scene.savedSelections.push({
+  id: 'agent-selection-test', name: 'Backbone neighborhood', futureSelectionField: 'preserved',
+  selector: {
+    kind: 'within', structureId: doc.structure.id, cutoff: 4,
+    target: { kind: 'residue', structureId: doc.structure.id, model: 1, chain: 'A', resi: 1, icode: '', resn: 'ALA' }
+  }
+});
+
 const json = JSON.stringify(doc, null, 2).replace(/</g, '\\u003c');
 const edited = html.replace(pattern, `$1${json}$3`);
 await mkdir(resolve('output'), { recursive: true });
@@ -43,4 +51,5 @@ const roundtrip = JSON.parse(reread.match(pattern)[2]);
 if (roundtrip.modifiedBy !== 'agent' || roundtrip.scene.selection?.identity?.serial !== 2) throw new Error('Agent selection did not round-trip.');
 if (roundtrip.scene.customColors.at(-1)?.color !== '#ff0000') throw new Error('Agent color did not round-trip.');
 if (roundtrip.scene.measurements.at(-1)?.note !== 'Agent-authored annotation') throw new Error('Agent measurement did not round-trip.');
+if (roundtrip.scene.savedSelections.at(-1)?.futureSelectionField !== 'preserved') throw new Error('Agent named selection did not round-trip.');
 console.log(`Agent edit round-trip passed: ${output}`);
