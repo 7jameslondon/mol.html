@@ -48,7 +48,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .brand-mark span:nth-child(2) { right: 0; bottom: 4px; background: var(--success); }
 .brand-mark span:nth-child(3) { left: 0; bottom: 4px; background: var(--warning); }
 .eyebrow, .section-label { font-size: 9px; font-weight: 800; letter-spacing: .15em; color: var(--muted-2); }
-.document-title { display: block; width: min(38vw, 520px); border: 0; padding: 1px 0 0; background: transparent; color: var(--ink); font-size: 16px; font-weight: 720; }
 .top-actions { gap: 7px; }
 .save-status { margin-right: 6px; color: var(--muted); font-size: 11px; white-space: nowrap; }
 .save-status[data-tone="success"] { color: var(--success); }
@@ -402,7 +401,6 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
 
 @media (max-width: 900px) {
   .save-status, #save-as-button { display: none; }
-  .document-title { width: 42vw; }
   .workspace.inspector-open { grid-template-columns: minmax(0, 1fr); }
   .inspector { position: absolute; inset: 0 auto 0 0; width: min(310px, 88vw); box-shadow: 20px 0 60px rgba(0, 0, 0, .52); }
 }
@@ -412,7 +410,6 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
   .topbar { padding: 0 10px; }
   .brand-mark, #undo-button, #redo-button { display: none; }
   .brand-block { min-width: 0; flex: 1; }
-  .document-title { width: 48vw; font-size: 14px; }
   .eyebrow { display: none; }
   .ribbon { padding-left: 8px; }
   .ribbon-group { padding: 0 7px; }
@@ -429,7 +426,7 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
   "documentId": "document-starter-molecular-scene",
   "title": "Protein and DNA starter scene",
   "revision": 1,
-  "modified": "2026-07-28T03:58:41.238Z",
+  "modified": "2026-07-28T04:04:32.818Z",
   "modifiedBy": "build",
   "structure": {
     "id": "structure-starter-complex",
@@ -484,7 +481,6 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
         <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
         <div>
           <div class="eyebrow">MOL.HTML</div>
-          <input id="document-title" class="document-title" value="Starter molecule" aria-label="Document title">
         </div>
       </div>
       <div class="top-actions">
@@ -3204,7 +3200,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   }
 
   const elements = Object.fromEntries([
-    'document-title', 'save-status', 'save-button', 'save-as-button', 'undo-button', 'redo-button',
+    'save-status', 'save-button', 'save-as-button', 'undo-button', 'redo-button',
     'structure-name', 'structure-stats', 'structure-chip', 'file-input', 'pdb-fetch-form', 'pdb-id',
     'pdb-fetch-button', 'pdb-fetch-status', 'pdb-id-mode-button', 'pdb-search-mode-button',
     'pdb-id-pane', 'pdb-search-pane', 'pdb-search-form', 'pdb-search-query', 'pdb-search-button',
@@ -3368,7 +3364,6 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   }
 
   function syncControls() {
-    elements['document-title'].value = doc.title;
     elements['structure-name'].textContent = doc.structure.name;
     const atoms = parsed?.atoms.length || 0;
     const residues = parsed ? new Set(parsed.atoms.map(atom => `${atom.model}|${atom.chain}|${atom.resi}|${atom.icode}`)).size : 0;
@@ -4983,11 +4978,6 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     }
   }
 
-  elements['document-title'].addEventListener('change', event => {
-    const value = event.target.value.trim();
-    if (value && value !== doc.title) commit(() => { doc.title = value; });
-    else event.target.value = doc.title;
-  });
   elements['representation'].addEventListener('change', event => commit(() => { doc.scene.representation = event.target.value; }));
   elements['color-mode'].addEventListener('change', event => commit(() => { doc.scene.colorMode = event.target.value; }));
   elements['show-hydrogens'].addEventListener('change', event => commit(() => { doc.scene.showHydrogens = event.target.checked; }));

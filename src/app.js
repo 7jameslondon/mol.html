@@ -15,7 +15,7 @@
   }
 
   const elements = Object.fromEntries([
-    'document-title', 'save-status', 'save-button', 'save-as-button', 'undo-button', 'redo-button',
+    'save-status', 'save-button', 'save-as-button', 'undo-button', 'redo-button',
     'structure-name', 'structure-stats', 'structure-chip', 'file-input', 'pdb-fetch-form', 'pdb-id',
     'pdb-fetch-button', 'pdb-fetch-status', 'pdb-id-mode-button', 'pdb-search-mode-button',
     'pdb-id-pane', 'pdb-search-pane', 'pdb-search-form', 'pdb-search-query', 'pdb-search-button',
@@ -179,7 +179,6 @@
   }
 
   function syncControls() {
-    elements['document-title'].value = doc.title;
     elements['structure-name'].textContent = doc.structure.name;
     const atoms = parsed?.atoms.length || 0;
     const residues = parsed ? new Set(parsed.atoms.map(atom => `${atom.model}|${atom.chain}|${atom.resi}|${atom.icode}`)).size : 0;
@@ -1794,11 +1793,6 @@
     }
   }
 
-  elements['document-title'].addEventListener('change', event => {
-    const value = event.target.value.trim();
-    if (value && value !== doc.title) commit(() => { doc.title = value; });
-    else event.target.value = doc.title;
-  });
   elements['representation'].addEventListener('change', event => commit(() => { doc.scene.representation = event.target.value; }));
   elements['color-mode'].addEventListener('change', event => commit(() => { doc.scene.colorMode = event.target.value; }));
   elements['show-hydrogens'].addEventListener('change', event => commit(() => { doc.scene.showHydrogens = event.target.checked; }));
