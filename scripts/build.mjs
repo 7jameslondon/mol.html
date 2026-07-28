@@ -20,7 +20,7 @@ if (installed3Dmol.version !== '2.5.5') throw new Error(`Expected 3Dmol.js 2.5.5
 
 const starterPdb = buildStarterStructure();
 const document = {
-  format: 'molview/document',
+  format: 'molhtml/document',
   version: 1,
   documentId: 'document-starter-molecular-scene',
   title: 'Protein and DNA starter scene',
@@ -33,7 +33,7 @@ const document = {
     format: 'pdb',
     data: starterPdb,
     metadata: {
-      title: 'Synthetic coordinates for molview/file demonstration',
+      title: 'Synthetic coordinates for mol.html demonstration',
       classification: 'Illustrative protein-DNA starter',
       entityDescriptions: ['Illustrative protein and DNA starter scene'],
       provenance: { kind: 'generated-demo' },
@@ -84,7 +84,7 @@ for (const [marker, content] of Object.entries(replacements)) {
 }
 if (/__[A-Z_]+__/.test(html)) throw new Error('An unreplaced build marker remains in the generated HTML.');
 
-const output = resolve(root, 'dist/MolView.molecule.html');
+const output = resolve(root, 'dist/example.mol.html');
 await mkdir(dirname(output), { recursive: true });
 await writeFile(output, html, 'utf8');
 console.log(`Built ${output} (${(Buffer.byteLength(html) / 1024).toFixed(1)} KB)`);
@@ -92,7 +92,7 @@ console.log(`Built ${output} (${(Buffer.byteLength(html) / 1024).toFixed(1)} KB)
 function buildStarterStructure() {
   const lines = [
     'HEADER    ILLUSTRATIVE PROTEIN-DNA STARTER',
-    'TITLE     SYNTHETIC COORDINATES FOR MOLVIEW/FILE DEMONSTRATION',
+    'TITLE     SYNTHETIC COORDINATES FOR MOL.HTML DEMONSTRATION',
     'REMARK    THIS STARTER IS FOR INTERFACE DEMONSTRATION, NOT SCIENTIFIC ANALYSIS'
   ];
   let serial = 1;

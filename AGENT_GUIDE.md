@@ -1,11 +1,11 @@
-# molview/file agent guide
+# mol.html agent guide
 
 The complete molecular document is stored in one plaintext block inside the
 HTML file:
 
 ```html
-<script type="application/molview+json" id="molview-doc">
-{ "format": "molview/document", "version": 1, ... }
+<script type="application/molhtml+json" id="molhtml-doc">
+{ "format": "molhtml/document", "version": 1, ... }
 </script>
 ```
 
@@ -17,7 +17,7 @@ script block. Preserve fields you do not understand.
 
 For every edit:
 
-1. Verify `format` is `molview/document` and `version` is `1`.
+1. Verify `format` is `molhtml/document` and `version` is `1`.
 2. Read `scene.selection` when the user says “this atom”, “this residue”, or
    “this chain”.
 3. Apply the smallest targeted state change.
@@ -74,7 +74,7 @@ Coordinate counts, occupancy observations, B-factor statistics, ligand/water
 counts, malformed-line detection, and synthetic/demo remarks are deliberately
 derived at runtime rather than persisted. They are descriptive checks, not a
 scientific quality score. In the open page, read them with
-`window.molview.getDataQuality()`.
+`window.molhtml.getDataQuality()`.
 
 ## Selection
 
@@ -313,53 +313,53 @@ it to `null` to have the browser fit the whole structure on its next refresh.
 When operating the open page directly:
 
 ```js
-window.molview.document
-window.molview.getSelection()
-window.molview.getMeasurements()
-window.molview.getSavedSelections()
-window.molview.listLigands()
-window.molview.getLigandAnalysis()
-window.molview.getMetadata()
-window.molview.getDataQuality()
-window.molview.getSavedViews()
-window.molview.fetchPDB('4HHB')
-window.molview.searchPDB('human hemoglobin')
-window.molview.selectAtom(317)
-window.molview.colorSelection('#ff0000', 'atom')
-window.molview.beginMeasurement('distance')
-window.molview.cancelMeasurement()
-window.molview.addMeasurement('distance', [317, 441], { label: 'Active-site span' })
-window.molview.updateMeasurement('measurement-id', { note: 'Reviewed' })
-window.molview.removeMeasurement('measurement-id')
-window.molview.clearMeasurements()
-window.molview.saveCurrentSelection('Catalytic residue', 'residue')
-window.molview.addSavedSelection('Chain A range', {
-  kind: 'residue-range', structureId: window.molview.document.structure.id,
+window.molhtml.document
+window.molhtml.getSelection()
+window.molhtml.getMeasurements()
+window.molhtml.getSavedSelections()
+window.molhtml.listLigands()
+window.molhtml.getLigandAnalysis()
+window.molhtml.getMetadata()
+window.molhtml.getDataQuality()
+window.molhtml.getSavedViews()
+window.molhtml.fetchPDB('4HHB')
+window.molhtml.searchPDB('human hemoglobin')
+window.molhtml.selectAtom(317)
+window.molhtml.colorSelection('#ff0000', 'atom')
+window.molhtml.beginMeasurement('distance')
+window.molhtml.cancelMeasurement()
+window.molhtml.addMeasurement('distance', [317, 441], { label: 'Active-site span' })
+window.molhtml.updateMeasurement('measurement-id', { note: 'Reviewed' })
+window.molhtml.removeMeasurement('measurement-id')
+window.molhtml.clearMeasurements()
+window.molhtml.saveCurrentSelection('Catalytic residue', 'residue')
+window.molhtml.addSavedSelection('Chain A range', {
+  kind: 'residue-range', structureId: window.molhtml.document.structure.id,
   model: 1, chain: 'A', start: { resi: 20 }, end: { resi: 40 }
 })
-window.molview.renameSavedSelection('selection-id', 'New name')
-window.molview.getSavedSelectionMatch('selection-id')
-window.molview.highlightSavedSelection('selection-id', true)
-window.molview.clearSavedSelectionHighlight()
-window.molview.removeSavedSelection('selection-id')
-window.molview.clearSavedSelections()
-window.molview.selectLigand(ligandKeyOrSelector)
-window.molview.setLigandAnalysis({ cutoff: 5, showContacts: false })
-window.molview.analyzeLigand(ligandKeyOrSelector, 4)
-window.molview.focusLigandAnalysis()
-window.molview.clearLigandAnalysis()
-window.molview.createSavedView({ title: 'Overview', narrative: 'Opening view' })
-window.molview.updateSavedView('view-id', { title: 'Active site', narrative: 'Look here' })
-window.molview.recaptureSavedView('view-id')
-window.molview.applySavedView('view-id')
-window.molview.moveSavedView('view-id', -1)
-window.molview.duplicateSavedView('view-id')
-window.molview.removeSavedView('view-id')
-window.molview.startStory('view-id')
-window.molview.previousStoryView()
-window.molview.nextStoryView()
-window.molview.exitStory()
-window.molview.loadDocument(updatedDocument, 'agent')
-window.molview.serialize()
-window.molview.save()
+window.molhtml.renameSavedSelection('selection-id', 'New name')
+window.molhtml.getSavedSelectionMatch('selection-id')
+window.molhtml.highlightSavedSelection('selection-id', true)
+window.molhtml.clearSavedSelectionHighlight()
+window.molhtml.removeSavedSelection('selection-id')
+window.molhtml.clearSavedSelections()
+window.molhtml.selectLigand(ligandKeyOrSelector)
+window.molhtml.setLigandAnalysis({ cutoff: 5, showContacts: false })
+window.molhtml.analyzeLigand(ligandKeyOrSelector, 4)
+window.molhtml.focusLigandAnalysis()
+window.molhtml.clearLigandAnalysis()
+window.molhtml.createSavedView({ title: 'Overview', narrative: 'Opening view' })
+window.molhtml.updateSavedView('view-id', { title: 'Active site', narrative: 'Look here' })
+window.molhtml.recaptureSavedView('view-id')
+window.molhtml.applySavedView('view-id')
+window.molhtml.moveSavedView('view-id', -1)
+window.molhtml.duplicateSavedView('view-id')
+window.molhtml.removeSavedView('view-id')
+window.molhtml.startStory('view-id')
+window.molhtml.previousStoryView()
+window.molhtml.nextStoryView()
+window.molhtml.exitStory()
+window.molhtml.loadDocument(updatedDocument, 'agent')
+window.molhtml.serialize()
+window.molhtml.save()
 ```

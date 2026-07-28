@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const Core = window.MolViewCore;
+  const Core = window.MolhtmlCore;
   const ThreeDmol = window.$3Dmol || window['3Dmol'];
 
   class MoleculeRenderer {

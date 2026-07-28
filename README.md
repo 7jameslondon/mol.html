@@ -1,6 +1,6 @@
-# molview/file
+# mol.html
 
-`molview/file` is a molecular viewer whose final document is one self-contained,
+`mol.html` is a molecular viewer whose final document is one self-contained,
 self-editing HTML file. The HTML carries the viewer, editor, PDB coordinates,
 selection, colors, camera, and agent-readable JSON state.
 
@@ -14,7 +14,7 @@ node scripts/build.mjs
 node scripts/verify.mjs
 ```
 
-The result is `dist/MolView.molecule.html`. Open that file in a modern browser.
+The result is `dist/example.mol.html`. Open that file in a modern browser.
 The build embeds 3Dmol.js 2.5.5 and its license notices directly in that file,
 so the finished viewer does not need a network connection.
 
@@ -56,4 +56,4 @@ supported by this PDB-format-only document version.
 ## Agent editing
 
 See [AGENT_GUIDE.md](AGENT_GUIDE.md). Agents should edit only the plaintext
-`#molview-doc` JSON block, increment `revision`, and preserve unknown fields.
+`#molhtml-doc` JSON block, increment `revision`, and preserve unknown fields.

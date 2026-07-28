@@ -1,8 +1,8 @@
 (function () {
   'use strict';
 
-  const DATA_BLOCK_ID = 'molview-doc';
-  const DB_NAME = 'molview-autosave';
+  const DATA_BLOCK_ID = 'molhtml-doc';
+  const DB_NAME = 'molhtml-autosave';
   const STORE_NAME = 'recovery';
 
   function capturePristine() {
@@ -12,10 +12,10 @@
   function serializeDocument(pristine, doc) {
     const clone = pristine.cloneNode(true);
     const block = clone.getElementById(DATA_BLOCK_ID);
-    if (!block) throw new Error('The application shell is missing its molview document block.');
+    if (!block) throw new Error('The application shell is missing its molhtml document block.');
     block.textContent = '\n' + JSON.stringify(doc, null, 2).replace(/</g, '\\u003c') + '\n';
     const title = clone.querySelector('title');
-    if (title) title.textContent = `${doc.title} — molview/file`;
+    if (title) title.textContent = `${doc.title} — mol.html`;
     return '<!DOCTYPE html>\n' + clone.documentElement.outerHTML;
   }
 
@@ -27,7 +27,7 @@
 
   function suggestedName(doc) {
     const base = doc.title.replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '') || 'Molecule';
-    return `${base}.molecule.html`;
+    return `${base}.mol.html`;
   }
 
   function download(html, name) {
@@ -117,8 +117,8 @@
       if (forcePicker || !this.fileHandle) {
         try {
           this.fileHandle = await globalThis.showSaveFilePicker({
-            id: 'molview-document', suggestedName: suggestedName(doc),
-            types: [{ description: 'Self-contained molecule viewer', accept: { 'text/html': ['.html'] } }]
+            id: 'molhtml-document', suggestedName: suggestedName(doc),
+            types: [{ description: 'mol.html document', accept: { 'text/html': ['.html'] } }]
           });
         } catch (error) {
           if (error?.name === 'AbortError') return 'cancelled';
@@ -176,5 +176,5 @@
     }
   }
 
-  window.MolViewPersistence = { capturePristine, serializeDocument, extractDocument, PersistenceManager };
+  window.MolhtmlPersistence = { capturePristine, serializeDocument, extractDocument, PersistenceManager };
 })();

@@ -7,7 +7,7 @@ const fixture = await readFile(new URL('../fixtures/metadata-quality.pdb', impor
 const context = vm.createContext({ window: {}, structuredClone, console });
 context.globalThis = context;
 vm.runInContext(source, context, { filename: 'src/model.js' });
-const Core = context.window.MolViewCore;
+const Core = context.window.MolhtmlCore;
 
 const metadata = Core.parsePDBMetadata(fixture);
 assert.equal(metadata.classification, 'TEST OXIDOREDUCTASE QUALITY FIXTURE 1234');
@@ -48,7 +48,7 @@ assert.ok(quality.warnings.some(item => item.code === 'synthetic-demo'));
 assert.ok(quality.warnings.some(item => item.code === 'skipped-coordinate-lines'));
 
 const normalized = Core.normalizeDocument({
-  format: 'molview/document', version: 1,
+  format: 'molhtml/document', version: 1,
   structure: {
     id: 'structure-metadata-test', name: 'Metadata fixture', format: 'pdb', data: fixture,
     metadata: {

@@ -489,7 +489,7 @@
   }
 
   function normalizeDocument(input) {
-    if (!input || input.format !== 'molview/document') throw new Error('This is not a molview/document file.');
+    if (!input || input.format !== 'molhtml/document') throw new Error('This is not a molhtml/document file.');
     const doc = structuredClone(input);
     doc.version = Number(doc.version) || 1;
     doc.documentId ||= uid('document');
@@ -1035,7 +1035,7 @@
   function isWater(atom) { return WATER_NAMES.has(atom.resn); }
   function vdwRadius(element) { return VDW_RADII[element] || 1.7; }
 
-  window.MolViewCore = {
+  window.MolhtmlCore = {
     ELEMENT_COLORS, CHAIN_COLORS, parsePDB, parsePDBMetadata, normalizeMetadata, mergeMetadata,
     metadataFromRCSBEntry, deriveDataQuality, normalizeDocument, selectorForAtom,
     atomMatchesSelector, atomIdentity, atomLabel, colorForAtom, isWater, vdwRadius, uid,

@@ -6,7 +6,7 @@ const fixture = await readFile(new URL('../fixtures/mini-peptide.pdb', import.me
 const context = { window: {}, console, structuredClone };
 context.globalThis = context;
 vm.runInNewContext(source, context, { filename: 'src/model.js' });
-const Core = context.window.MolViewCore;
+const Core = context.window.MolhtmlCore;
 
 const extra = [
   'ATOM      6  P    DA B   1       4.000   0.000   0.000  1.00 20.00           P',

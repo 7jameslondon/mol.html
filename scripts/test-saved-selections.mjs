@@ -5,7 +5,7 @@ import vm from 'node:vm';
 const source = await readFile(new URL('../src/model.js', import.meta.url), 'utf8');
 const context = vm.createContext({ window: {}, structuredClone, console });
 vm.runInContext(source, context, { filename: 'model.js' });
-const Core = context.window.MolViewCore;
+const Core = context.window.MolhtmlCore;
 
 const atom = (serial, model, chain, resi, resn, name, x, y, z, options = {}) => ({
   index: serial - 1, serial, model, chain, resi, resn, name,
@@ -66,7 +66,7 @@ assert.match(Core.matchSavedSelection(selector('within', {
 }), atoms, structureId).error, /target must be/i);
 
 const normalized = Core.normalizeDocument({
-  format: 'molview/document', version: 1, documentId: 'document-test', title: 'Selections',
+  format: 'molhtml/document', version: 1, documentId: 'document-test', title: 'Selections',
   structure: { id: structureId, name: 'Test', format: 'pdb', data: 'ATOM coordinates' },
   futureDocumentField: { preserved: true },
   scene: {
@@ -91,7 +91,7 @@ assert.equal(normalized.scene.savedSelections[0].selector.futureSelectorField, '
 assert.equal(normalized.scene.savedSelections[0].selector.target.kind, 'ligands');
 assert.equal(normalized.scene.savedSelections[0].selector.target.futureTargetField, true);
 assert.equal(Core.normalizeDocument({
-  format: 'molview/document', version: 1,
+  format: 'molhtml/document', version: 1,
   structure: { id: structureId, name: 'Test', format: 'pdb', data: 'ATOM coordinates' },
   scene: {}
 }).scene.savedSelections.length, 0);

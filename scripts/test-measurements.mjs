@@ -5,7 +5,7 @@ import vm from 'node:vm';
 const source = await readFile(new URL('../src/model.js', import.meta.url), 'utf8');
 const context = vm.createContext({ window: {}, structuredClone, console });
 vm.runInContext(source, context, { filename: 'model.js' });
-const Core = context.window.MolViewCore;
+const Core = context.window.MolhtmlCore;
 
 const point = (x, y, z) => ({ x, y, z });
 assert.equal(Core.measurementValue('distance', [point(0, 0, 0), point(3, 4, 0)]), 5);
@@ -20,7 +20,7 @@ assert.equal(Core.formatMeasurementValue('angle', 90.04), '90.0°');
 const selectorA = { structureId: 'structure-test', model: 1, chain: 'A', resi: 1, icode: '', atom: 'CA', altLoc: '', serial: 1 };
 const selectorB = { structureId: 'structure-test', model: 1, chain: 'A', resi: 2, icode: '', atom: 'N', altLoc: '', serial: 2 };
 const normalized = Core.normalizeDocument({
-  format: 'molview/document',
+  format: 'molhtml/document',
   version: 1,
   documentId: 'document-test',
   title: 'Geometry test',
@@ -40,6 +40,10 @@ assert.equal(normalized.scene.futureSceneField, 'preserved');
 assert.equal(normalized.scene.measurements[0].type, 'distance');
 assert.equal(normalized.scene.measurements[0].futureMeasurementField, 42);
 assert.notStrictEqual(normalized.scene.measurements[0].atoms[0], selectorA);
+assert.throws(
+  () => Core.normalizeDocument({ ...normalized, format: ['mol', 'view/document'].join('') }),
+  /not a molhtml\/document/
+);
 
 const atoms = [
   { ...point(0, 0, 0), model: 1, chain: 'A', resi: 1, icode: '', resn: 'ALA', name: 'CA', altLoc: '', serial: 1 },

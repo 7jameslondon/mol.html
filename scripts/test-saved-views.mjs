@@ -5,7 +5,7 @@ import vm from 'node:vm';
 const source = await readFile('src/model.js', 'utf8');
 const context = vm.createContext({ window: {}, structuredClone, console });
 vm.runInContext(source, context);
-const Core = context.window.MolViewCore;
+const Core = context.window.MolhtmlCore;
 
 const cameraA = { view: [1, 2, 3, 25, 0, 0, 0, 1], futureCameraField: 'kept' };
 const views = Core.normalizeSavedViews([
@@ -28,7 +28,7 @@ assert.equal(views[1].snapshot.savedViews, undefined);
 assert.equal(views[1].snapshot.camera.futureCameraField, 'kept');
 
 const normalizedDocument = Core.normalizeDocument({
-  format: 'molview/document', version: 1,
+  format: 'molhtml/document', version: 1,
   structure: { id: 'structure-test', name: 'Test', format: 'pdb', data: 'ATOM coordinates' },
   scene: { savedViews: views, futureSceneField: 'preserved', camera: cameraA }
 });

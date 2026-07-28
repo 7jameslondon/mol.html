@@ -1,12 +1,12 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-const input = resolve('dist/MolView.molecule.html');
-const output = resolve('output/roundtrip-agent-edit.molecule.html');
+const input = resolve('dist/example.mol.html');
+const output = resolve('output/roundtrip-agent-edit.mol.html');
 const html = await readFile(input, 'utf8');
-const pattern = /(<script type="application\/molview\+json" id="molview-doc">\s*)([\s\S]*?)(\s*<\/script>)/i;
+const pattern = /(<script type="application\/molhtml\+json" id="molhtml-doc">\s*)([\s\S]*?)(\s*<\/script>)/i;
 const match = html.match(pattern);
-if (!match) throw new Error('Could not locate the molview document block.');
+if (!match) throw new Error('Could not locate the molhtml document block.');
 
 const doc = JSON.parse(match[2]);
 doc.documentId = 'document-roundtrip-agent-test';

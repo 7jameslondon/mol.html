@@ -7,7 +7,7 @@ const fixture = await readFile(new URL('../fixtures/ligand-pocket.pdb', import.m
 const context = { window: {}, console, structuredClone };
 context.globalThis = context;
 vm.runInNewContext(source, context, { filename: 'src/model.js' });
-const Core = context.window.MolViewCore;
+const Core = context.window.MolhtmlCore;
 const parsed = Core.parsePDB(fixture);
 
 const ligands = Core.groupLigands(parsed, 'structure-pocket-test');
@@ -41,7 +41,7 @@ assert(spatial.indexedAtomCount > 5000, 'indexes all eligible polymer atoms');
 assert(spatial.candidatePairs < 50, 'queries local grid cells instead of comparing every atom pair');
 
 const normalized = Core.normalizeDocument({
-  format: 'molview/document', version: 1,
+  format: 'molhtml/document', version: 1,
   structure: { id: 'structure-pocket-test', format: 'pdb', data: fixture },
   scene: {
     futureSceneField: true,

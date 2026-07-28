@@ -1,10 +1,10 @@
 (function () {
   'use strict';
 
-  const Core = window.MolViewCore;
-  const Persistence = window.MolViewPersistence;
+  const Core = window.MolhtmlCore;
+  const Persistence = window.MolhtmlPersistence;
   const pristine = Persistence.capturePristine();
-  const embedded = document.getElementById('molview-doc')?.textContent?.trim();
+  const embedded = document.getElementById('molhtml-doc')?.textContent?.trim();
   let doc;
   try {
     doc = Core.normalizeDocument(JSON.parse(embedded || '{}'));
@@ -130,7 +130,7 @@
   }
 
   function syncLiveDataBlock() {
-    const block = document.getElementById('molview-doc');
+    const block = document.getElementById('molhtml-doc');
     if (block) block.textContent = '\n' + JSON.stringify(doc, null, 2).replace(/</g, '\\u003c') + '\n';
   }
 
@@ -2005,7 +2005,7 @@
     else if (event.key.toLowerCase() === 'r' && (document.activeElement === elements['molecule-viewer'] || elements['molecule-viewer'].contains(document.activeElement))) elements['fit-button'].click();
   });
 
-  window.molview = Object.freeze({
+  window.molhtml = Object.freeze({
     version: '0.7.0',
     get document() { return structuredClone(doc); },
     getSelection() { return structuredClone(doc.scene.selection); },
