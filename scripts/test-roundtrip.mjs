@@ -45,6 +45,10 @@ doc.scene.savedSelections.push({
     target: { kind: 'residue', structureId: doc.structure.id, model: 1, chain: 'A', resi: 1, icode: '', resn: 'ALA' }
   }
 });
+doc.structure.metadata.agentReview = {
+  reviewedAt: '2026-07-27T00:00:00.000Z',
+  note: 'Unknown metadata fields must round-trip unchanged.'
+};
 
 const json = JSON.stringify(doc, null, 2).replace(/</g, '\\u003c');
 const edited = html.replace(pattern, `$1${json}$3`);
@@ -58,4 +62,5 @@ if (roundtrip.scene.customColors.at(-1)?.color !== '#ff0000') throw new Error('A
 if (roundtrip.scene.measurements.at(-1)?.note !== 'Agent-authored annotation') throw new Error('Agent measurement did not round-trip.');
 if (roundtrip.scene.savedSelections.at(-1)?.futureSelectionField !== 'preserved') throw new Error('Agent named selection did not round-trip.');
 if (roundtrip.scene.ligandAnalysis?.cutoff !== 5.2 || roundtrip.scene.ligandAnalysis?.futureAnalysisField !== 'agent-preserved') throw new Error('Agent ligand analysis state did not round-trip.');
+if (roundtrip.structure.metadata.agentReview?.note !== 'Unknown metadata fields must round-trip unchanged.') throw new Error('Agent metadata did not round-trip.');
 console.log(`Agent edit round-trip passed: ${output}`);

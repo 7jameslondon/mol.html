@@ -28,12 +28,15 @@ assert(html.includes('data-inspector-target="saved-selections"') && html.include
 assert(html.includes('getSavedSelections()') && html.includes('highlightSavedSelection(id, focus = false)'), 'artifact exposes named selection browser APIs');
 assert(html.includes('data-inspector-target="ligands"') && html.includes('analyzeLigandPocket'), 'artifact includes local ligand and pocket analysis');
 assert(html.includes('listLigands()') && html.includes('setLigandAnalysis(changes)'), 'artifact exposes ligand analysis browser APIs');
+assert(html.includes('data-inspector-target="metadata"') && html.includes('id="quality-stats"'), 'artifact includes the metadata and coordinate-quality inspector');
+assert(html.includes('getMetadata()') && html.includes('getDataQuality()') && html.includes('deriveDataQuality'), 'artifact exposes metadata and locally derived quality APIs');
 
 const match = html.match(/<script type="application\/molview\+json" id="molview-doc">\s*([\s\S]*?)\s*<\/script>/i);
 assert(Boolean(match), 'document JSON can be extracted with a simple splice contract');
 const doc = JSON.parse(match[1]);
 assert(doc.format === 'molview/document' && doc.version === 1, 'document format is molview/document version 1');
 assert(doc.structure?.format === 'pdb' && doc.structure.data.includes('\nATOM'), 'PDB coordinates are embedded in the file');
+assert(doc.structure?.metadata?.provenance?.kind === 'generated-demo' && doc.structure.metadata.flags?.syntheticDemo, 'source metadata and the starter-data caveat are embedded');
 assert(doc.scene?.camera && 'view' in doc.scene.camera && Array.isArray(doc.scene.customColors)
   && Array.isArray(doc.scene.measurements) && Array.isArray(doc.scene.savedSelections)
   && doc.scene.ligandAnalysis?.cutoff === 4, 'scene state is embedded and editable');

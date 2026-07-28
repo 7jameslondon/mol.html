@@ -41,7 +41,10 @@
     'ligands-button', 'ligands-ribbon-value', 'empty-ligands', 'ligand-analysis-controls',
     'ligand-select', 'ligand-cutoff', 'ligand-cutoff-value', 'ligand-show-ligand',
     'ligand-show-pocket', 'ligand-show-contacts', 'ligand-polar-only', 'ligand-focus',
-    'ligand-analysis-note', 'ligand-analysis-summary', 'empty-pocket', 'ligand-residue-list'
+    'ligand-analysis-note', 'ligand-analysis-summary', 'empty-pocket', 'ligand-residue-list',
+    'metadata-button', 'metadata-ribbon-value', 'metadata-source', 'metadata-details',
+    'metadata-entities-section', 'metadata-entities', 'metadata-citation-section', 'metadata-citation',
+    'quality-stats', 'quality-observations'
   ].map(id => [id, document.getElementById(id)]));
 
   const undoStack = [];
@@ -55,6 +58,7 @@
   let measurementDraft = null;
   let activeMeasurementId = null;
   let activeSavedSelectionId = null;
+  let currentQuality = null;
   const navigatorState = {
     structureKey: '', chains: [], residueByKey: new Map(),
     expandedChains: new Set(), expandedResidues: new Set(), query: ''
@@ -66,7 +70,7 @@
     fetch: 'Find structure', representation: 'Representation', color: 'Color',
     show: 'Show and hide', inspect: 'Selection inspector', measurements: 'Measurements',
     navigator: 'Structure navigator', 'saved-selections': 'Named selections',
-    ligands: 'Ligands and pocket'
+    ligands: 'Ligands and pocket', metadata: 'Metadata and quality'
   };
 
   const renderer = new window.MoleculeRenderer(elements['molecule-viewer'], {
@@ -162,6 +166,7 @@
     syncSavedSelections();
     syncNavigator();
     syncLigandAnalysis();
+    syncMetadata();
   }
 
   function syncControls() {
@@ -198,6 +203,122 @@
       ? 'Pocket active' : ligands.length ? `${ligands.length} found` : 'None';
     elements['undo-button'].disabled = !undoStack.length;
     elements['redo-button'].disabled = !redoStack.length;
+  }
+
+  function syncMetadata() {
+    const metadata = doc.structure.metadata || {};
+    currentQuality = parsed ? Core.deriveDataQuality(parsed, doc.structure.data) : null;
+    const provenanceKind = metadata.provenance?.kind;
+    const sourceLabels = {
+      'rcsb-data-api': 'RCSB Data API',
+      'embedded-pdb-header': 'Embedded PDB header',
+      'generated-demo': 'Generated demonstration'
+    };
+    const sourceLabel = sourceLabels[provenanceKind] || provenanceKind || 'Embedded document metadata';
+    const fetchedDate = metadata.provenance?.fetchedAt?.slice?.(0, 10);
+    elements['metadata-source'].textContent = fetchedDate ? `${sourceLabel} · ${fetchedDate}` : sourceLabel;
+
+    const resolution = (metadata.resolutionAngstroms || []).map(value => `${Number(value).toFixed(2)} Å`).join(', ');
+    const details = [
+      ['Title', metadata.title || doc.structure.name],
+      ['PDB ID', metadata.pdbId || doc.structure.source?.pdbId],
+      ['Classification', metadata.classification],
+      ['Organism', (metadata.organisms || []).join(' · ')],
+      ['Experimental method', (metadata.experimentalMethods || []).join(' · ')],
+      ['Resolution', resolution],
+      ['Deposited', metadata.depositionDate],
+      ['Released', metadata.releaseDate],
+      ['Structure authors', (metadata.authors || []).join(', ')],
+      ['Compound record', metadata.compoundText],
+      ['Source record', metadata.sourceText]
+    ];
+    elements['metadata-details'].replaceChildren();
+    for (const [label, value] of details) {
+      const row = document.createElement('div');
+      const term = document.createElement('dt');
+      const description = document.createElement('dd');
+      term.textContent = label;
+      description.textContent = value || 'Not provided';
+      description.classList.toggle('missing', !value);
+      row.append(term, description);
+      elements['metadata-details'].appendChild(row);
+    }
+
+    const entities = metadata.entityDescriptions || [];
+    elements['metadata-entities-section'].hidden = !entities.length;
+    elements['metadata-entities'].replaceChildren();
+    for (const entity of entities) {
+      const item = document.createElement('li');
+      item.textContent = entity;
+      elements['metadata-entities'].appendChild(item);
+    }
+
+    const citation = metadata.primaryCitation;
+    elements['metadata-citation-section'].hidden = !citation;
+    elements['metadata-citation'].replaceChildren();
+    if (citation) {
+      const title = document.createElement('strong');
+      title.textContent = citation.title || 'Citation title not provided';
+      const parts = [
+        (citation.authors || []).join(', '),
+        [citation.journal, citation.year].filter(Boolean).join(' '),
+        citation.doi ? `DOI ${citation.doi}` : '',
+        citation.pubmedId ? `PubMed ${citation.pubmedId}` : ''
+      ].filter(Boolean);
+      const summary = document.createElement('span');
+      summary.textContent = parts.join(' · ') || 'No citation details provided';
+      elements['metadata-citation'].append(title, summary);
+    }
+
+    elements['quality-stats'].replaceChildren();
+    const summary = currentQuality?.summary;
+    if (summary) {
+      const bFactor = summary.bFactor
+        ? `${summary.bFactor.min.toFixed(1)}–${summary.bFactor.max.toFixed(1)} (mean ${summary.bFactor.mean.toFixed(1)})`
+        : 'Unavailable';
+      const stats = [
+        ['Atoms', summary.atomCount], ['Residues', summary.residueCount],
+        ['Chains', summary.chainCount], ['Models', summary.modelCount],
+        ['Alt-location atoms', summary.alternateLocationAtoms],
+        ['Partial occupancy', summary.partialOccupancyAtoms],
+        ['Zero occupancy', summary.zeroOccupancyAtoms], ['B factors', bFactor],
+        ['Non-water ligands', summary.nonWaterLigandCount], ['Water residues', summary.waterResidueCount],
+        ['Hydrogen atoms', summary.hydrogenAtomCount], ['Skipped coordinate lines', summary.skippedCoordinateLines]
+      ];
+      for (const [label, value] of stats) {
+        const card = document.createElement('div');
+        card.className = 'quality-stat';
+        const amount = document.createElement('strong');
+        amount.textContent = typeof value === 'number' ? value.toLocaleString() : value;
+        const name = document.createElement('span');
+        name.textContent = label;
+        card.append(amount, name);
+        elements['quality-stats'].appendChild(card);
+      }
+    }
+
+    const observations = [
+      ...(metadata.metadataWarnings || []).map(message => ({ severity: 'warning', message })),
+      ...(currentQuality?.warnings || [])
+    ];
+    elements['quality-observations'].replaceChildren();
+    if (!observations.length) {
+      const item = document.createElement('div');
+      item.className = 'quality-observation ok';
+      item.textContent = 'No coordinate parsing or occupancy observations were detected by these local checks.';
+      elements['quality-observations'].appendChild(item);
+    } else {
+      for (const observation of observations) {
+        const item = document.createElement('div');
+        item.className = `quality-observation ${observation.severity === 'warning' ? 'warning' : ''}`.trim();
+        item.textContent = observation.message;
+        elements['quality-observations'].appendChild(item);
+      }
+    }
+    const warningCount = observations.filter(observation => observation.severity === 'warning').length;
+    elements['metadata-ribbon-value'].textContent = warningCount
+      ? `${warningCount} warning${warningCount === 1 ? '' : 's'}`
+      : observations.length ? `${observations.length} observation${observations.length === 1 ? '' : 's'}` : 'No flags';
   }
 
   function selectedAtom() {
@@ -1143,11 +1264,12 @@
   async function importPDB(name, text, options = {}) {
     const parsedCandidate = Core.parsePDB(text);
     const displayName = options.displayName || name.replace(/\.(pdb|ent|txt)$/i, '') || 'Imported molecule';
+    const metadata = Core.mergeMetadata(parsedCandidate.metadata, options.metadata);
     resetMeasurementInteraction(false);
     activeSavedSelectionId = null;
     commit(() => {
       doc.title = displayName;
-      doc.structure = { id: Core.uid('structure'), name: displayName, format: 'pdb', data: text };
+      doc.structure = { id: Core.uid('structure'), name: displayName, format: 'pdb', data: text, metadata };
       if (options.source) doc.structure.source = structuredClone(options.source);
       doc.scene.selection = null;
       doc.scene.customColors = [];
@@ -1210,8 +1332,18 @@
         rcsb_id
         struct { title }
         exptl { method }
-        rcsb_accession_info { initial_release_date }
+        rcsb_accession_info { deposit_date initial_release_date revision_date }
         rcsb_entry_info { resolution_combined }
+        audit_author { name }
+        rcsb_primary_citation {
+          id
+          title
+          year
+          journal_abbrev
+          pdbx_database_id_DOI
+          pdbx_database_id_PubMed
+          rcsb_authors
+        }
         polymer_entities {
           rcsb_polymer_entity { pdbx_description }
           rcsb_entity_source_organism { ncbi_scientific_name }
@@ -1375,9 +1507,23 @@
         throw new Error(`RCSB returned HTTP ${response.status}.`);
       }
       const text = await response.text();
+      const fetchedAt = new Date().toISOString();
+      let embeddedMetadata;
+      try {
+        const entries = await fetchEntrySummaries([id], controller.signal);
+        if (!entries[0]) throw new Error(`RCSB did not return metadata for ${id}.`);
+        embeddedMetadata = Core.metadataFromRCSBEntry(entries[0], { fetchedAt, coordinateUrl: url });
+      } catch (metadataError) {
+        if (controller.signal.aborted && fetchController !== controller) throw metadataError;
+        embeddedMetadata = {
+          provenance: { kind: 'embedded-pdb-header', coordinateSource: 'rcsb-pdb', coordinateUrl: url, fetchedAt },
+          metadataWarnings: [`RCSB Data API metadata was unavailable during fetch; displayed metadata is limited to the embedded PDB header (${metadataError.message}).`]
+        };
+      }
       const result = await importPDB(`${id}.pdb`, text, {
         displayName: `PDB ${id}`,
-        source: { kind: 'rcsb-pdb', pdbId: id, url, fetchedAt: new Date().toISOString() }
+        source: { kind: 'rcsb-pdb', pdbId: id, url, fetchedAt },
+        metadata: embeddedMetadata
       });
       elements['pdb-id'].value = id;
       setFetchState(`Loaded ${id}. It will be embedded when you save.`, 'success');
@@ -1612,6 +1758,8 @@
       const result = ligandAnalysisResult();
       return structuredClone({ state: doc.scene.ligandAnalysis, ...serializeLigandAnalysisResult(result) });
     },
+    getMetadata() { return structuredClone(doc.structure.metadata); },
+    getDataQuality() { return structuredClone(currentQuality); },
     serialize() { return persistence.serialize(); },
     async save() { return persistence.save(false); },
     async importPDB(name, text) { return importPDB(name, text); },

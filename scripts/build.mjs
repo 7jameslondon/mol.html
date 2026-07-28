@@ -31,7 +31,17 @@ const document = {
     id: 'structure-starter-complex',
     name: 'Protein–DNA starter',
     format: 'pdb',
-    data: starterPdb
+    data: starterPdb,
+    metadata: {
+      title: 'Synthetic coordinates for molview/file demonstration',
+      classification: 'Illustrative protein-DNA starter',
+      entityDescriptions: ['Illustrative protein and DNA starter scene'],
+      provenance: { kind: 'generated-demo' },
+      flags: {
+        syntheticDemo: true,
+        syntheticDemoRemark: 'This starter is for interface demonstration, not scientific analysis'
+      }
+    }
   },
   scene: {
     representation: 'ball-and-stick',

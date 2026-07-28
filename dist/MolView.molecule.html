@@ -220,6 +220,29 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
 .toggle input:checked + i { background: #266eaa; }
 .toggle input:checked + i::after { left: 16px; background: #eaf5ff; }
 
+.metadata-source { display: inline-flex; max-width: 100%; padding: 5px 7px; border: 1px solid rgba(88, 168, 255, .24); border-radius: 6px; background: rgba(88, 168, 255, .08); color: #9dccff; font-size: 8px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.metadata-section-heading { margin: 17px 0 8px; color: var(--muted-2); font-size: 9px; font-weight: 800; letter-spacing: .13em; }
+.metadata-details { display: grid; gap: 1px; margin: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 9px; background: var(--line); }
+.metadata-details div { display: grid; gap: 3px; padding: 8px 9px; background: #0d1b2c; }
+.metadata-details dt { color: var(--muted-2); font-size: 8px; font-weight: 750; letter-spacing: .05em; text-transform: uppercase; }
+.metadata-details dd { margin: 0; color: var(--ink); font-size: 9px; line-height: 1.45; overflow-wrap: anywhere; }
+.metadata-details dd.missing { color: var(--muted-2); font-style: italic; }
+.metadata-list { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.metadata-list li { padding: 7px 8px; border: 1px solid var(--line); border-radius: 7px; background: #0c1a2a; color: var(--muted); font-size: 9px; line-height: 1.4; }
+.metadata-citation { display: grid; gap: 5px; padding: 10px; border: 1px solid var(--line); border-radius: 9px; background: #0c1a2a; }
+.metadata-citation strong { color: var(--ink); font-size: 10px; line-height: 1.4; }
+.metadata-citation span { color: var(--muted); font-size: 8px; line-height: 1.5; overflow-wrap: anywhere; }
+.quality-heading { margin-top: 20px; }
+.quality-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.quality-stat { min-width: 0; display: grid; gap: 3px; padding: 9px; border: 1px solid var(--line); border-radius: 8px; background: #0c1a2a; }
+.quality-stat strong { color: #dceeff; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; overflow-wrap: anywhere; }
+.quality-stat span { color: var(--muted-2); font-size: 8px; line-height: 1.3; }
+.quality-observations { display: grid; gap: 6px; }
+.quality-observation { padding: 8px 9px; border: 1px solid rgba(88, 168, 255, .18); border-radius: 8px; background: rgba(88, 168, 255, .05); color: var(--muted); font-size: 9px; line-height: 1.45; }
+.quality-observation.warning { border-color: rgba(255, 200, 87, .3); background: rgba(255, 200, 87, .07); color: #e7cf91; }
+.quality-observation.ok { border-color: rgba(91, 215, 161, .25); background: rgba(91, 215, 161, .06); color: #8fd9b9; }
+.quality-disclaimer { margin: 13px 0 0; color: var(--muted-2); font-size: 8px; line-height: 1.5; }
+
 .selection-panel-heading { display: flex; align-items: center; justify-content: space-between; color: var(--muted-2); font-size: 9px; font-weight: 800; letter-spacing: .13em; }
 .text-button { border: 0; background: none; color: var(--blue); padding: 0; font-size: 10px; cursor: pointer; }
 .text-button:disabled { color: var(--muted-2); cursor: default; }
@@ -375,13 +398,27 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
   "documentId": "document-starter-molecular-scene",
   "title": "Protein and DNA starter scene",
   "revision": 1,
-  "modified": "2026-07-28T01:34:26.338Z",
+  "modified": "2026-07-28T01:37:01.088Z",
   "modifiedBy": "build",
   "structure": {
     "id": "structure-starter-complex",
     "name": "Protein–DNA starter",
     "format": "pdb",
-    "data": "HEADER    ILLUSTRATIVE PROTEIN-DNA STARTER\nTITLE     SYNTHETIC COORDINATES FOR MOLVIEW/FILE DEMONSTRATION\nREMARK    THIS STARTER IS FOR INTERFACE DEMONSTRATION, NOT SCIENTIFIC ANALYSIS\nATOM      1  N   ALA A   1       2.009  -0.407  -8.830  1.00 20.00           N\nATOM      2  CA  ALA A   1       2.320   0.000  -8.360  1.00 20.00           C\nATOM      3  C   ALA A   1       2.039   0.413  -7.880  1.00 20.00           C\nATOM      4  O   ALA A   1       2.267   0.726  -7.590  1.00 20.00           O\nATOM      5  CB  ALA A   1       3.618  -0.109  -8.280  1.00 20.00           C\nATOM      6  N   LEU A   2       0.052   2.049  -7.310  1.00 20.00           N\nATOM      7  CA  LEU A   2      -0.403   2.285  -6.840  1.00 20.00           C\nATOM      8  C   LEU A   2      -0.761   1.936  -6.360  1.00 20.00           C\nATOM      9  O   LEU A   2      -1.109   2.106  -6.070  1.00 20.00           O\nATOM     10  CB  LEU A   2      -0.521   3.582  -6.760  1.00 20.00           C\nATOM     11  N   GLU A   3      -2.027  -0.304  -5.790  1.00 20.00           N\nATOM     12  CA  GLU A   3      -2.180  -0.793  -5.320  1.00 20.00           C\nATOM     13  C   GLU A   3      -1.774  -1.086  -4.840  1.00 20.00           C\nATOM     14  O   GLU A   3      -1.882  -1.457  -4.550  1.00 20.00           O\nATOM     15  CB  GLU A   3      -3.437  -1.136  -5.240  1.00 20.00           C\nATOM     16  N   LYS A   4       0.652  -1.944  -4.270  1.00 20.00           N\nATOM     17  CA  LYS A   4       1.160  -2.009  -3.800  1.00 20.00           C\nATOM     18  C   LYS A   4       1.377  -1.559  -3.320  1.00 20.00           C\nATOM     19  O   LYS A   4       1.762  -1.600  -3.030  1.00 20.00           O\nATOM     20  CB  LYS A   4       1.715  -3.188  -3.720  1.00 20.00           C\nATOM     21  N   GLY A   5       1.801   0.979  -2.750  1.00 20.00           N\nATOM     22  CA  GLY A   5       1.777   1.491  -2.280  1.00 20.00           C\nATOM     23  C   GLY A   5       1.296   1.627  -1.800  1.00 20.00           C\nATOM     24  O   GLY A   5       1.270   2.013  -1.510  1.00 20.00           O\nATOM     25  CB  GLY A   5       2.842   2.243  -2.200  1.00 20.00           C\nATOM     26  N   SER A   6      -1.277   1.603  -1.230  1.00 20.00           N\nATOM     27  CA  SER A   6      -1.777   1.491  -0.760  1.00 20.00           C\nATOM     28  C   SER A   6      -1.827   0.994  -0.280  1.00 20.00           C\nATOM     29  O   SER A   6      -2.203   0.901   0.010  1.00 20.00           O\nATOM     30  CB  SER A   6      -2.702   2.409  -0.680  1.00 20.00           C\nATOM     31  N   VAL A   7      -1.357  -1.536   0.290  1.00 20.00           N\nATOM     32  CA  VAL A   7      -1.160  -2.009   0.760  1.00 20.00           C\nATOM     33  C   VAL A   7      -0.661  -1.972   1.240  1.00 20.00           C\nATOM     34  O   VAL A   7      -0.505  -2.326   1.530  1.00 20.00           O\nATOM     35  CB  VAL A   7      -1.903  -3.079   0.840  1.00 20.00           C\nATOM     36  N   ARG A   8       1.749  -1.070   1.810  1.00 20.00           N\nATOM     37  CA  ARG A   8       2.180  -0.793   2.280  1.00 20.00           C\nATOM     38  C   ARG A   8       2.057  -0.309   2.760  1.00 20.00           C\nATOM     39  O   ARG A   8       2.378  -0.093   3.050  1.00 20.00           O\nATOM     40  CB  ARG A   8       3.363  -1.340   2.360  1.00 20.00           C\nATOM     41  N   ALA A   9       0.750   1.908   3.330  1.00 20.00           N\nATOM     42  CA  ALA A   9       0.403   2.285   3.800  1.00 20.00           C\nATOM     43  C   ALA A   9      -0.053   2.079   4.280  1.00 20.00           C\nATOM     44  O   ALA A   9      -0.321   2.358   4.570  1.00 20.00           O\nATOM     45  CB  ALA A   9       0.735   3.545   3.880  1.00 20.00           C\nATOM     46  N   GLN A  10      -2.009   0.407   4.850  1.00 20.00           N\nATOM     47  CA  GLN A  10      -2.320   0.000   5.320  1.00 20.00           C\nATOM     48  C   GLN A  10      -2.039  -0.413   5.800  1.00 20.00           C\nATOM     49  O   GLN A  10      -2.267  -0.726   6.090  1.00 20.00           O\nATOM     50  CB  GLN A  10      -3.618   0.109   5.400  1.00 20.00           C\nATOM     51  N   LEU A  11      -0.052  -2.049   6.370  1.00 20.00           N\nATOM     52  CA  LEU A  11       0.403  -2.285   6.840  1.00 20.00           C\nATOM     53  C   LEU A  11       0.761  -1.936   7.320  1.00 20.00           C\nATOM     54  O   LEU A  11       1.109  -2.106   7.610  1.00 20.00           O\nATOM     55  CB  LEU A  11       0.521  -3.582   6.920  1.00 20.00           C\nATOM     56  N   GLY A  12       2.027   0.304   7.890  1.00 20.00           N\nATOM     57  CA  GLY A  12       2.180   0.793   8.360  1.00 20.00           C\nATOM     58  C   GLY A  12       1.774   1.086   8.840  1.00 20.00           C\nATOM     59  O   GLY A  12       1.882   1.457   9.130  1.00 20.00           O\nATOM     60  CB  GLY A  12       3.437   1.136   8.440  1.00 20.00           C\nTER\nATOM     61  P    DA B   1       7.898  -1.275 -12.875  1.00 20.00           P\nATOM     62  O5'  DA B   1       7.426  -0.595 -12.245  1.00 20.00           O\nATOM     63  C5'  DA B   1       7.200   0.000 -11.725  1.00 20.00           C\nATOM     64  C4'  DA B   1       6.699   0.537 -11.375  1.00 20.00           C\nATOM     65  C3'  DA B   1       6.850   1.176 -10.805  1.00 20.00           C\nATOM     66  O3'  DA B   1       7.316   1.559 -10.275  1.00 20.00           O\nATOM     67  N1   DA B   1       3.648   0.109 -11.525  1.00 20.00           N\nATOM     68  P    DT B   2       7.139   3.611  -9.525  1.00 20.00           P\nATOM     69  O5'  DT B   2       6.358   3.883  -8.895  1.00 20.00           O\nATOM     70  C5'  DT B   2       5.825   4.232  -8.375  1.00 20.00           C\nATOM     71  C4'  DT B   2       5.104   4.372  -8.025  1.00 20.00           C\nATOM     72  C3'  DT B   2       4.850   4.977  -7.455  1.00 20.00           C\nATOM     73  O3'  DT B   2       5.002   5.562  -6.925  1.00 20.00           O\nATOM     74  N1   DT B   2       2.887   2.233  -8.175  1.00 20.00           N\nATOM     75  P    DG B   3       3.653   7.117  -6.175  1.00 20.00           P\nATOM     76  O5'  DG B   3       2.861   6.879  -5.545  1.00 20.00           O\nATOM     77  C5'  DG B   3       2.225   6.848  -5.025  1.00 20.00           C\nATOM     78  C4'  DG B   3       1.559   6.537  -4.675  1.00 20.00           C\nATOM     79  C3'  DG B   3       0.998   6.878  -4.105  1.00 20.00           C\nATOM     80  O3'  DG B   3       0.778   7.439  -3.575  1.00 20.00           O\nATOM     81  N1   DG B   3       1.023   3.504  -4.825  1.00 20.00           N\nATOM     82  P    DC B   4      -1.228   7.905  -2.825  1.00 20.00           P\nATOM     83  O5'  DC B   4      -1.729   7.247  -2.195  1.00 20.00           O\nATOM     84  C5'  DC B   4      -2.225   6.848  -1.675  1.00 20.00           C\nATOM     85  C4'  DC B   4      -2.581   6.205  -1.325  1.00 20.00           C\nATOM     86  C3'  DC B   4      -3.235   6.151  -0.755  1.00 20.00           C\nATOM     87  O3'  DC B   4      -3.744   6.476  -0.225  1.00 20.00           O\nATOM     88  N1   DC B   4      -1.232   3.436  -1.475  1.00 20.00           N\nATOM     89  P    DA B   5      -5.640   5.673   0.525  1.00 20.00           P\nATOM     90  O5'  DA B   5      -5.658   4.847   1.155  1.00 20.00           O\nATOM     91  C5'  DA B   5      -5.825   4.232   1.675  1.00 20.00           C\nATOM     92  C4'  DA B   5      -5.735   3.503   2.025  1.00 20.00           C\nATOM     93  C3'  DA B   5      -6.233   3.075   2.595  1.00 20.00           C\nATOM     94  O3'  DA B   5      -6.835   3.039   3.125  1.00 20.00           O\nATOM     95  N1   DA B   5      -3.016   2.056   1.875  1.00 20.00           N\nATOM     96  P    DG B   6      -7.898   1.275   3.875  1.00 20.00           P\nATOM     97  O5'  DG B   6      -7.426   0.595   4.505  1.00 20.00           O\nATOM     98  C5'  DG B   6      -7.200   0.000   5.025  1.00 20.00           C\nATOM     99  C4'  DG B   6      -6.699  -0.537   5.375  1.00 20.00           C\nATOM    100  C3'  DG B   6      -6.850  -1.176   5.945  1.00 20.00           C\nATOM    101  O3'  DG B   6      -7.316  -1.559   6.475  1.00 20.00           O\nATOM    102  N1   DG B   6      -3.648  -0.109   5.225  1.00 20.00           N\nATOM    103  P    DT B   7      -7.139  -3.611   7.225  1.00 20.00           P\nATOM    104  O5'  DT B   7      -6.358  -3.883   7.855  1.00 20.00           O\nATOM    105  C5'  DT B   7      -5.825  -4.232   8.375  1.00 20.00           C\nATOM    106  C4'  DT B   7      -5.104  -4.372   8.725  1.00 20.00           C\nATOM    107  C3'  DT B   7      -4.850  -4.977   9.295  1.00 20.00           C\nATOM    108  O3'  DT B   7      -5.002  -5.562   9.825  1.00 20.00           O\nATOM    109  N1   DT B   7      -2.887  -2.233   8.575  1.00 20.00           N\nATOM    110  P    DC B   8      -3.653  -7.117  10.575  1.00 20.00           P\nATOM    111  O5'  DC B   8      -2.861  -6.879  11.205  1.00 20.00           O\nATOM    112  C5'  DC B   8      -2.225  -6.848  11.725  1.00 20.00           C\nATOM    113  C4'  DC B   8      -1.559  -6.537  12.075  1.00 20.00           C\nATOM    114  C3'  DC B   8      -0.998  -6.878  12.645  1.00 20.00           C\nATOM    115  O3'  DC B   8      -0.778  -7.439  13.175  1.00 20.00           O\nATOM    116  N1   DC B   8      -1.023  -3.504  11.925  1.00 20.00           N\nTER\nATOM    117  P    DG C   1      -7.898   1.275 -12.875  1.00 20.00           P\nATOM    118  O5'  DG C   1      -7.426   0.595 -12.245  1.00 20.00           O\nATOM    119  C5'  DG C   1      -7.200   0.000 -11.725  1.00 20.00           C\nATOM    120  C4'  DG C   1      -6.699  -0.537 -11.375  1.00 20.00           C\nATOM    121  C3'  DG C   1      -6.850  -1.176 -10.805  1.00 20.00           C\nATOM    122  O3'  DG C   1      -7.316  -1.559 -10.275  1.00 20.00           O\nATOM    123  N1   DG C   1      -3.648  -0.109 -11.525  1.00 20.00           N\nATOM    124  P    DA C   2      -7.139  -3.611  -9.525  1.00 20.00           P\nATOM    125  O5'  DA C   2      -6.358  -3.883  -8.895  1.00 20.00           O\nATOM    126  C5'  DA C   2      -5.825  -4.232  -8.375  1.00 20.00           C\nATOM    127  C4'  DA C   2      -5.104  -4.372  -8.025  1.00 20.00           C\nATOM    128  C3'  DA C   2      -4.850  -4.977  -7.455  1.00 20.00           C\nATOM    129  O3'  DA C   2      -5.002  -5.562  -6.925  1.00 20.00           O\nATOM    130  N1   DA C   2      -2.887  -2.233  -8.175  1.00 20.00           N\nATOM    131  P    DC C   3      -3.653  -7.117  -6.175  1.00 20.00           P\nATOM    132  O5'  DC C   3      -2.861  -6.879  -5.545  1.00 20.00           O\nATOM    133  C5'  DC C   3      -2.225  -6.848  -5.025  1.00 20.00           C\nATOM    134  C4'  DC C   3      -1.559  -6.537  -4.675  1.00 20.00           C\nATOM    135  C3'  DC C   3      -0.998  -6.878  -4.105  1.00 20.00           C\nATOM    136  O3'  DC C   3      -0.778  -7.439  -3.575  1.00 20.00           O\nATOM    137  N1   DC C   3      -1.023  -3.504  -4.825  1.00 20.00           N\nATOM    138  P    DT C   4       1.228  -7.905  -2.825  1.00 20.00           P\nATOM    139  O5'  DT C   4       1.729  -7.247  -2.195  1.00 20.00           O\nATOM    140  C5'  DT C   4       2.225  -6.848  -1.675  1.00 20.00           C\nATOM    141  C4'  DT C   4       2.581  -6.205  -1.325  1.00 20.00           C\nATOM    142  C3'  DT C   4       3.235  -6.151  -0.755  1.00 20.00           C\nATOM    143  O3'  DT C   4       3.744  -6.476  -0.225  1.00 20.00           O\nATOM    144  N1   DT C   4       1.232  -3.436  -1.475  1.00 20.00           N\nATOM    145  P    DG C   5       5.640  -5.673   0.525  1.00 20.00           P\nATOM    146  O5'  DG C   5       5.658  -4.847   1.155  1.00 20.00           O\nATOM    147  C5'  DG C   5       5.825  -4.232   1.675  1.00 20.00           C\nATOM    148  C4'  DG C   5       5.735  -3.503   2.025  1.00 20.00           C\nATOM    149  C3'  DG C   5       6.233  -3.075   2.595  1.00 20.00           C\nATOM    150  O3'  DG C   5       6.835  -3.039   3.125  1.00 20.00           O\nATOM    151  N1   DG C   5       3.016  -2.056   1.875  1.00 20.00           N\nATOM    152  P    DC C   6       7.898  -1.275   3.875  1.00 20.00           P\nATOM    153  O5'  DC C   6       7.426  -0.595   4.505  1.00 20.00           O\nATOM    154  C5'  DC C   6       7.200  -0.000   5.025  1.00 20.00           C\nATOM    155  C4'  DC C   6       6.699   0.537   5.375  1.00 20.00           C\nATOM    156  C3'  DC C   6       6.850   1.176   5.945  1.00 20.00           C\nATOM    157  O3'  DC C   6       7.316   1.559   6.475  1.00 20.00           O\nATOM    158  N1   DC C   6       3.648   0.109   5.225  1.00 20.00           N\nATOM    159  P    DA C   7       7.139   3.611   7.225  1.00 20.00           P\nATOM    160  O5'  DA C   7       6.358   3.883   7.855  1.00 20.00           O\nATOM    161  C5'  DA C   7       5.825   4.232   8.375  1.00 20.00           C\nATOM    162  C4'  DA C   7       5.104   4.372   8.725  1.00 20.00           C\nATOM    163  C3'  DA C   7       4.850   4.977   9.295  1.00 20.00           C\nATOM    164  O3'  DA C   7       5.002   5.562   9.825  1.00 20.00           O\nATOM    165  N1   DA C   7       2.887   2.233   8.575  1.00 20.00           N\nATOM    166  P    DT C   8       3.653   7.117  10.575  1.00 20.00           P\nATOM    167  O5'  DT C   8       2.861   6.879  11.205  1.00 20.00           O\nATOM    168  C5'  DT C   8       2.225   6.848  11.725  1.00 20.00           C\nATOM    169  C4'  DT C   8       1.559   6.537  12.075  1.00 20.00           C\nATOM    170  C3'  DT C   8       0.998   6.878  12.645  1.00 20.00           C\nATOM    171  O3'  DT C   8       0.778   7.439  13.175  1.00 20.00           O\nATOM    172  N1   DT C   8       1.023   3.504  11.925  1.00 20.00           N\nTER\nCONECT    1    2\nCONECT    2    3\nCONECT    3    4\nCONECT    2    5\nCONECT    6    7\nCONECT    7    8\nCONECT    8    9\nCONECT    7   10\nCONECT    3    6\nCONECT   11   12\nCONECT   12   13\nCONECT   13   14\nCONECT   12   15\nCONECT    8   11\nCONECT   16   17\nCONECT   17   18\nCONECT   18   19\nCONECT   17   20\nCONECT   13   16\nCONECT   21   22\nCONECT   22   23\nCONECT   23   24\nCONECT   22   25\nCONECT   18   21\nCONECT   26   27\nCONECT   27   28\nCONECT   28   29\nCONECT   27   30\nCONECT   23   26\nCONECT   31   32\nCONECT   32   33\nCONECT   33   34\nCONECT   32   35\nCONECT   28   31\nCONECT   36   37\nCONECT   37   38\nCONECT   38   39\nCONECT   37   40\nCONECT   33   36\nCONECT   41   42\nCONECT   42   43\nCONECT   43   44\nCONECT   42   45\nCONECT   38   41\nCONECT   46   47\nCONECT   47   48\nCONECT   48   49\nCONECT   47   50\nCONECT   43   46\nCONECT   51   52\nCONECT   52   53\nCONECT   53   54\nCONECT   52   55\nCONECT   48   51\nCONECT   56   57\nCONECT   57   58\nCONECT   58   59\nCONECT   57   60\nCONECT   53   56\nCONECT   61   62\nCONECT   62   63\nCONECT   63   64\nCONECT   64   65\nCONECT   65   66\nCONECT   64   67\nCONECT   68   69\nCONECT   69   70\nCONECT   70   71\nCONECT   71   72\nCONECT   72   73\nCONECT   71   74\nCONECT   66   68\nCONECT   75   76\nCONECT   76   77\nCONECT   77   78\nCONECT   78   79\nCONECT   79   80\nCONECT   78   81\nCONECT   73   75\nCONECT   82   83\nCONECT   83   84\nCONECT   84   85\nCONECT   85   86\nCONECT   86   87\nCONECT   85   88\nCONECT   80   82\nCONECT   89   90\nCONECT   90   91\nCONECT   91   92\nCONECT   92   93\nCONECT   93   94\nCONECT   92   95\nCONECT   87   89\nCONECT   96   97\nCONECT   97   98\nCONECT   98   99\nCONECT   99  100\nCONECT  100  101\nCONECT   99  102\nCONECT   94   96\nCONECT  103  104\nCONECT  104  105\nCONECT  105  106\nCONECT  106  107\nCONECT  107  108\nCONECT  106  109\nCONECT  101  103\nCONECT  110  111\nCONECT  111  112\nCONECT  112  113\nCONECT  113  114\nCONECT  114  115\nCONECT  113  116\nCONECT  108  110\nCONECT  117  118\nCONECT  118  119\nCONECT  119  120\nCONECT  120  121\nCONECT  121  122\nCONECT  120  123\nCONECT  124  125\nCONECT  125  126\nCONECT  126  127\nCONECT  127  128\nCONECT  128  129\nCONECT  127  130\nCONECT  122  124\nCONECT  131  132\nCONECT  132  133\nCONECT  133  134\nCONECT  134  135\nCONECT  135  136\nCONECT  134  137\nCONECT  129  131\nCONECT  138  139\nCONECT  139  140\nCONECT  140  141\nCONECT  141  142\nCONECT  142  143\nCONECT  141  144\nCONECT  136  138\nCONECT  145  146\nCONECT  146  147\nCONECT  147  148\nCONECT  148  149\nCONECT  149  150\nCONECT  148  151\nCONECT  143  145\nCONECT  152  153\nCONECT  153  154\nCONECT  154  155\nCONECT  155  156\nCONECT  156  157\nCONECT  155  158\nCONECT  150  152\nCONECT  159  160\nCONECT  160  161\nCONECT  161  162\nCONECT  162  163\nCONECT  163  164\nCONECT  162  165\nCONECT  157  159\nCONECT  166  167\nCONECT  167  168\nCONECT  168  169\nCONECT  169  170\nCONECT  170  171\nCONECT  169  172\nCONECT  164  166\nEND\n"
+    "data": "HEADER    ILLUSTRATIVE PROTEIN-DNA STARTER\nTITLE     SYNTHETIC COORDINATES FOR MOLVIEW/FILE DEMONSTRATION\nREMARK    THIS STARTER IS FOR INTERFACE DEMONSTRATION, NOT SCIENTIFIC ANALYSIS\nATOM      1  N   ALA A   1       2.009  -0.407  -8.830  1.00 20.00           N\nATOM      2  CA  ALA A   1       2.320   0.000  -8.360  1.00 20.00           C\nATOM      3  C   ALA A   1       2.039   0.413  -7.880  1.00 20.00           C\nATOM      4  O   ALA A   1       2.267   0.726  -7.590  1.00 20.00           O\nATOM      5  CB  ALA A   1       3.618  -0.109  -8.280  1.00 20.00           C\nATOM      6  N   LEU A   2       0.052   2.049  -7.310  1.00 20.00           N\nATOM      7  CA  LEU A   2      -0.403   2.285  -6.840  1.00 20.00           C\nATOM      8  C   LEU A   2      -0.761   1.936  -6.360  1.00 20.00           C\nATOM      9  O   LEU A   2      -1.109   2.106  -6.070  1.00 20.00           O\nATOM     10  CB  LEU A   2      -0.521   3.582  -6.760  1.00 20.00           C\nATOM     11  N   GLU A   3      -2.027  -0.304  -5.790  1.00 20.00           N\nATOM     12  CA  GLU A   3      -2.180  -0.793  -5.320  1.00 20.00           C\nATOM     13  C   GLU A   3      -1.774  -1.086  -4.840  1.00 20.00           C\nATOM     14  O   GLU A   3      -1.882  -1.457  -4.550  1.00 20.00           O\nATOM     15  CB  GLU A   3      -3.437  -1.136  -5.240  1.00 20.00           C\nATOM     16  N   LYS A   4       0.652  -1.944  -4.270  1.00 20.00           N\nATOM     17  CA  LYS A   4       1.160  -2.009  -3.800  1.00 20.00           C\nATOM     18  C   LYS A   4       1.377  -1.559  -3.320  1.00 20.00           C\nATOM     19  O   LYS A   4       1.762  -1.600  -3.030  1.00 20.00           O\nATOM     20  CB  LYS A   4       1.715  -3.188  -3.720  1.00 20.00           C\nATOM     21  N   GLY A   5       1.801   0.979  -2.750  1.00 20.00           N\nATOM     22  CA  GLY A   5       1.777   1.491  -2.280  1.00 20.00           C\nATOM     23  C   GLY A   5       1.296   1.627  -1.800  1.00 20.00           C\nATOM     24  O   GLY A   5       1.270   2.013  -1.510  1.00 20.00           O\nATOM     25  CB  GLY A   5       2.842   2.243  -2.200  1.00 20.00           C\nATOM     26  N   SER A   6      -1.277   1.603  -1.230  1.00 20.00           N\nATOM     27  CA  SER A   6      -1.777   1.491  -0.760  1.00 20.00           C\nATOM     28  C   SER A   6      -1.827   0.994  -0.280  1.00 20.00           C\nATOM     29  O   SER A   6      -2.203   0.901   0.010  1.00 20.00           O\nATOM     30  CB  SER A   6      -2.702   2.409  -0.680  1.00 20.00           C\nATOM     31  N   VAL A   7      -1.357  -1.536   0.290  1.00 20.00           N\nATOM     32  CA  VAL A   7      -1.160  -2.009   0.760  1.00 20.00           C\nATOM     33  C   VAL A   7      -0.661  -1.972   1.240  1.00 20.00           C\nATOM     34  O   VAL A   7      -0.505  -2.326   1.530  1.00 20.00           O\nATOM     35  CB  VAL A   7      -1.903  -3.079   0.840  1.00 20.00           C\nATOM     36  N   ARG A   8       1.749  -1.070   1.810  1.00 20.00           N\nATOM     37  CA  ARG A   8       2.180  -0.793   2.280  1.00 20.00           C\nATOM     38  C   ARG A   8       2.057  -0.309   2.760  1.00 20.00           C\nATOM     39  O   ARG A   8       2.378  -0.093   3.050  1.00 20.00           O\nATOM     40  CB  ARG A   8       3.363  -1.340   2.360  1.00 20.00           C\nATOM     41  N   ALA A   9       0.750   1.908   3.330  1.00 20.00           N\nATOM     42  CA  ALA A   9       0.403   2.285   3.800  1.00 20.00           C\nATOM     43  C   ALA A   9      -0.053   2.079   4.280  1.00 20.00           C\nATOM     44  O   ALA A   9      -0.321   2.358   4.570  1.00 20.00           O\nATOM     45  CB  ALA A   9       0.735   3.545   3.880  1.00 20.00           C\nATOM     46  N   GLN A  10      -2.009   0.407   4.850  1.00 20.00           N\nATOM     47  CA  GLN A  10      -2.320   0.000   5.320  1.00 20.00           C\nATOM     48  C   GLN A  10      -2.039  -0.413   5.800  1.00 20.00           C\nATOM     49  O   GLN A  10      -2.267  -0.726   6.090  1.00 20.00           O\nATOM     50  CB  GLN A  10      -3.618   0.109   5.400  1.00 20.00           C\nATOM     51  N   LEU A  11      -0.052  -2.049   6.370  1.00 20.00           N\nATOM     52  CA  LEU A  11       0.403  -2.285   6.840  1.00 20.00           C\nATOM     53  C   LEU A  11       0.761  -1.936   7.320  1.00 20.00           C\nATOM     54  O   LEU A  11       1.109  -2.106   7.610  1.00 20.00           O\nATOM     55  CB  LEU A  11       0.521  -3.582   6.920  1.00 20.00           C\nATOM     56  N   GLY A  12       2.027   0.304   7.890  1.00 20.00           N\nATOM     57  CA  GLY A  12       2.180   0.793   8.360  1.00 20.00           C\nATOM     58  C   GLY A  12       1.774   1.086   8.840  1.00 20.00           C\nATOM     59  O   GLY A  12       1.882   1.457   9.130  1.00 20.00           O\nATOM     60  CB  GLY A  12       3.437   1.136   8.440  1.00 20.00           C\nTER\nATOM     61  P    DA B   1       7.898  -1.275 -12.875  1.00 20.00           P\nATOM     62  O5'  DA B   1       7.426  -0.595 -12.245  1.00 20.00           O\nATOM     63  C5'  DA B   1       7.200   0.000 -11.725  1.00 20.00           C\nATOM     64  C4'  DA B   1       6.699   0.537 -11.375  1.00 20.00           C\nATOM     65  C3'  DA B   1       6.850   1.176 -10.805  1.00 20.00           C\nATOM     66  O3'  DA B   1       7.316   1.559 -10.275  1.00 20.00           O\nATOM     67  N1   DA B   1       3.648   0.109 -11.525  1.00 20.00           N\nATOM     68  P    DT B   2       7.139   3.611  -9.525  1.00 20.00           P\nATOM     69  O5'  DT B   2       6.358   3.883  -8.895  1.00 20.00           O\nATOM     70  C5'  DT B   2       5.825   4.232  -8.375  1.00 20.00           C\nATOM     71  C4'  DT B   2       5.104   4.372  -8.025  1.00 20.00           C\nATOM     72  C3'  DT B   2       4.850   4.977  -7.455  1.00 20.00           C\nATOM     73  O3'  DT B   2       5.002   5.562  -6.925  1.00 20.00           O\nATOM     74  N1   DT B   2       2.887   2.233  -8.175  1.00 20.00           N\nATOM     75  P    DG B   3       3.653   7.117  -6.175  1.00 20.00           P\nATOM     76  O5'  DG B   3       2.861   6.879  -5.545  1.00 20.00           O\nATOM     77  C5'  DG B   3       2.225   6.848  -5.025  1.00 20.00           C\nATOM     78  C4'  DG B   3       1.559   6.537  -4.675  1.00 20.00           C\nATOM     79  C3'  DG B   3       0.998   6.878  -4.105  1.00 20.00           C\nATOM     80  O3'  DG B   3       0.778   7.439  -3.575  1.00 20.00           O\nATOM     81  N1   DG B   3       1.023   3.504  -4.825  1.00 20.00           N\nATOM     82  P    DC B   4      -1.228   7.905  -2.825  1.00 20.00           P\nATOM     83  O5'  DC B   4      -1.729   7.247  -2.195  1.00 20.00           O\nATOM     84  C5'  DC B   4      -2.225   6.848  -1.675  1.00 20.00           C\nATOM     85  C4'  DC B   4      -2.581   6.205  -1.325  1.00 20.00           C\nATOM     86  C3'  DC B   4      -3.235   6.151  -0.755  1.00 20.00           C\nATOM     87  O3'  DC B   4      -3.744   6.476  -0.225  1.00 20.00           O\nATOM     88  N1   DC B   4      -1.232   3.436  -1.475  1.00 20.00           N\nATOM     89  P    DA B   5      -5.640   5.673   0.525  1.00 20.00           P\nATOM     90  O5'  DA B   5      -5.658   4.847   1.155  1.00 20.00           O\nATOM     91  C5'  DA B   5      -5.825   4.232   1.675  1.00 20.00           C\nATOM     92  C4'  DA B   5      -5.735   3.503   2.025  1.00 20.00           C\nATOM     93  C3'  DA B   5      -6.233   3.075   2.595  1.00 20.00           C\nATOM     94  O3'  DA B   5      -6.835   3.039   3.125  1.00 20.00           O\nATOM     95  N1   DA B   5      -3.016   2.056   1.875  1.00 20.00           N\nATOM     96  P    DG B   6      -7.898   1.275   3.875  1.00 20.00           P\nATOM     97  O5'  DG B   6      -7.426   0.595   4.505  1.00 20.00           O\nATOM     98  C5'  DG B   6      -7.200   0.000   5.025  1.00 20.00           C\nATOM     99  C4'  DG B   6      -6.699  -0.537   5.375  1.00 20.00           C\nATOM    100  C3'  DG B   6      -6.850  -1.176   5.945  1.00 20.00           C\nATOM    101  O3'  DG B   6      -7.316  -1.559   6.475  1.00 20.00           O\nATOM    102  N1   DG B   6      -3.648  -0.109   5.225  1.00 20.00           N\nATOM    103  P    DT B   7      -7.139  -3.611   7.225  1.00 20.00           P\nATOM    104  O5'  DT B   7      -6.358  -3.883   7.855  1.00 20.00           O\nATOM    105  C5'  DT B   7      -5.825  -4.232   8.375  1.00 20.00           C\nATOM    106  C4'  DT B   7      -5.104  -4.372   8.725  1.00 20.00           C\nATOM    107  C3'  DT B   7      -4.850  -4.977   9.295  1.00 20.00           C\nATOM    108  O3'  DT B   7      -5.002  -5.562   9.825  1.00 20.00           O\nATOM    109  N1   DT B   7      -2.887  -2.233   8.575  1.00 20.00           N\nATOM    110  P    DC B   8      -3.653  -7.117  10.575  1.00 20.00           P\nATOM    111  O5'  DC B   8      -2.861  -6.879  11.205  1.00 20.00           O\nATOM    112  C5'  DC B   8      -2.225  -6.848  11.725  1.00 20.00           C\nATOM    113  C4'  DC B   8      -1.559  -6.537  12.075  1.00 20.00           C\nATOM    114  C3'  DC B   8      -0.998  -6.878  12.645  1.00 20.00           C\nATOM    115  O3'  DC B   8      -0.778  -7.439  13.175  1.00 20.00           O\nATOM    116  N1   DC B   8      -1.023  -3.504  11.925  1.00 20.00           N\nTER\nATOM    117  P    DG C   1      -7.898   1.275 -12.875  1.00 20.00           P\nATOM    118  O5'  DG C   1      -7.426   0.595 -12.245  1.00 20.00           O\nATOM    119  C5'  DG C   1      -7.200   0.000 -11.725  1.00 20.00           C\nATOM    120  C4'  DG C   1      -6.699  -0.537 -11.375  1.00 20.00           C\nATOM    121  C3'  DG C   1      -6.850  -1.176 -10.805  1.00 20.00           C\nATOM    122  O3'  DG C   1      -7.316  -1.559 -10.275  1.00 20.00           O\nATOM    123  N1   DG C   1      -3.648  -0.109 -11.525  1.00 20.00           N\nATOM    124  P    DA C   2      -7.139  -3.611  -9.525  1.00 20.00           P\nATOM    125  O5'  DA C   2      -6.358  -3.883  -8.895  1.00 20.00           O\nATOM    126  C5'  DA C   2      -5.825  -4.232  -8.375  1.00 20.00           C\nATOM    127  C4'  DA C   2      -5.104  -4.372  -8.025  1.00 20.00           C\nATOM    128  C3'  DA C   2      -4.850  -4.977  -7.455  1.00 20.00           C\nATOM    129  O3'  DA C   2      -5.002  -5.562  -6.925  1.00 20.00           O\nATOM    130  N1   DA C   2      -2.887  -2.233  -8.175  1.00 20.00           N\nATOM    131  P    DC C   3      -3.653  -7.117  -6.175  1.00 20.00           P\nATOM    132  O5'  DC C   3      -2.861  -6.879  -5.545  1.00 20.00           O\nATOM    133  C5'  DC C   3      -2.225  -6.848  -5.025  1.00 20.00           C\nATOM    134  C4'  DC C   3      -1.559  -6.537  -4.675  1.00 20.00           C\nATOM    135  C3'  DC C   3      -0.998  -6.878  -4.105  1.00 20.00           C\nATOM    136  O3'  DC C   3      -0.778  -7.439  -3.575  1.00 20.00           O\nATOM    137  N1   DC C   3      -1.023  -3.504  -4.825  1.00 20.00           N\nATOM    138  P    DT C   4       1.228  -7.905  -2.825  1.00 20.00           P\nATOM    139  O5'  DT C   4       1.729  -7.247  -2.195  1.00 20.00           O\nATOM    140  C5'  DT C   4       2.225  -6.848  -1.675  1.00 20.00           C\nATOM    141  C4'  DT C   4       2.581  -6.205  -1.325  1.00 20.00           C\nATOM    142  C3'  DT C   4       3.235  -6.151  -0.755  1.00 20.00           C\nATOM    143  O3'  DT C   4       3.744  -6.476  -0.225  1.00 20.00           O\nATOM    144  N1   DT C   4       1.232  -3.436  -1.475  1.00 20.00           N\nATOM    145  P    DG C   5       5.640  -5.673   0.525  1.00 20.00           P\nATOM    146  O5'  DG C   5       5.658  -4.847   1.155  1.00 20.00           O\nATOM    147  C5'  DG C   5       5.825  -4.232   1.675  1.00 20.00           C\nATOM    148  C4'  DG C   5       5.735  -3.503   2.025  1.00 20.00           C\nATOM    149  C3'  DG C   5       6.233  -3.075   2.595  1.00 20.00           C\nATOM    150  O3'  DG C   5       6.835  -3.039   3.125  1.00 20.00           O\nATOM    151  N1   DG C   5       3.016  -2.056   1.875  1.00 20.00           N\nATOM    152  P    DC C   6       7.898  -1.275   3.875  1.00 20.00           P\nATOM    153  O5'  DC C   6       7.426  -0.595   4.505  1.00 20.00           O\nATOM    154  C5'  DC C   6       7.200  -0.000   5.025  1.00 20.00           C\nATOM    155  C4'  DC C   6       6.699   0.537   5.375  1.00 20.00           C\nATOM    156  C3'  DC C   6       6.850   1.176   5.945  1.00 20.00           C\nATOM    157  O3'  DC C   6       7.316   1.559   6.475  1.00 20.00           O\nATOM    158  N1   DC C   6       3.648   0.109   5.225  1.00 20.00           N\nATOM    159  P    DA C   7       7.139   3.611   7.225  1.00 20.00           P\nATOM    160  O5'  DA C   7       6.358   3.883   7.855  1.00 20.00           O\nATOM    161  C5'  DA C   7       5.825   4.232   8.375  1.00 20.00           C\nATOM    162  C4'  DA C   7       5.104   4.372   8.725  1.00 20.00           C\nATOM    163  C3'  DA C   7       4.850   4.977   9.295  1.00 20.00           C\nATOM    164  O3'  DA C   7       5.002   5.562   9.825  1.00 20.00           O\nATOM    165  N1   DA C   7       2.887   2.233   8.575  1.00 20.00           N\nATOM    166  P    DT C   8       3.653   7.117  10.575  1.00 20.00           P\nATOM    167  O5'  DT C   8       2.861   6.879  11.205  1.00 20.00           O\nATOM    168  C5'  DT C   8       2.225   6.848  11.725  1.00 20.00           C\nATOM    169  C4'  DT C   8       1.559   6.537  12.075  1.00 20.00           C\nATOM    170  C3'  DT C   8       0.998   6.878  12.645  1.00 20.00           C\nATOM    171  O3'  DT C   8       0.778   7.439  13.175  1.00 20.00           O\nATOM    172  N1   DT C   8       1.023   3.504  11.925  1.00 20.00           N\nTER\nCONECT    1    2\nCONECT    2    3\nCONECT    3    4\nCONECT    2    5\nCONECT    6    7\nCONECT    7    8\nCONECT    8    9\nCONECT    7   10\nCONECT    3    6\nCONECT   11   12\nCONECT   12   13\nCONECT   13   14\nCONECT   12   15\nCONECT    8   11\nCONECT   16   17\nCONECT   17   18\nCONECT   18   19\nCONECT   17   20\nCONECT   13   16\nCONECT   21   22\nCONECT   22   23\nCONECT   23   24\nCONECT   22   25\nCONECT   18   21\nCONECT   26   27\nCONECT   27   28\nCONECT   28   29\nCONECT   27   30\nCONECT   23   26\nCONECT   31   32\nCONECT   32   33\nCONECT   33   34\nCONECT   32   35\nCONECT   28   31\nCONECT   36   37\nCONECT   37   38\nCONECT   38   39\nCONECT   37   40\nCONECT   33   36\nCONECT   41   42\nCONECT   42   43\nCONECT   43   44\nCONECT   42   45\nCONECT   38   41\nCONECT   46   47\nCONECT   47   48\nCONECT   48   49\nCONECT   47   50\nCONECT   43   46\nCONECT   51   52\nCONECT   52   53\nCONECT   53   54\nCONECT   52   55\nCONECT   48   51\nCONECT   56   57\nCONECT   57   58\nCONECT   58   59\nCONECT   57   60\nCONECT   53   56\nCONECT   61   62\nCONECT   62   63\nCONECT   63   64\nCONECT   64   65\nCONECT   65   66\nCONECT   64   67\nCONECT   68   69\nCONECT   69   70\nCONECT   70   71\nCONECT   71   72\nCONECT   72   73\nCONECT   71   74\nCONECT   66   68\nCONECT   75   76\nCONECT   76   77\nCONECT   77   78\nCONECT   78   79\nCONECT   79   80\nCONECT   78   81\nCONECT   73   75\nCONECT   82   83\nCONECT   83   84\nCONECT   84   85\nCONECT   85   86\nCONECT   86   87\nCONECT   85   88\nCONECT   80   82\nCONECT   89   90\nCONECT   90   91\nCONECT   91   92\nCONECT   92   93\nCONECT   93   94\nCONECT   92   95\nCONECT   87   89\nCONECT   96   97\nCONECT   97   98\nCONECT   98   99\nCONECT   99  100\nCONECT  100  101\nCONECT   99  102\nCONECT   94   96\nCONECT  103  104\nCONECT  104  105\nCONECT  105  106\nCONECT  106  107\nCONECT  107  108\nCONECT  106  109\nCONECT  101  103\nCONECT  110  111\nCONECT  111  112\nCONECT  112  113\nCONECT  113  114\nCONECT  114  115\nCONECT  113  116\nCONECT  108  110\nCONECT  117  118\nCONECT  118  119\nCONECT  119  120\nCONECT  120  121\nCONECT  121  122\nCONECT  120  123\nCONECT  124  125\nCONECT  125  126\nCONECT  126  127\nCONECT  127  128\nCONECT  128  129\nCONECT  127  130\nCONECT  122  124\nCONECT  131  132\nCONECT  132  133\nCONECT  133  134\nCONECT  134  135\nCONECT  135  136\nCONECT  134  137\nCONECT  129  131\nCONECT  138  139\nCONECT  139  140\nCONECT  140  141\nCONECT  141  142\nCONECT  142  143\nCONECT  141  144\nCONECT  136  138\nCONECT  145  146\nCONECT  146  147\nCONECT  147  148\nCONECT  148  149\nCONECT  149  150\nCONECT  148  151\nCONECT  143  145\nCONECT  152  153\nCONECT  153  154\nCONECT  154  155\nCONECT  155  156\nCONECT  156  157\nCONECT  155  158\nCONECT  150  152\nCONECT  159  160\nCONECT  160  161\nCONECT  161  162\nCONECT  162  163\nCONECT  163  164\nCONECT  162  165\nCONECT  157  159\nCONECT  166  167\nCONECT  167  168\nCONECT  168  169\nCONECT  169  170\nCONECT  170  171\nCONECT  169  172\nCONECT  164  166\nEND\n",
+    "metadata": {
+      "title": "Synthetic coordinates for molview/file demonstration",
+      "classification": "Illustrative protein-DNA starter",
+      "entityDescriptions": [
+        "Illustrative protein and DNA starter scene"
+      ],
+      "provenance": {
+        "kind": "generated-demo"
+      },
+      "flags": {
+        "syntheticDemo": true,
+        "syntheticDemoRemark": "This starter is for interface demonstration, not scientific analysis"
+      }
+    }
   },
   "scene": {
     "representation": "ball-and-stick",
@@ -480,6 +517,10 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
 
       <div class="ribbon-group" aria-label="Analysis commands">
         <div class="ribbon-buttons">
+          <button id="metadata-button" class="ribbon-button" type="button" data-inspector-target="metadata" aria-controls="inspector" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3.5h14v17H5zM8 7h8M8 11h8M8 15h3"/><circle cx="16" cy="16" r="2.2"/></svg>
+            <span>Metadata</span><small id="metadata-ribbon-value">Quality details</small>
+          </button>
           <button id="measurements-button" class="ribbon-button" type="button" data-inspector-target="measurements" aria-controls="inspector" aria-pressed="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18 18 4m-2-1 5 5M3 16l5 5m2-8 2 2m1-5 2 2"/></svg>
             <span>Measurements</span><small id="measurements-ribbon-value">None</small>
@@ -604,6 +645,26 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
               <label class="visibility-option"><span><strong>Hydrogens</strong><small>Show hydrogen atoms when present</small></span><span class="toggle"><input id="show-hydrogens" type="checkbox"><i></i></span></label>
               <label class="visibility-option"><span><strong>Water</strong><small>Show crystallographic water molecules</small></span><span class="toggle"><input id="show-water" type="checkbox"><i></i></span></label>
             </div>
+          </section>
+
+          <section id="panel-metadata" class="inspector-panel" data-inspector-panel="metadata" hidden>
+            <p class="panel-intro">Source metadata is embedded with this document. Coordinate statistics and observations are derived locally each time it opens.</p>
+            <div id="metadata-source" class="metadata-source">Embedded PDB header</div>
+            <div class="metadata-section-heading">STRUCTURE METADATA</div>
+            <dl id="metadata-details" class="metadata-details"></dl>
+            <div id="metadata-entities-section" hidden>
+              <div class="metadata-section-heading">ENTITIES</div>
+              <ul id="metadata-entities" class="metadata-list"></ul>
+            </div>
+            <div id="metadata-citation-section" hidden>
+              <div class="metadata-section-heading">PRIMARY CITATION</div>
+              <div id="metadata-citation" class="metadata-citation"></div>
+            </div>
+            <div class="metadata-section-heading quality-heading">COORDINATE SUMMARY</div>
+            <div id="quality-stats" class="quality-stats"></div>
+            <div class="metadata-section-heading">OBSERVATIONS</div>
+            <div id="quality-observations" class="quality-observations"></div>
+            <p class="quality-disclaimer">These are descriptive checks, not a scientific quality score. Interpret them with the experimental context and deposited validation data.</p>
           </section>
 
           <section id="panel-measurements" class="inspector-panel" data-inspector-panel="measurements" hidden>
@@ -910,20 +971,220 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     return COVALENT_RADII[pair] ? pair : clean[0];
   }
 
+  function compactStrings(values) {
+    return [...new Set((values || []).map(value => String(value || '').replace(/\s+/g, ' ').trim()).filter(Boolean))];
+  }
+
+  function parsePDBDate(value) {
+    const raw = String(value || '').trim();
+    const match = raw.match(/^(\d{2})-([A-Z]{3})-(\d{2})$/i);
+    if (!match) return raw;
+    const months = { JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06', JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12' };
+    const month = months[match[2].toUpperCase()];
+    if (!month) return raw;
+    const year = Number(match[3]);
+    return `${year >= 50 ? 1900 + year : 2000 + year}-${month}-${match[1]}`;
+  }
+
+  function recordText(lines, record) {
+    return lines.filter(line => line.slice(0, 6).trim().toUpperCase() === record)
+      .map(line => line.slice(10, 80).replace(/^\s*\d+\s+/, '').trim())
+      .filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function normalizeMetadata(value) {
+    const metadata = value && typeof value === 'object' && !Array.isArray(value) ? { ...value } : {};
+    for (const key of ['organisms', 'experimentalMethods', 'authors', 'entityDescriptions', 'metadataWarnings']) {
+      if (key in metadata) metadata[key] = compactStrings(Array.isArray(metadata[key]) ? metadata[key] : [metadata[key]]);
+    }
+    if ('resolutionAngstroms' in metadata) {
+      const values = Array.isArray(metadata.resolutionAngstroms) ? metadata.resolutionAngstroms : [metadata.resolutionAngstroms];
+      metadata.resolutionAngstroms = [...new Set(values.map(Number).filter(value => Number.isFinite(value) && value > 0))];
+    }
+    if (metadata.primaryCitation && typeof metadata.primaryCitation === 'object' && !Array.isArray(metadata.primaryCitation)) {
+      metadata.primaryCitation = { ...metadata.primaryCitation };
+      if ('authors' in metadata.primaryCitation) metadata.primaryCitation.authors = compactStrings(metadata.primaryCitation.authors);
+    }
+    if (metadata.identifiers && typeof metadata.identifiers === 'object' && !Array.isArray(metadata.identifiers)) {
+      metadata.identifiers = { ...metadata.identifiers };
+      if (Array.isArray(metadata.identifiers.databaseReferences)) {
+        metadata.identifiers.databaseReferences = metadata.identifiers.databaseReferences
+          .filter(reference => reference && typeof reference === 'object' && !Array.isArray(reference))
+          .map(reference => ({ ...reference }));
+      }
+    }
+    if (metadata.provenance && typeof metadata.provenance === 'object' && !Array.isArray(metadata.provenance)) {
+      metadata.provenance = { ...metadata.provenance };
+    }
+    if (metadata.flags && typeof metadata.flags === 'object' && !Array.isArray(metadata.flags)) metadata.flags = { ...metadata.flags };
+    return metadata;
+  }
+
+  function mergeMetadata(base, override) {
+    const left = normalizeMetadata(base);
+    const right = normalizeMetadata(override);
+    const merged = { ...left, ...right };
+    for (const key of ['primaryCitation', 'identifiers', 'provenance', 'flags']) {
+      if (left[key] && right[key] && typeof left[key] === 'object' && typeof right[key] === 'object') {
+        merged[key] = { ...left[key], ...right[key] };
+      }
+    }
+    return normalizeMetadata(merged);
+  }
+
+  function parsePDBMetadata(text) {
+    const lines = String(text || '').replace(/\r/g, '').split('\n');
+    const metadata = { provenance: { kind: 'embedded-pdb-header' } };
+    const header = lines.find(line => line.slice(0, 6).trim().toUpperCase() === 'HEADER');
+    if (header) {
+      const classification = header.slice(10, 50).trim();
+      const depositionDate = parsePDBDate(header.slice(50, 59));
+      const pdbId = header.slice(62, 66).trim().toUpperCase();
+      if (classification) metadata.classification = classification;
+      if (depositionDate) metadata.depositionDate = depositionDate;
+      if (pdbId) metadata.pdbId = pdbId;
+    }
+
+    const title = recordText(lines, 'TITLE');
+    const compoundText = recordText(lines, 'COMPND');
+    const sourceText = recordText(lines, 'SOURCE');
+    const experimentalText = recordText(lines, 'EXPDTA');
+    const authorText = recordText(lines, 'AUTHOR');
+    if (title) metadata.title = title;
+    if (compoundText) metadata.compoundText = compoundText;
+    if (sourceText) metadata.sourceText = sourceText;
+    if (experimentalText) metadata.experimentalMethods = compactStrings(experimentalText.split(';'));
+    if (authorText) metadata.authors = compactStrings(authorText.split(','));
+
+    const organisms = [];
+    for (const match of sourceText.matchAll(/ORGANISM_SCIENTIFIC\s*:\s*([^;]+)/gi)) organisms.push(match[1]);
+    if (organisms.length) metadata.organisms = compactStrings(organisms);
+    const descriptions = [];
+    for (const match of compoundText.matchAll(/MOLECULE\s*:\s*([^;]+)/gi)) descriptions.push(match[1]);
+    if (descriptions.length) metadata.entityDescriptions = compactStrings(descriptions);
+
+    const resolutionValues = [];
+    for (const line of lines) {
+      if (!/^REMARK\s+2\s/i.test(line)) continue;
+      const match = line.match(/RESOLUTION\.\s+([0-9]+(?:\.[0-9]+)?)\s+ANGSTROMS/i);
+      if (match) resolutionValues.push(Number(match[1]));
+    }
+    if (resolutionValues.length) metadata.resolutionAngstroms = resolutionValues;
+
+    const databaseReferences = [];
+    for (const line of lines) {
+      if (line.slice(0, 6).trim().toUpperCase() !== 'DBREF') continue;
+      const reference = {
+        chain: line.slice(12, 13).trim() || '_',
+        database: line.slice(26, 32).trim(),
+        accession: line.slice(33, 41).trim(),
+        idCode: line.slice(42, 54).trim()
+      };
+      if (reference.database || reference.accession || reference.idCode) databaseReferences.push(reference);
+    }
+
+    const journal = {};
+    const journalParts = new Map();
+    for (const line of lines) {
+      if (line.slice(0, 6).trim().toUpperCase() !== 'JRNL') continue;
+      const key = line.slice(12, 16).trim().toUpperCase();
+      const value = line.slice(19, 79).trim();
+      if (!key || !value) continue;
+      if (!journalParts.has(key)) journalParts.set(key, []);
+      journalParts.get(key).push(value);
+    }
+    const journalValue = key => (journalParts.get(key) || []).join(' ').replace(/\s+/g, ' ').trim();
+    const citationTitle = journalValue('TITL');
+    const citationAuthors = compactStrings(journalValue('AUTH').split(','));
+    const journalReference = journalValue('REF');
+    const doi = journalValue('DOI');
+    const pubmedId = journalValue('PMID');
+    if (citationTitle) journal.title = citationTitle;
+    if (citationAuthors.length) journal.authors = citationAuthors;
+    if (journalReference) journal.journal = journalReference;
+    if (doi) journal.doi = doi;
+    if (pubmedId) journal.pubmedId = pubmedId;
+    if (Object.keys(journal).length) metadata.primaryCitation = journal;
+
+    const identifiers = {};
+    if (metadata.pdbId) identifiers.pdbId = metadata.pdbId;
+    if (doi) identifiers.doi = doi;
+    if (pubmedId) identifiers.pubmedId = pubmedId;
+    if (databaseReferences.length) identifiers.databaseReferences = databaseReferences;
+    if (Object.keys(identifiers).length) metadata.identifiers = identifiers;
+
+    const syntheticRemark = lines.find(line => /^REMARK\s/i.test(line) && /(?:synthetic|demonstration|\bdemo\b|illustrative|not (?:for )?scientific analysis)/i.test(line));
+    if (syntheticRemark) {
+      metadata.flags = { syntheticDemo: true, syntheticDemoRemark: syntheticRemark.slice(10).trim() };
+    }
+    return normalizeMetadata(metadata);
+  }
+
+  function metadataFromRCSBEntry(entry, provenance = {}) {
+    const metadata = {};
+    if (entry?.rcsb_id) metadata.pdbId = String(entry.rcsb_id).toUpperCase();
+    if (entry?.struct?.title) metadata.title = entry.struct.title;
+    const methods = compactStrings((entry?.exptl || []).map(item => item?.method));
+    if (methods.length) metadata.experimentalMethods = methods;
+    const resolutions = (entry?.rcsb_entry_info?.resolution_combined || []).map(Number).filter(value => Number.isFinite(value) && value > 0);
+    if (resolutions.length) metadata.resolutionAngstroms = resolutions;
+    const accession = entry?.rcsb_accession_info || {};
+    if (accession.deposit_date) metadata.depositionDate = String(accession.deposit_date).slice(0, 10);
+    if (accession.initial_release_date) metadata.releaseDate = String(accession.initial_release_date).slice(0, 10);
+    if (accession.revision_date) metadata.revisionDate = String(accession.revision_date).slice(0, 10);
+    const entities = entry?.polymer_entities || [];
+    const descriptions = compactStrings(entities.map(entity => entity?.rcsb_polymer_entity?.pdbx_description));
+    const organisms = compactStrings(entities.flatMap(entity => (entity?.rcsb_entity_source_organism || []).map(source => source?.ncbi_scientific_name)));
+    if (descriptions.length) metadata.entityDescriptions = descriptions;
+    if (organisms.length) metadata.organisms = organisms;
+    const structureAuthors = compactStrings((entry?.audit_author || []).map(author => author?.name));
+    if (structureAuthors.length) metadata.authors = structureAuthors;
+
+    const citation = entry?.rcsb_primary_citation
+      || (entry?.citation || []).find(item => String(item?.id || '').toLowerCase() === 'primary')
+      || entry?.citation?.[0];
+    if (citation) {
+      const primaryCitation = {};
+      if (citation.title) primaryCitation.title = citation.title;
+      const citationAuthors = compactStrings(citation.rcsb_authors || []);
+      if (citationAuthors.length) primaryCitation.authors = citationAuthors;
+      if (citation.journal_abbrev) primaryCitation.journal = citation.journal_abbrev;
+      if (citation.year != null) primaryCitation.year = Number(citation.year) || citation.year;
+      if (citation.pdbx_database_id_DOI) primaryCitation.doi = citation.pdbx_database_id_DOI;
+      if (citation.pdbx_database_id_PubMed) primaryCitation.pubmedId = String(citation.pdbx_database_id_PubMed);
+      if (Object.keys(primaryCitation).length) metadata.primaryCitation = primaryCitation;
+    }
+    const identifiers = {};
+    if (metadata.pdbId) identifiers.pdbId = metadata.pdbId;
+    if (metadata.primaryCitation?.doi) identifiers.doi = metadata.primaryCitation.doi;
+    if (metadata.primaryCitation?.pubmedId) identifiers.pubmedId = metadata.primaryCitation.pubmedId;
+    if (Object.keys(identifiers).length) metadata.identifiers = identifiers;
+    metadata.provenance = {
+      kind: 'rcsb-data-api',
+      url: 'https://data.rcsb.org/graphql',
+      ...provenance
+    };
+    return normalizeMetadata(metadata);
+  }
+
   function parsePDB(text) {
     const atoms = [];
     const explicitBonds = new Set();
     const serialMap = new Map();
     let model = 1;
     const lines = String(text || '').replace(/\r/g, '').split('\n');
+    const diagnostics = { coordinateLines: 0, skippedCoordinateLines: 0, malformedCoordinateLines: 0, malformedLineNumbers: [] };
 
+    let lineNumber = 0;
     for (const line of lines) {
+      lineNumber++;
       const record = line.slice(0, 6).trim().toUpperCase();
       if (record === 'MODEL') {
         model = Number.parseInt(line.slice(10, 14), 10) || model;
         continue;
       }
       if (record === 'ATOM' || record === 'HETATM') {
+        diagnostics.coordinateLines++;
         const serial = Number.parseInt(line.slice(6, 11), 10) || atoms.length + 1;
         const rawName = line.slice(12, 16);
         const atom = {
@@ -947,6 +1208,10 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         if ([atom.x, atom.y, atom.z].every(Number.isFinite)) {
           atoms.push(atom);
           serialMap.set(serial, atom.index);
+        } else {
+          diagnostics.skippedCoordinateLines++;
+          diagnostics.malformedCoordinateLines++;
+          if (diagnostics.malformedLineNumbers.length < 20) diagnostics.malformedLineNumbers.push(lineNumber);
         }
         continue;
       }
@@ -967,7 +1232,84 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       if (serialMap.has(aSerial) && serialMap.has(bSerial)) bonds.push([serialMap.get(aSerial), serialMap.get(bSerial)]);
     }
     inferBonds(atoms, bonds);
-    return { atoms, bonds, chains: [...new Set(atoms.map(a => a.chain))] };
+    return {
+      atoms, bonds, chains: [...new Set(atoms.map(a => a.chain))],
+      metadata: parsePDBMetadata(text), diagnostics
+    };
+  }
+
+  function deriveDataQuality(value, pdbText = '') {
+    const parsed = Array.isArray(value) ? { atoms: value } : (value || { atoms: [] });
+    const atoms = Array.isArray(parsed.atoms) ? parsed.atoms : [];
+    const diagnostics = parsed.diagnostics || { coordinateLines: atoms.length, skippedCoordinateLines: 0, malformedCoordinateLines: 0, malformedLineNumbers: [] };
+    const residues = new Set();
+    const chains = new Set();
+    const models = new Set();
+    const ligands = new Set();
+    const waters = new Set();
+    let alternateLocationAtoms = 0;
+    let partialOccupancyAtoms = 0;
+    let zeroOccupancyAtoms = 0;
+    let hydrogenAtoms = 0;
+    let bFactorCount = 0;
+    let bFactorTotal = 0;
+    let bFactorMin = Infinity;
+    let bFactorMax = -Infinity;
+    for (const atom of atoms) {
+      const residueKey = `${atom.model}|${atom.chain}|${atom.resi}|${atom.icode}|${atom.resn}`;
+      residues.add(residueKey);
+      chains.add(atom.chain);
+      models.add(atom.model);
+      if (atom.altLoc) alternateLocationAtoms++;
+      if (Number(atom.occupancy) === 0) zeroOccupancyAtoms++;
+      else if (Number(atom.occupancy) > 0 && Number(atom.occupancy) < 1) partialOccupancyAtoms++;
+      if (String(atom.element).toUpperCase() === 'H') hydrogenAtoms++;
+      if (Number.isFinite(Number(atom.bfactor))) {
+        const value = Number(atom.bfactor);
+        bFactorCount++;
+        bFactorTotal += value;
+        bFactorMin = Math.min(bFactorMin, value);
+        bFactorMax = Math.max(bFactorMax, value);
+      }
+      if (isWater(atom)) waters.add(residueKey);
+      else if (atom.het) ligands.add(residueKey);
+    }
+    const bFactor = bFactorCount ? {
+      min: bFactorMin, max: bFactorMax,
+      mean: bFactorTotal / bFactorCount
+    } : null;
+    const metadata = parsed.metadata || parsePDBMetadata(pdbText);
+    const summary = {
+      atomCount: atoms.length,
+      residueCount: residues.size,
+      chainCount: chains.size,
+      modelCount: models.size,
+      alternateLocationAtoms,
+      partialOccupancyAtoms,
+      zeroOccupancyAtoms,
+      bFactor,
+      nonWaterLigandCount: ligands.size,
+      waterResidueCount: waters.size,
+      hydrogenAtomCount: hydrogenAtoms,
+      coordinateLineCount: Number(diagnostics.coordinateLines) || atoms.length,
+      skippedCoordinateLines: Number(diagnostics.skippedCoordinateLines) || 0,
+      malformedCoordinateLines: Number(diagnostics.malformedCoordinateLines) || 0
+    };
+    const warnings = [];
+    if (metadata.flags?.syntheticDemo) warnings.push({ code: 'synthetic-demo', severity: 'warning', message: metadata.flags.syntheticDemoRemark || 'The PDB remarks identify these coordinates as synthetic or for demonstration.' });
+    if (summary.skippedCoordinateLines) warnings.push({ code: 'skipped-coordinate-lines', severity: 'warning', message: `${summary.skippedCoordinateLines} coordinate line${summary.skippedCoordinateLines === 1 ? ' was' : 's were'} skipped because its coordinates could not be parsed.` });
+    if (alternateLocationAtoms) warnings.push({ code: 'alternate-locations', severity: 'info', message: `${alternateLocationAtoms} atom record${alternateLocationAtoms === 1 ? ' has' : 's have'} alternate-location identifiers.` });
+    if (zeroOccupancyAtoms) warnings.push({ code: 'zero-occupancy', severity: 'info', message: `${zeroOccupancyAtoms} atom record${zeroOccupancyAtoms === 1 ? ' has' : 's have'} zero or missing occupancy.` });
+    if (partialOccupancyAtoms) warnings.push({ code: 'partial-occupancy', severity: 'info', message: `${partialOccupancyAtoms} atom record${partialOccupancyAtoms === 1 ? ' has' : 's have'} occupancy between zero and one.` });
+    return {
+      summary, warnings,
+      diagnostics: {
+        coordinateLines: summary.coordinateLineCount,
+        skippedCoordinateLines: summary.skippedCoordinateLines,
+        malformedCoordinateLines: summary.malformedCoordinateLines,
+        malformedLineNumbers: Array.isArray(diagnostics.malformedLineNumbers) ? [...diagnostics.malformedLineNumbers] : []
+      }
+    };
   }
 
   function residueDescriptor(residueName) {
@@ -1081,6 +1423,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     doc.structure.name ||= 'Molecule';
     doc.structure.format = String(doc.structure.format || 'pdb').toLowerCase();
     if (doc.structure.format !== 'pdb') throw new Error(`Unsupported structure format: ${doc.structure.format}. This version accepts PDB.`);
+    doc.structure.metadata = mergeMetadata(parsePDBMetadata(doc.structure.data), doc.structure.metadata);
     doc.scene ||= {};
     Object.assign(doc.scene, {
       representation: doc.scene.representation || 'ball-and-stick',
@@ -1534,7 +1877,8 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   function vdwRadius(element) { return VDW_RADII[element] || 1.7; }
 
   window.MolViewCore = {
-    ELEMENT_COLORS, CHAIN_COLORS, parsePDB, normalizeDocument, selectorForAtom,
+    ELEMENT_COLORS, CHAIN_COLORS, parsePDB, parsePDBMetadata, normalizeMetadata, mergeMetadata,
+    metadataFromRCSBEntry, deriveDataQuality, normalizeDocument, selectorForAtom,
     atomMatchesSelector, atomIdentity, atomLabel, colorForAtom, isWater, vdwRadius, uid,
     MEASUREMENT_ATOM_COUNTS, normalizeMeasurements, measurementAtoms, measurementValue,
     formatMeasurementValue,
@@ -2183,7 +2527,10 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     'ligands-button', 'ligands-ribbon-value', 'empty-ligands', 'ligand-analysis-controls',
     'ligand-select', 'ligand-cutoff', 'ligand-cutoff-value', 'ligand-show-ligand',
     'ligand-show-pocket', 'ligand-show-contacts', 'ligand-polar-only', 'ligand-focus',
-    'ligand-analysis-note', 'ligand-analysis-summary', 'empty-pocket', 'ligand-residue-list'
+    'ligand-analysis-note', 'ligand-analysis-summary', 'empty-pocket', 'ligand-residue-list',
+    'metadata-button', 'metadata-ribbon-value', 'metadata-source', 'metadata-details',
+    'metadata-entities-section', 'metadata-entities', 'metadata-citation-section', 'metadata-citation',
+    'quality-stats', 'quality-observations'
   ].map(id => [id, document.getElementById(id)]));
 
   const undoStack = [];
@@ -2197,6 +2544,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   let measurementDraft = null;
   let activeMeasurementId = null;
   let activeSavedSelectionId = null;
+  let currentQuality = null;
   const navigatorState = {
     structureKey: '', chains: [], residueByKey: new Map(),
     expandedChains: new Set(), expandedResidues: new Set(), query: ''
@@ -2208,7 +2556,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     fetch: 'Find structure', representation: 'Representation', color: 'Color',
     show: 'Show and hide', inspect: 'Selection inspector', measurements: 'Measurements',
     navigator: 'Structure navigator', 'saved-selections': 'Named selections',
-    ligands: 'Ligands and pocket'
+    ligands: 'Ligands and pocket', metadata: 'Metadata and quality'
   };
 
   const renderer = new window.MoleculeRenderer(elements['molecule-viewer'], {
@@ -2304,6 +2652,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     syncSavedSelections();
     syncNavigator();
     syncLigandAnalysis();
+    syncMetadata();
   }
 
   function syncControls() {
@@ -2340,6 +2689,122 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       ? 'Pocket active' : ligands.length ? `${ligands.length} found` : 'None';
     elements['undo-button'].disabled = !undoStack.length;
     elements['redo-button'].disabled = !redoStack.length;
+  }
+
+  function syncMetadata() {
+    const metadata = doc.structure.metadata || {};
+    currentQuality = parsed ? Core.deriveDataQuality(parsed, doc.structure.data) : null;
+    const provenanceKind = metadata.provenance?.kind;
+    const sourceLabels = {
+      'rcsb-data-api': 'RCSB Data API',
+      'embedded-pdb-header': 'Embedded PDB header',
+      'generated-demo': 'Generated demonstration'
+    };
+    const sourceLabel = sourceLabels[provenanceKind] || provenanceKind || 'Embedded document metadata';
+    const fetchedDate = metadata.provenance?.fetchedAt?.slice?.(0, 10);
+    elements['metadata-source'].textContent = fetchedDate ? `${sourceLabel} · ${fetchedDate}` : sourceLabel;
+
+    const resolution = (metadata.resolutionAngstroms || []).map(value => `${Number(value).toFixed(2)} Å`).join(', ');
+    const details = [
+      ['Title', metadata.title || doc.structure.name],
+      ['PDB ID', metadata.pdbId || doc.structure.source?.pdbId],
+      ['Classification', metadata.classification],
+      ['Organism', (metadata.organisms || []).join(' · ')],
+      ['Experimental method', (metadata.experimentalMethods || []).join(' · ')],
+      ['Resolution', resolution],
+      ['Deposited', metadata.depositionDate],
+      ['Released', metadata.releaseDate],
+      ['Structure authors', (metadata.authors || []).join(', ')],
+      ['Compound record', metadata.compoundText],
+      ['Source record', metadata.sourceText]
+    ];
+    elements['metadata-details'].replaceChildren();
+    for (const [label, value] of details) {
+      const row = document.createElement('div');
+      const term = document.createElement('dt');
+      const description = document.createElement('dd');
+      term.textContent = label;
+      description.textContent = value || 'Not provided';
+      description.classList.toggle('missing', !value);
+      row.append(term, description);
+      elements['metadata-details'].appendChild(row);
+    }
+
+    const entities = metadata.entityDescriptions || [];
+    elements['metadata-entities-section'].hidden = !entities.length;
+    elements['metadata-entities'].replaceChildren();
+    for (const entity of entities) {
+      const item = document.createElement('li');
+      item.textContent = entity;
+      elements['metadata-entities'].appendChild(item);
+    }
+
+    const citation = metadata.primaryCitation;
+    elements['metadata-citation-section'].hidden = !citation;
+    elements['metadata-citation'].replaceChildren();
+    if (citation) {
+      const title = document.createElement('strong');
+      title.textContent = citation.title || 'Citation title not provided';
+      const parts = [
+        (citation.authors || []).join(', '),
+        [citation.journal, citation.year].filter(Boolean).join(' '),
+        citation.doi ? `DOI ${citation.doi}` : '',
+        citation.pubmedId ? `PubMed ${citation.pubmedId}` : ''
+      ].filter(Boolean);
+      const summary = document.createElement('span');
+      summary.textContent = parts.join(' · ') || 'No citation details provided';
+      elements['metadata-citation'].append(title, summary);
+    }
+
+    elements['quality-stats'].replaceChildren();
+    const summary = currentQuality?.summary;
+    if (summary) {
+      const bFactor = summary.bFactor
+        ? `${summary.bFactor.min.toFixed(1)}–${summary.bFactor.max.toFixed(1)} (mean ${summary.bFactor.mean.toFixed(1)})`
+        : 'Unavailable';
+      const stats = [
+        ['Atoms', summary.atomCount], ['Residues', summary.residueCount],
+        ['Chains', summary.chainCount], ['Models', summary.modelCount],
+        ['Alt-location atoms', summary.alternateLocationAtoms],
+        ['Partial occupancy', summary.partialOccupancyAtoms],
+        ['Zero occupancy', summary.zeroOccupancyAtoms], ['B factors', bFactor],
+        ['Non-water ligands', summary.nonWaterLigandCount], ['Water residues', summary.waterResidueCount],
+        ['Hydrogen atoms', summary.hydrogenAtomCount], ['Skipped coordinate lines', summary.skippedCoordinateLines]
+      ];
+      for (const [label, value] of stats) {
+        const card = document.createElement('div');
+        card.className = 'quality-stat';
+        const amount = document.createElement('strong');
+        amount.textContent = typeof value === 'number' ? value.toLocaleString() : value;
+        const name = document.createElement('span');
+        name.textContent = label;
+        card.append(amount, name);
+        elements['quality-stats'].appendChild(card);
+      }
+    }
+
+    const observations = [
+      ...(metadata.metadataWarnings || []).map(message => ({ severity: 'warning', message })),
+      ...(currentQuality?.warnings || [])
+    ];
+    elements['quality-observations'].replaceChildren();
+    if (!observations.length) {
+      const item = document.createElement('div');
+      item.className = 'quality-observation ok';
+      item.textContent = 'No coordinate parsing or occupancy observations were detected by these local checks.';
+      elements['quality-observations'].appendChild(item);
+    } else {
+      for (const observation of observations) {
+        const item = document.createElement('div');
+        item.className = `quality-observation ${observation.severity === 'warning' ? 'warning' : ''}`.trim();
+        item.textContent = observation.message;
+        elements['quality-observations'].appendChild(item);
+      }
+    }
+    const warningCount = observations.filter(observation => observation.severity === 'warning').length;
+    elements['metadata-ribbon-value'].textContent = warningCount
+      ? `${warningCount} warning${warningCount === 1 ? '' : 's'}`
+      : observations.length ? `${observations.length} observation${observations.length === 1 ? '' : 's'}` : 'No flags';
   }
 
   function selectedAtom() {
@@ -3285,11 +3750,12 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   async function importPDB(name, text, options = {}) {
     const parsedCandidate = Core.parsePDB(text);
     const displayName = options.displayName || name.replace(/\.(pdb|ent|txt)$/i, '') || 'Imported molecule';
+    const metadata = Core.mergeMetadata(parsedCandidate.metadata, options.metadata);
     resetMeasurementInteraction(false);
     activeSavedSelectionId = null;
     commit(() => {
       doc.title = displayName;
-      doc.structure = { id: Core.uid('structure'), name: displayName, format: 'pdb', data: text };
+      doc.structure = { id: Core.uid('structure'), name: displayName, format: 'pdb', data: text, metadata };
       if (options.source) doc.structure.source = structuredClone(options.source);
       doc.scene.selection = null;
       doc.scene.customColors = [];
@@ -3352,8 +3818,18 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         rcsb_id
         struct { title }
         exptl { method }
-        rcsb_accession_info { initial_release_date }
+        rcsb_accession_info { deposit_date initial_release_date revision_date }
         rcsb_entry_info { resolution_combined }
+        audit_author { name }
+        rcsb_primary_citation {
+          id
+          title
+          year
+          journal_abbrev
+          pdbx_database_id_DOI
+          pdbx_database_id_PubMed
+          rcsb_authors
+        }
         polymer_entities {
           rcsb_polymer_entity { pdbx_description }
           rcsb_entity_source_organism { ncbi_scientific_name }
@@ -3517,9 +3993,23 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         throw new Error(`RCSB returned HTTP ${response.status}.`);
       }
       const text = await response.text();
+      const fetchedAt = new Date().toISOString();
+      let embeddedMetadata;
+      try {
+        const entries = await fetchEntrySummaries([id], controller.signal);
+        if (!entries[0]) throw new Error(`RCSB did not return metadata for ${id}.`);
+        embeddedMetadata = Core.metadataFromRCSBEntry(entries[0], { fetchedAt, coordinateUrl: url });
+      } catch (metadataError) {
+        if (controller.signal.aborted && fetchController !== controller) throw metadataError;
+        embeddedMetadata = {
+          provenance: { kind: 'embedded-pdb-header', coordinateSource: 'rcsb-pdb', coordinateUrl: url, fetchedAt },
+          metadataWarnings: [`RCSB Data API metadata was unavailable during fetch; displayed metadata is limited to the embedded PDB header (${metadataError.message}).`]
+        };
+      }
       const result = await importPDB(`${id}.pdb`, text, {
         displayName: `PDB ${id}`,
-        source: { kind: 'rcsb-pdb', pdbId: id, url, fetchedAt: new Date().toISOString() }
+        source: { kind: 'rcsb-pdb', pdbId: id, url, fetchedAt },
+        metadata: embeddedMetadata
       });
       elements['pdb-id'].value = id;
       setFetchState(`Loaded ${id}. It will be embedded when you save.`, 'success');
@@ -3754,6 +4244,8 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       const result = ligandAnalysisResult();
       return structuredClone({ state: doc.scene.ligandAnalysis, ...serializeLigandAnalysisResult(result) });
     },
+    getMetadata() { return structuredClone(doc.structure.metadata); },
+    getDataQuality() { return structuredClone(currentQuality); },
     serialize() { return persistence.serialize(); },
     async save() { return persistence.save(false); },
     async importPDB(name, text) { return importPDB(name, text); },

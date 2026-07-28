@@ -31,6 +31,51 @@ For structures fetched from RCSB, `structure.source` records `kind`, `pdbId`,
 the official download `url`, and `fetchedAt`. Preserve this provenance when
 editing other scene fields.
 
+## Structure metadata and coordinate quality
+
+Source metadata is embedded in `structure.metadata` so it remains available
+offline. Preserve unknown fields at every level. Common fields are:
+
+```json
+{
+  "title": "Structure title",
+  "classification": "TRANSFERASE",
+  "pdbId": "1ABC",
+  "depositionDate": "2024-01-15",
+  "releaseDate": "2024-03-20",
+  "organisms": ["Homo sapiens"],
+  "experimentalMethods": ["X-RAY DIFFRACTION"],
+  "resolutionAngstroms": [1.8],
+  "authors": ["A.AUTHOR"],
+  "entityDescriptions": ["Example protein"],
+  "primaryCitation": {
+    "title": "Primary citation title",
+    "authors": ["A. Author"],
+    "journal": "J MOL BIOL",
+    "year": 2024,
+    "doi": "10.0000/example",
+    "pubmedId": "12345678"
+  },
+  "identifiers": { "pdbId": "1ABC", "doi": "10.0000/example" },
+  "provenance": {
+    "kind": "rcsb-data-api",
+    "url": "https://data.rcsb.org/graphql",
+    "fetchedAt": "2026-07-27T00:00:00.000Z"
+  }
+}
+```
+
+Locally imported PDB files use `provenance.kind` `embedded-pdb-header`; fetched
+entries use `rcsb-data-api` when that lookup succeeds. `metadataWarnings` may
+explain that only PDB-header fallback data was available. Do not remove those
+warnings unless the metadata has actually been refreshed from its named source.
+
+Coordinate counts, occupancy observations, B-factor statistics, ligand/water
+counts, malformed-line detection, and synthetic/demo remarks are deliberately
+derived at runtime rather than persisted. They are descriptive checks, not a
+scientific quality score. In the open page, read them with
+`window.molview.getDataQuality()`.
+
 ## Selection
 
 An atom click writes both a machine selector and a readable identity:
@@ -242,6 +287,8 @@ window.molview.getMeasurements()
 window.molview.getSavedSelections()
 window.molview.listLigands()
 window.molview.getLigandAnalysis()
+window.molview.getMetadata()
+window.molview.getDataQuality()
 window.molview.fetchPDB('4HHB')
 window.molview.searchPDB('human hemoglobin')
 window.molview.selectAtom(317)

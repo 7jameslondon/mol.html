@@ -43,20 +43,220 @@
     return COVALENT_RADII[pair] ? pair : clean[0];
   }
 
+  function compactStrings(values) {
+    return [...new Set((values || []).map(value => String(value || '').replace(/\s+/g, ' ').trim()).filter(Boolean))];
+  }
+
+  function parsePDBDate(value) {
+    const raw = String(value || '').trim();
+    const match = raw.match(/^(\d{2})-([A-Z]{3})-(\d{2})$/i);
+    if (!match) return raw;
+    const months = { JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06', JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12' };
+    const month = months[match[2].toUpperCase()];
+    if (!month) return raw;
+    const year = Number(match[3]);
+    return `${year >= 50 ? 1900 + year : 2000 + year}-${month}-${match[1]}`;
+  }
+
+  function recordText(lines, record) {
+    return lines.filter(line => line.slice(0, 6).trim().toUpperCase() === record)
+      .map(line => line.slice(10, 80).replace(/^\s*\d+\s+/, '').trim())
+      .filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function normalizeMetadata(value) {
+    const metadata = value && typeof value === 'object' && !Array.isArray(value) ? { ...value } : {};
+    for (const key of ['organisms', 'experimentalMethods', 'authors', 'entityDescriptions', 'metadataWarnings']) {
+      if (key in metadata) metadata[key] = compactStrings(Array.isArray(metadata[key]) ? metadata[key] : [metadata[key]]);
+    }
+    if ('resolutionAngstroms' in metadata) {
+      const values = Array.isArray(metadata.resolutionAngstroms) ? metadata.resolutionAngstroms : [metadata.resolutionAngstroms];
+      metadata.resolutionAngstroms = [...new Set(values.map(Number).filter(value => Number.isFinite(value) && value > 0))];
+    }
+    if (metadata.primaryCitation && typeof metadata.primaryCitation === 'object' && !Array.isArray(metadata.primaryCitation)) {
+      metadata.primaryCitation = { ...metadata.primaryCitation };
+      if ('authors' in metadata.primaryCitation) metadata.primaryCitation.authors = compactStrings(metadata.primaryCitation.authors);
+    }
+    if (metadata.identifiers && typeof metadata.identifiers === 'object' && !Array.isArray(metadata.identifiers)) {
+      metadata.identifiers = { ...metadata.identifiers };
+      if (Array.isArray(metadata.identifiers.databaseReferences)) {
+        metadata.identifiers.databaseReferences = metadata.identifiers.databaseReferences
+          .filter(reference => reference && typeof reference === 'object' && !Array.isArray(reference))
+          .map(reference => ({ ...reference }));
+      }
+    }
+    if (metadata.provenance && typeof metadata.provenance === 'object' && !Array.isArray(metadata.provenance)) {
+      metadata.provenance = { ...metadata.provenance };
+    }
+    if (metadata.flags && typeof metadata.flags === 'object' && !Array.isArray(metadata.flags)) metadata.flags = { ...metadata.flags };
+    return metadata;
+  }
+
+  function mergeMetadata(base, override) {
+    const left = normalizeMetadata(base);
+    const right = normalizeMetadata(override);
+    const merged = { ...left, ...right };
+    for (const key of ['primaryCitation', 'identifiers', 'provenance', 'flags']) {
+      if (left[key] && right[key] && typeof left[key] === 'object' && typeof right[key] === 'object') {
+        merged[key] = { ...left[key], ...right[key] };
+      }
+    }
+    return normalizeMetadata(merged);
+  }
+
+  function parsePDBMetadata(text) {
+    const lines = String(text || '').replace(/\r/g, '').split('\n');
+    const metadata = { provenance: { kind: 'embedded-pdb-header' } };
+    const header = lines.find(line => line.slice(0, 6).trim().toUpperCase() === 'HEADER');
+    if (header) {
+      const classification = header.slice(10, 50).trim();
+      const depositionDate = parsePDBDate(header.slice(50, 59));
+      const pdbId = header.slice(62, 66).trim().toUpperCase();
+      if (classification) metadata.classification = classification;
+      if (depositionDate) metadata.depositionDate = depositionDate;
+      if (pdbId) metadata.pdbId = pdbId;
+    }
+
+    const title = recordText(lines, 'TITLE');
+    const compoundText = recordText(lines, 'COMPND');
+    const sourceText = recordText(lines, 'SOURCE');
+    const experimentalText = recordText(lines, 'EXPDTA');
+    const authorText = recordText(lines, 'AUTHOR');
+    if (title) metadata.title = title;
+    if (compoundText) metadata.compoundText = compoundText;
+    if (sourceText) metadata.sourceText = sourceText;
+    if (experimentalText) metadata.experimentalMethods = compactStrings(experimentalText.split(';'));
+    if (authorText) metadata.authors = compactStrings(authorText.split(','));
+
+    const organisms = [];
+    for (const match of sourceText.matchAll(/ORGANISM_SCIENTIFIC\s*:\s*([^;]+)/gi)) organisms.push(match[1]);
+    if (organisms.length) metadata.organisms = compactStrings(organisms);
+    const descriptions = [];
+    for (const match of compoundText.matchAll(/MOLECULE\s*:\s*([^;]+)/gi)) descriptions.push(match[1]);
+    if (descriptions.length) metadata.entityDescriptions = compactStrings(descriptions);
+
+    const resolutionValues = [];
+    for (const line of lines) {
+      if (!/^REMARK\s+2\s/i.test(line)) continue;
+      const match = line.match(/RESOLUTION\.\s+([0-9]+(?:\.[0-9]+)?)\s+ANGSTROMS/i);
+      if (match) resolutionValues.push(Number(match[1]));
+    }
+    if (resolutionValues.length) metadata.resolutionAngstroms = resolutionValues;
+
+    const databaseReferences = [];
+    for (const line of lines) {
+      if (line.slice(0, 6).trim().toUpperCase() !== 'DBREF') continue;
+      const reference = {
+        chain: line.slice(12, 13).trim() || '_',
+        database: line.slice(26, 32).trim(),
+        accession: line.slice(33, 41).trim(),
+        idCode: line.slice(42, 54).trim()
+      };
+      if (reference.database || reference.accession || reference.idCode) databaseReferences.push(reference);
+    }
+
+    const journal = {};
+    const journalParts = new Map();
+    for (const line of lines) {
+      if (line.slice(0, 6).trim().toUpperCase() !== 'JRNL') continue;
+      const key = line.slice(12, 16).trim().toUpperCase();
+      const value = line.slice(19, 79).trim();
+      if (!key || !value) continue;
+      if (!journalParts.has(key)) journalParts.set(key, []);
+      journalParts.get(key).push(value);
+    }
+    const journalValue = key => (journalParts.get(key) || []).join(' ').replace(/\s+/g, ' ').trim();
+    const citationTitle = journalValue('TITL');
+    const citationAuthors = compactStrings(journalValue('AUTH').split(','));
+    const journalReference = journalValue('REF');
+    const doi = journalValue('DOI');
+    const pubmedId = journalValue('PMID');
+    if (citationTitle) journal.title = citationTitle;
+    if (citationAuthors.length) journal.authors = citationAuthors;
+    if (journalReference) journal.journal = journalReference;
+    if (doi) journal.doi = doi;
+    if (pubmedId) journal.pubmedId = pubmedId;
+    if (Object.keys(journal).length) metadata.primaryCitation = journal;
+
+    const identifiers = {};
+    if (metadata.pdbId) identifiers.pdbId = metadata.pdbId;
+    if (doi) identifiers.doi = doi;
+    if (pubmedId) identifiers.pubmedId = pubmedId;
+    if (databaseReferences.length) identifiers.databaseReferences = databaseReferences;
+    if (Object.keys(identifiers).length) metadata.identifiers = identifiers;
+
+    const syntheticRemark = lines.find(line => /^REMARK\s/i.test(line) && /(?:synthetic|demonstration|\bdemo\b|illustrative|not (?:for )?scientific analysis)/i.test(line));
+    if (syntheticRemark) {
+      metadata.flags = { syntheticDemo: true, syntheticDemoRemark: syntheticRemark.slice(10).trim() };
+    }
+    return normalizeMetadata(metadata);
+  }
+
+  function metadataFromRCSBEntry(entry, provenance = {}) {
+    const metadata = {};
+    if (entry?.rcsb_id) metadata.pdbId = String(entry.rcsb_id).toUpperCase();
+    if (entry?.struct?.title) metadata.title = entry.struct.title;
+    const methods = compactStrings((entry?.exptl || []).map(item => item?.method));
+    if (methods.length) metadata.experimentalMethods = methods;
+    const resolutions = (entry?.rcsb_entry_info?.resolution_combined || []).map(Number).filter(value => Number.isFinite(value) && value > 0);
+    if (resolutions.length) metadata.resolutionAngstroms = resolutions;
+    const accession = entry?.rcsb_accession_info || {};
+    if (accession.deposit_date) metadata.depositionDate = String(accession.deposit_date).slice(0, 10);
+    if (accession.initial_release_date) metadata.releaseDate = String(accession.initial_release_date).slice(0, 10);
+    if (accession.revision_date) metadata.revisionDate = String(accession.revision_date).slice(0, 10);
+    const entities = entry?.polymer_entities || [];
+    const descriptions = compactStrings(entities.map(entity => entity?.rcsb_polymer_entity?.pdbx_description));
+    const organisms = compactStrings(entities.flatMap(entity => (entity?.rcsb_entity_source_organism || []).map(source => source?.ncbi_scientific_name)));
+    if (descriptions.length) metadata.entityDescriptions = descriptions;
+    if (organisms.length) metadata.organisms = organisms;
+    const structureAuthors = compactStrings((entry?.audit_author || []).map(author => author?.name));
+    if (structureAuthors.length) metadata.authors = structureAuthors;
+
+    const citation = entry?.rcsb_primary_citation
+      || (entry?.citation || []).find(item => String(item?.id || '').toLowerCase() === 'primary')
+      || entry?.citation?.[0];
+    if (citation) {
+      const primaryCitation = {};
+      if (citation.title) primaryCitation.title = citation.title;
+      const citationAuthors = compactStrings(citation.rcsb_authors || []);
+      if (citationAuthors.length) primaryCitation.authors = citationAuthors;
+      if (citation.journal_abbrev) primaryCitation.journal = citation.journal_abbrev;
+      if (citation.year != null) primaryCitation.year = Number(citation.year) || citation.year;
+      if (citation.pdbx_database_id_DOI) primaryCitation.doi = citation.pdbx_database_id_DOI;
+      if (citation.pdbx_database_id_PubMed) primaryCitation.pubmedId = String(citation.pdbx_database_id_PubMed);
+      if (Object.keys(primaryCitation).length) metadata.primaryCitation = primaryCitation;
+    }
+    const identifiers = {};
+    if (metadata.pdbId) identifiers.pdbId = metadata.pdbId;
+    if (metadata.primaryCitation?.doi) identifiers.doi = metadata.primaryCitation.doi;
+    if (metadata.primaryCitation?.pubmedId) identifiers.pubmedId = metadata.primaryCitation.pubmedId;
+    if (Object.keys(identifiers).length) metadata.identifiers = identifiers;
+    metadata.provenance = {
+      kind: 'rcsb-data-api',
+      url: 'https://data.rcsb.org/graphql',
+      ...provenance
+    };
+    return normalizeMetadata(metadata);
+  }
+
   function parsePDB(text) {
     const atoms = [];
     const explicitBonds = new Set();
     const serialMap = new Map();
     let model = 1;
     const lines = String(text || '').replace(/\r/g, '').split('\n');
+    const diagnostics = { coordinateLines: 0, skippedCoordinateLines: 0, malformedCoordinateLines: 0, malformedLineNumbers: [] };
 
+    let lineNumber = 0;
     for (const line of lines) {
+      lineNumber++;
       const record = line.slice(0, 6).trim().toUpperCase();
       if (record === 'MODEL') {
         model = Number.parseInt(line.slice(10, 14), 10) || model;
         continue;
       }
       if (record === 'ATOM' || record === 'HETATM') {
+        diagnostics.coordinateLines++;
         const serial = Number.parseInt(line.slice(6, 11), 10) || atoms.length + 1;
         const rawName = line.slice(12, 16);
         const atom = {
@@ -80,6 +280,10 @@
         if ([atom.x, atom.y, atom.z].every(Number.isFinite)) {
           atoms.push(atom);
           serialMap.set(serial, atom.index);
+        } else {
+          diagnostics.skippedCoordinateLines++;
+          diagnostics.malformedCoordinateLines++;
+          if (diagnostics.malformedLineNumbers.length < 20) diagnostics.malformedLineNumbers.push(lineNumber);
         }
         continue;
       }
@@ -100,7 +304,84 @@
       if (serialMap.has(aSerial) && serialMap.has(bSerial)) bonds.push([serialMap.get(aSerial), serialMap.get(bSerial)]);
     }
     inferBonds(atoms, bonds);
-    return { atoms, bonds, chains: [...new Set(atoms.map(a => a.chain))] };
+    return {
+      atoms, bonds, chains: [...new Set(atoms.map(a => a.chain))],
+      metadata: parsePDBMetadata(text), diagnostics
+    };
+  }
+
+  function deriveDataQuality(value, pdbText = '') {
+    const parsed = Array.isArray(value) ? { atoms: value } : (value || { atoms: [] });
+    const atoms = Array.isArray(parsed.atoms) ? parsed.atoms : [];
+    const diagnostics = parsed.diagnostics || { coordinateLines: atoms.length, skippedCoordinateLines: 0, malformedCoordinateLines: 0, malformedLineNumbers: [] };
+    const residues = new Set();
+    const chains = new Set();
+    const models = new Set();
+    const ligands = new Set();
+    const waters = new Set();
+    let alternateLocationAtoms = 0;
+    let partialOccupancyAtoms = 0;
+    let zeroOccupancyAtoms = 0;
+    let hydrogenAtoms = 0;
+    let bFactorCount = 0;
+    let bFactorTotal = 0;
+    let bFactorMin = Infinity;
+    let bFactorMax = -Infinity;
+    for (const atom of atoms) {
+      const residueKey = `${atom.model}|${atom.chain}|${atom.resi}|${atom.icode}|${atom.resn}`;
+      residues.add(residueKey);
+      chains.add(atom.chain);
+      models.add(atom.model);
+      if (atom.altLoc) alternateLocationAtoms++;
+      if (Number(atom.occupancy) === 0) zeroOccupancyAtoms++;
+      else if (Number(atom.occupancy) > 0 && Number(atom.occupancy) < 1) partialOccupancyAtoms++;
+      if (String(atom.element).toUpperCase() === 'H') hydrogenAtoms++;
+      if (Number.isFinite(Number(atom.bfactor))) {
+        const value = Number(atom.bfactor);
+        bFactorCount++;
+        bFactorTotal += value;
+        bFactorMin = Math.min(bFactorMin, value);
+        bFactorMax = Math.max(bFactorMax, value);
+      }
+      if (isWater(atom)) waters.add(residueKey);
+      else if (atom.het) ligands.add(residueKey);
+    }
+    const bFactor = bFactorCount ? {
+      min: bFactorMin, max: bFactorMax,
+      mean: bFactorTotal / bFactorCount
+    } : null;
+    const metadata = parsed.metadata || parsePDBMetadata(pdbText);
+    const summary = {
+      atomCount: atoms.length,
+      residueCount: residues.size,
+      chainCount: chains.size,
+      modelCount: models.size,
+      alternateLocationAtoms,
+      partialOccupancyAtoms,
+      zeroOccupancyAtoms,
+      bFactor,
+      nonWaterLigandCount: ligands.size,
+      waterResidueCount: waters.size,
+      hydrogenAtomCount: hydrogenAtoms,
+      coordinateLineCount: Number(diagnostics.coordinateLines) || atoms.length,
+      skippedCoordinateLines: Number(diagnostics.skippedCoordinateLines) || 0,
+      malformedCoordinateLines: Number(diagnostics.malformedCoordinateLines) || 0
+    };
+    const warnings = [];
+    if (metadata.flags?.syntheticDemo) warnings.push({ code: 'synthetic-demo', severity: 'warning', message: metadata.flags.syntheticDemoRemark || 'The PDB remarks identify these coordinates as synthetic or for demonstration.' });
+    if (summary.skippedCoordinateLines) warnings.push({ code: 'skipped-coordinate-lines', severity: 'warning', message: `${summary.skippedCoordinateLines} coordinate line${summary.skippedCoordinateLines === 1 ? ' was' : 's were'} skipped because its coordinates could not be parsed.` });
+    if (alternateLocationAtoms) warnings.push({ code: 'alternate-locations', severity: 'info', message: `${alternateLocationAtoms} atom record${alternateLocationAtoms === 1 ? ' has' : 's have'} alternate-location identifiers.` });
+    if (zeroOccupancyAtoms) warnings.push({ code: 'zero-occupancy', severity: 'info', message: `${zeroOccupancyAtoms} atom record${zeroOccupancyAtoms === 1 ? ' has' : 's have'} zero or missing occupancy.` });
+    if (partialOccupancyAtoms) warnings.push({ code: 'partial-occupancy', severity: 'info', message: `${partialOccupancyAtoms} atom record${partialOccupancyAtoms === 1 ? ' has' : 's have'} occupancy between zero and one.` });
+    return {
+      summary, warnings,
+      diagnostics: {
+        coordinateLines: summary.coordinateLineCount,
+        skippedCoordinateLines: summary.skippedCoordinateLines,
+        malformedCoordinateLines: summary.malformedCoordinateLines,
+        malformedLineNumbers: Array.isArray(diagnostics.malformedLineNumbers) ? [...diagnostics.malformedLineNumbers] : []
+      }
+    };
   }
 
   function residueDescriptor(residueName) {
@@ -214,6 +495,7 @@
     doc.structure.name ||= 'Molecule';
     doc.structure.format = String(doc.structure.format || 'pdb').toLowerCase();
     if (doc.structure.format !== 'pdb') throw new Error(`Unsupported structure format: ${doc.structure.format}. This version accepts PDB.`);
+    doc.structure.metadata = mergeMetadata(parsePDBMetadata(doc.structure.data), doc.structure.metadata);
     doc.scene ||= {};
     Object.assign(doc.scene, {
       representation: doc.scene.representation || 'ball-and-stick',
@@ -667,7 +949,8 @@
   function vdwRadius(element) { return VDW_RADII[element] || 1.7; }
 
   window.MolViewCore = {
-    ELEMENT_COLORS, CHAIN_COLORS, parsePDB, normalizeDocument, selectorForAtom,
+    ELEMENT_COLORS, CHAIN_COLORS, parsePDB, parsePDBMetadata, normalizeMetadata, mergeMetadata,
+    metadataFromRCSBEntry, deriveDataQuality, normalizeDocument, selectorForAtom,
     atomMatchesSelector, atomIdentity, atomLabel, colorForAtom, isWater, vdwRadius, uid,
     MEASUREMENT_ATOM_COUNTS, normalizeMeasurements, measurementAtoms, measurementValue,
     formatMeasurementValue,
