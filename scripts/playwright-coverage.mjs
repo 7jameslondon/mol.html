@@ -7,7 +7,7 @@ import { CoverageReport } from 'monocart-coverage-reports';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const reportDirectory = resolve(root, 'coverage/playwright');
 const rawDirectory = resolve(root, 'test-results/coverage-raw');
-const coverageEntryPattern = /^molhtml:\/\/\/src\/(?:structure|model|renderer|persistence|app)\.js$/;
+const coverageEntryPattern = /^molhtml:\/\/\/src\/(?:structure|model|renderer|export|persistence|app)\.js$/;
 
 function run(label, script, args = [], env = {}) {
   return new Promise((resolvePromise, reject) => {
@@ -51,7 +51,7 @@ const report = new CoverageReport({
   outputDir: reportDirectory,
   entryFilter: entry => coverageEntryPattern.test(entry.url),
   sourcePath: filePath => {
-    const match = filePath.replaceAll('\\', '/').match(/src\/(structure|model|renderer|persistence|app)\.js$/);
+    const match = filePath.replaceAll('\\', '/').match(/src\/(structure|model|renderer|export|persistence|app)\.js$/);
     return match ? `src/${match[1]}.js` : filePath;
   },
   reports: [
@@ -76,6 +76,7 @@ const expectedSources = new Set([
   'src/structure.js',
   'src/model.js',
   'src/renderer.js',
+  'src/export.js',
   'src/persistence.js',
   'src/app.js'
 ]);
