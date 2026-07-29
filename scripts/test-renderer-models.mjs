@@ -229,14 +229,14 @@ const presentationState = {
   activeSavedSelectionId: 'saved-export-active'
 };
 
-function renderExportScale(screenScale) {
+function renderExportScale(screenScale, labelScale = screenScale) {
   addedStyles.length = 0;
   addedLabels.length = 0;
   assignedStyles.length = 0;
   addedLines.length = 0;
   clickableCalls = 0;
   const exportRenderer = new context.window.MoleculeRenderer({}, {}, {
-    backgroundAlpha: 0, interactive: false, screenScale, upscale: false
+    backgroundAlpha: 0, interactive: false, screenScale, labelScale, upscale: false
   });
   const generation = exportRenderer.setDocument(exportDocument, {
     cameraMode: 'snapshot', writeCamera: false, presentationState
@@ -254,6 +254,7 @@ function renderExportScale(screenScale) {
 
 const currentExport = renderExportScale(1);
 const highResolutionExport = renderExportScale(4);
+const adjustedPixelRatioExport = renderExportScale(1, 1.6);
 assert.notEqual(webglRenderer.initFrameBuffer, nativeInitFrameBuffer,
   'the hidden non-interactive renderer stabilizes framebuffer reuse');
 assert.equal(framebufferInitCalls, 0, 'the export-only framebuffer shim does not invoke the native resize allocator');
@@ -271,6 +272,14 @@ for (let index = 0; index < currentExport.labels.length; index += 1) {
   assert.equal(highResolution.borderThickness / current.borderThickness, 4,
     '4x label border preserves normalized composition');
 }
+for (let index = 0; index < currentExport.labels.length; index += 1) {
+  const current = currentExport.labels[index].style;
+  const adjusted = adjustedPixelRatioExport.labels[index].style;
+  assert.equal(adjusted.fontSize, Math.round(current.fontSize * 1.6),
+    'label scale can compensate for visible and export renderer pixel-ratio differences');
+  assert.equal(adjusted.padding, Math.round(current.padding * 1.6),
+    'label padding uses the independent scale and rounds to whole pixels');
+}
 assert.ok(highResolutionExport.addedStyles.some(entry => entry.style.stick?.color === '#30e3d2'),
   'the active persisted saved selection is emphasized in export rendering');
 assert.ok(highResolutionExport.lines.some(line => line.color === '#ffcf5a'),
@@ -279,8 +288,11 @@ assert.ok(highResolutionExport.lines.every(line => line.linewidth >= 1 && line.l
   'measurement line widths are present and clamped to the reported WebGL range');
 const currentLineStyle = currentExport.assignedStyles.find(entry => entry.style.line)?.style.line;
 const highResolutionLineStyle = highResolutionExport.assignedStyles.find(entry => entry.style.line)?.style.line;
+const adjustedLineStyle = adjustedPixelRatioExport.assignedStyles.find(entry => entry.style.line)?.style.line;
 assert.equal(currentLineStyle.linewidth, 1.5, 'current-scale line representation retains its requested visible width');
 assert.equal(highResolutionLineStyle.linewidth, 2, '4x line representation clamps to the hardware maximum');
+assert.equal(adjustedLineStyle.linewidth, currentLineStyle.linewidth,
+  'pixel-ratio label compensation does not change WebGL line width scaling');
 assert.equal(currentExport.clickableCalls, 0, 'non-interactive export rendering installs no picking behavior');
 assert.equal(highResolutionExport.clickableCalls, 0, 'repeated non-interactive export rendering installs no picking behavior');
 await currentExport.renderer.whenSurfacesReady(currentExport.generation);
