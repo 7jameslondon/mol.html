@@ -85,6 +85,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .ribbon-button[aria-pressed="true"] { border-color: rgba(88, 168, 255, .34); background: rgba(57, 132, 204, .16); color: #eaf5ff; }
 .ribbon-button:disabled { opacity: .3; cursor: default; }
 .ribbon-button svg { grid-row: 1 / 3; width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.interaction-glyph { grid-row: 1 / 3; position: relative; width: 24px; height: 24px; display: flex; align-items: center; justify-content: space-between; }
+.interaction-glyph::before { content: ""; position: absolute; left: 3px; right: 3px; top: 11px; border-top: 2px dashed currentColor; opacity: .78; }
+.interaction-glyph i { position: relative; width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 2px #0d1c2d; }
 .ribbon-button span { align-self: end; white-space: nowrap; font-size: 11px; font-weight: 740; }
 .ribbon-button small { align-self: start; color: #667f98; white-space: nowrap; font-size: 8px; }
 .ribbon-button.compact { min-width: 78px; }
@@ -204,6 +207,11 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
 .visibility-option > span:first-child { display: grid; gap: 3px; }
 .visibility-option strong { font-size: 11px; }
 .visibility-option small { color: var(--muted); font-size: 9px; line-height: 1.4; }
+.interaction-visibility-list { margin-bottom: 14px; }
+.interaction-results { display: grid; gap: 5px; padding: 12px; border: 1px solid rgba(73, 215, 255, .2); border-radius: 9px; background: rgba(73, 215, 255, .05); }
+.interaction-results strong { color: #dff8ff; font-size: 11px; }
+.interaction-results span { color: var(--muted); font-size: 9px; line-height: 1.45; }
+.interaction-warning { margin: 10px 0 0; padding: 9px 10px; border: 1px solid rgba(255, 184, 77, .34); border-radius: 8px; background: rgba(255, 184, 77, .08); color: #ffd28c; font-size: 9px; line-height: 1.5; }
 .toggle { flex: 0 0 auto; display: block; position: relative; width: 32px; height: 18px; }
 .toggle input { position: absolute; opacity: 0; pointer-events: none; }
 .toggle i { display: block; width: 32px; height: 18px; position: relative; border-radius: 999px; background: #24364a; transition: .18s ease; }
@@ -368,6 +376,11 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
 .viewer-badges { display: flex; align-items: center; gap: 7px; }
 .structure-chip, .controls-hint { border: 1px solid rgba(170, 204, 237, .17); background: rgba(7, 17, 31, .76); backdrop-filter: blur(12px); box-shadow: var(--shadow); }
 .structure-chip { padding: 8px 11px; border-radius: 8px; color: #aac7e4; font-size: 9px; font-weight: 800; letter-spacing: .13em; }
+.interaction-legend { position: absolute; top: 55px; left: 15px; display: grid; gap: 7px; padding: 9px 10px; border: 1px solid rgba(170, 204, 237, .17); border-radius: 8px; background: rgba(7, 17, 31, .8); backdrop-filter: blur(12px); box-shadow: var(--shadow); color: #bfd3e7; font-size: 9px; pointer-events: none; }
+.interaction-legend span { display: flex; align-items: center; gap: 7px; }
+.interaction-legend i { width: 23px; height: 0; border-top: 2px dashed; }
+.interaction-legend .hydrogen-bond { border-color: #49d7ff; }
+.interaction-legend .salt-bridge { border-color: #ffb84d; }
 .controls-hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); padding: 8px 12px; border-radius: 8px; color: var(--muted); font-size: 9px; white-space: nowrap; }
 .controls-hint span { margin-left: 9px; color: #d9e9f8; font-weight: 700; }
 .controls-hint span:first-child { margin-left: 0; }

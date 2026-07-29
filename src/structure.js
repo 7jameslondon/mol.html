@@ -74,6 +74,18 @@
     return !left?.altLoc || !right?.altLoc || left.altLoc === right.altLoc;
   }
 
+  function parseFormalCharge(value) {
+    const charge = String(value ?? '').trim();
+    if (!charge || charge === '.' || charge === '?') return null;
+    if (/^[+-]$/.test(charge)) return charge === '+' ? 1 : -1;
+    let match = charge.match(/^([1-9])([+-])$/);
+    if (match) return Number(match[1]) * (match[2] === '+' ? 1 : -1);
+    match = charge.match(/^([+-])([1-9])$/);
+    if (match) return Number(match[2]) * (match[1] === '+' ? 1 : -1);
+    const number = Number(charge);
+    return Number.isInteger(number) ? number : null;
+  }
+
   function normalizeStructureFormat(value) {
     const format = String(value || '').trim().toLowerCase().replace(/^\./, '');
     if (['pdb', 'ent'].includes(format)) return 'pdb';
@@ -162,6 +174,7 @@
           occupancy: finiteOr(line.slice(54, 60), 0),
           bfactor: finiteOr(line.slice(60, 66), 0),
           element: inferElement(rawName, line.slice(76, 78)),
+          formalCharge: parseFormalCharge(line.slice(78, 80)),
           het: record === 'HETATM',
           model,
           sourceFormat: 'pdb',
@@ -554,6 +567,7 @@
         occupancy: cifNumber(row.occupancy, 0) || 0,
         bfactor: cifNumber(row.b_iso_or_equiv, 0) || 0,
         element: inferElement(labelAtomId, cifValue(row.type_symbol)),
+        formalCharge: parseFormalCharge(row.pdbx_formal_charge),
         het: String(row.group_pdb || '').toUpperCase() === 'HETATM',
         model,
         sourceFormat: 'mmcif',
@@ -582,11 +596,11 @@
 
     const entityDefinitions = mmcifEntityDefinitions(block.categories);
     const instanceDefinitions = mmcifInstanceDefinitions(block.categories);
-    const explicitTopology = mmcifExplicitBonds(block.categories, atoms, diagnostics);
-    const bonds = explicitTopology.bonds;
-    inferBonds(atoms, bonds, explicitTopology.deniedInferencePairs);
+    const explicitConnections = mmcifExplicitConnections(block.categories, atoms, diagnostics);
+    const bonds = explicitConnections.bonds;
+    inferBonds(atoms, bonds, explicitConnections.deniedInferencePairs);
     return finalizeStructure({
-      format: 'mmcif', atoms, bonds,
+      format: 'mmcif', atoms, bonds, interactions: explicitConnections.interactions,
       assemblies: mmcifAssemblies(block.categories),
       diagnostics, entityDefinitions, instanceDefinitions,
       dataBlock: block.name,
@@ -825,6 +839,7 @@
       source: { format: input.format, dataBlock: input.dataBlock || null },
       atoms,
       bonds: input.bonds,
+      interactions: input.interactions || [],
       chains,
       topology: { atoms, residues, instances, entities, bonds: input.bonds, connectedComponents: components },
       coordinateSets,
@@ -934,13 +949,17 @@
     return components;
   }
 
-  function mmcifExplicitBonds(categories, atoms, diagnostics) {
+  function mmcifExplicitConnections(categories, atoms, diagnostics) {
     const bonds = [];
+    const interactions = [];
     const deniedInferencePairs = new Set();
     let deniedPairAttempts = 0;
-    const existing = new Set();
+    const existingBonds = new Set();
+    const interactionByKey = new Map();
     const modelNumbers = [...new Set(atoms.map(atom => atom.model))];
-    const connections = (categories.struct_conn || []).filter(row => isTopologyConnectionType(row.conn_type_id));
+    const connections = (categories.struct_conn || []).filter(row =>
+      isTopologyConnectionType(row.conn_type_id) || interactionTypeForStructConn(row.conn_type_id)
+    );
     const scopedConnections = connections.map(row => {
       const leftModel = cifNumber(row.pdbx_ptnr1_pdb_model_num);
       const rightModel = cifNumber(row.pdbx_ptnr2_pdb_model_num);
@@ -957,9 +976,11 @@
       throw new Error('Connection limit exceeded while resolving struct_conn endpoints.');
     }
     for (const { row, leftModel, rightModel, applicableModels } of scopedConnections) {
+      const interactionType = interactionTypeForStructConn(row.conn_type_id);
+      const targetName = interactionType ? 'interactions' : 'topology';
       if (leftModel != null && rightModel != null && leftModel !== rightModel) {
         if (diagnostics?.parserWarnings?.length < 50) {
-          diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} connects different coordinate models and was excluded from topology.`);
+          diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} connects different coordinate models and was excluded from ${targetName}.`);
         }
         continue;
       }
@@ -967,12 +988,13 @@
       const leftAtoms = findStructConnAtoms(atoms, row, 'ptnr1');
       const rightAtoms = findStructConnAtoms(atoms, row, 'ptnr2');
       if (!baseCoordinates && diagnostics?.parserWarnings?.length < 50) {
-        diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} references a crystallographic symmetry mate and was excluded from base topology.`);
+        diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} references a crystallographic symmetry mate and was excluded from base-coordinate ${targetName}.`);
       }
       for (const modelNumber of applicableModels) {
         const leftMatches = leftAtoms.filter(atom => atom.model === modelNumber);
         const rightMatches = rightAtoms.filter(atom => atom.model === modelNumber);
         if (!baseCoordinates) {
+          if (interactionType) continue;
           deniedPairAttempts += leftMatches.length * rightMatches.length;
           if (deniedPairAttempts > MAX_DENIED_INFERENCE_PAIRS) {
             throw new Error('Connection limit exceeded while materializing symmetry-denied atom pairs.');
@@ -990,7 +1012,7 @@
         }
         if (leftMatches.length !== 1 || rightMatches.length !== 1) {
           if (diagnostics?.parserWarnings?.length < 50) {
-            diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} is ambiguous or unresolved in model ${modelNumber}.`);
+            diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} is ambiguous or unresolved in model ${modelNumber} and was excluded from ${targetName}.`);
           }
           continue;
         }
@@ -998,8 +1020,42 @@
         const right = rightMatches[0];
         if (left.index === right.index) continue;
         const key = left.index < right.index ? `${left.index}:${right.index}` : `${right.index}:${left.index}`;
-        if (!existing.has(key)) {
-          existing.add(key);
+        if (interactionType) {
+          const interactionKey = `${interactionType}|${key}`;
+          const source = {
+            kind: 'mmcif-struct-conn',
+            connectionId: cifValue(row.id),
+            connectionType: String(cifValue(row.conn_type_id) || '').toLowerCase(),
+            details: cifValue(row.details)
+          };
+          const reportedDistance = cifNumber(row.pdbx_dist_value);
+          const roles = structConnParticipantRoles(row, interactionType, left, right);
+          const existing = interactionByKey.get(interactionKey);
+          if (existing) {
+            existing.sources.push(source);
+            if (existing.reportedDistance == null && reportedDistance != null) existing.reportedDistance = reportedDistance;
+            continue;
+          }
+          const record = {
+            type: interactionType,
+            participants: [
+              { atomIndex: left.index, role: roles[0] },
+              { atomIndex: right.index, role: roles[1] }
+            ],
+            direction: interactionType === 'hydrogen-bond'
+              ? (roles[0] === 'donor' && roles[1] === 'acceptor') || (roles[1] === 'donor' && roles[0] === 'acceptor')
+                ? 'directed' : 'ambiguous'
+              : null,
+            distance: Math.hypot(left.x - right.x, left.y - right.y, left.z - right.z),
+            reportedDistance,
+            sources: [source],
+            heuristicQuality: null,
+            model: modelNumber
+          };
+          interactionByKey.set(interactionKey, record);
+          interactions.push(record);
+        } else if (!existingBonds.has(key)) {
+          existingBonds.add(key);
           bonds.push(bondRecord(
             left.index, right.index, mmcifBondOrder(row.pdbx_value_order),
             'mmcif-struct-conn', String(cifValue(row.conn_type_id) || '').toLowerCase()
@@ -1007,7 +1063,33 @@
         }
       }
     }
-    return { bonds, deniedInferencePairs };
+    return { bonds, interactions, deniedInferencePairs };
+  }
+
+  function interactionTypeForStructConn(value) {
+    const type = String(cifValue(value) || '').trim().toLowerCase();
+    if (['hydrog', 'hydbnd'].includes(type)) return 'hydrogen-bond';
+    if (['saltbr', 'sltbrg'].includes(type)) return 'salt-bridge';
+    return null;
+  }
+
+  function normalizeStructConnRole(value, type) {
+    const role = String(cifValue(value) || '').trim().toLowerCase();
+    if (/(^|[^a-z])don(or|ating)?([^a-z]|$)/.test(role)) return 'donor';
+    if (/(^|[^a-z])acc(eptor|epting)?([^a-z]|$)/.test(role)) return 'acceptor';
+    if (/(positive|cation)/.test(role)) return 'positive';
+    if (/(negative|anion)/.test(role)) return 'negative';
+    return type === 'hydrogen-bond' ? 'donor-or-acceptor' : 'charged-site';
+  }
+
+  function structConnParticipantRoles(row, type, left, right) {
+    let leftRole = normalizeStructConnRole(row.ptnr1_role ?? row.pdbx_ptnr1_role, type);
+    let rightRole = normalizeStructConnRole(row.ptnr2_role ?? row.pdbx_ptnr2_role, type);
+    if (type === 'salt-bridge' && leftRole === 'charged-site' && rightRole === 'charged-site') {
+      if (Number(left.formalCharge) > 0 && Number(right.formalCharge) < 0) [leftRole, rightRole] = ['positive', 'negative'];
+      else if (Number(left.formalCharge) < 0 && Number(right.formalCharge) > 0) [leftRole, rightRole] = ['negative', 'positive'];
+    }
+    return [leftRole, rightRole];
   }
 
   function isTopologyConnectionType(value) {
@@ -1280,6 +1362,60 @@
     return index;
   }
 
+  function forEachNearbyPair(atoms, cutoffValue, visit, options = {}) {
+    if (!Array.isArray(atoms) || typeof visit !== 'function') {
+      return { candidatePairs: 0, qualifyingPairs: 0, indexedAtomCount: 0, truncated: false };
+    }
+    const cutoff = Math.max(.1, Number(cutoffValue) || 1);
+    const cutoffSquared = cutoff * cutoff;
+    const leftIndices = Array.isArray(options.leftIndices) ? options.leftIndices : atoms.map(atom => atom.index);
+    const rightIndices = options.rightIndices == null
+      ? null : new Set(options.rightIndices);
+    const unique = options.unique !== false;
+    const compatibleAlternates = options.compatibleAlternates === true;
+    const maxCandidatePairs = Number.isFinite(Number(options.maxCandidatePairs))
+      ? Math.max(0, Number(options.maxCandidatePairs)) : Infinity;
+    const cells = spatialIndex(atoms, cutoff).cells;
+    let candidatePairs = 0;
+    let qualifyingPairs = 0;
+    let truncated = false;
+
+    outer: for (const leftIndex of leftIndices) {
+      const left = atoms[leftIndex];
+      if (!left) continue;
+      const cx = Math.floor(left.x / cutoff);
+      const cy = Math.floor(left.y / cutoff);
+      const cz = Math.floor(left.z / cutoff);
+      for (let dx = -1; dx <= 1; dx += 1) for (let dy = -1; dy <= 1; dy += 1) for (let dz = -1; dz <= 1; dz += 1) {
+        const nearby = cells.get(`${left.model}|${cx + dx}|${cy + dy}|${cz + dz}`);
+        if (!nearby) continue;
+        for (const rightIndex of nearby) {
+          if (rightIndex === leftIndex || (rightIndices && !rightIndices.has(rightIndex))) continue;
+          if (unique && rightIndex < leftIndex) continue;
+          candidatePairs += 1;
+          if (candidatePairs > maxCandidatePairs) {
+            truncated = true;
+            break outer;
+          }
+          const right = atoms[rightIndex];
+          if (!right || left.model !== right.model) continue;
+          if (compatibleAlternates && !alternateLocationsCompatible(left, right)) continue;
+          const x = left.x - right.x;
+          const y = left.y - right.y;
+          const z = left.z - right.z;
+          const distanceSquared = x * x + y * y + z * z;
+          if (distanceSquared > cutoffSquared) continue;
+          qualifyingPairs += 1;
+          if (visit(left, right, Math.sqrt(distanceSquared)) === false) {
+            truncated = true;
+            break outer;
+          }
+        }
+      }
+    }
+    return { candidatePairs: Math.min(candidatePairs, maxCandidatePairs), qualifyingPairs, indexedAtomCount: atoms.length, truncated };
+  }
+
   function finiteOr(value, fallback) {
     const number = Number.parseFloat(value);
     return Number.isFinite(number) ? number : fallback;
@@ -1296,6 +1432,9 @@
     inferElement,
     labelIdentityKey,
     authorIdentityKey,
-    spatialIndex
+    spatialIndex,
+    forEachNearbyPair,
+    alternateLocationsCompatible,
+    parseFormalCharge
   });
 })();

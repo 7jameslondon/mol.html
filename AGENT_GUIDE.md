@@ -323,6 +323,41 @@ donor/acceptor roles, hydrogen bonds, energies, protonation, or solvent
 accessibility. Preserve unknown fields. Set `selectedLigand` to `null` to clear
 the active analysis; when replacing the structure, clear it or retarget it to
 the new `structure.id`.
+
+## Non-covalent interaction display
+
+Only interaction presentation settings are persisted in `scene.interactions`:
+
+```json
+{
+  "enabled": false,
+  "types": {
+    "hydrogenBonds": true,
+    "saltBridges": true
+  },
+  "includeWater": false
+}
+```
+
+Preserve unknown additive fields at both the interaction and `types` levels.
+`enabled` is the master visibility switch; the type switches and `includeWater`
+filter a single cached, structure-wide inventory. Interaction settings are part
+of saved-view snapshots. Resetting appearance restores the defaults above.
+
+Never write derived interaction pairs, atom indices, counts, spatial indexes,
+classifier caches, topology, or coordinates into the document. They are rebuilt
+from `structure.data` and are invalidated whenever the structure ID, format, or
+complete coordinate string changes. Explicit mmCIF `_struct_conn` records are
+kept separate from `bonds` and `topology.bonds`, so they cannot join connected
+components or appear as covalent sticks.
+
+Hydrogen-bond and salt-bridge inference uses conservative standard-residue
+typing, explicit hydrogen geometry, and formal charges. Results marked
+`possible` are geometric/typing heuristics, not energies or protonation-state
+predictions. Legacy PDB `HYDBND`/`SLTBRG` records, crystallographic symmetry
+mates, protonation prediction, solvent energetics, and arbitrary electrostatic
+fields are outside the current format boundary.
+
 ## Saved views and stories
 
 Presentation bookmarks live in `scene.savedViews`. The array is displayed in ascending
@@ -342,6 +377,11 @@ not molecular coordinates. `structureId` ties it to the structure it was capture
     "background": "#07111f",
     "showHydrogens": false,
     "showWater": false,
+    "interactions": {
+      "enabled": true,
+      "types": { "hydrogenBonds": true, "saltBridges": false },
+      "includeWater": false
+    },
     "selection": null,
     "customColors": [],
     "camera": { "view": [0, 0, 0, 35, 0, 0, 0, 1] }
@@ -377,6 +417,7 @@ window.molhtml.getMeasurements()
 window.molhtml.getSavedSelections()
 window.molhtml.listLigands()
 window.molhtml.getLigandAnalysis()
+window.molhtml.getInteractions()
 window.molhtml.getStructureSummary()
 window.molhtml.getMetadata()
 window.molhtml.getDataQuality()
@@ -412,6 +453,7 @@ window.molhtml.setLigandAnalysis({ cutoff: 5, showContacts: false })
 window.molhtml.analyzeLigand(ligandKeyOrSelector, 4)
 window.molhtml.focusLigandAnalysis()
 window.molhtml.clearLigandAnalysis()
+window.molhtml.setInteractions({ enabled: true, types: { hydrogenBonds: true } })
 window.molhtml.createSavedView({ title: 'Overview', narrative: 'Opening view' })
 window.molhtml.updateSavedView('view-id', { title: 'Active site', narrative: 'Look here' })
 window.molhtml.recaptureSavedView('view-id')

@@ -32,6 +32,14 @@ real-GPU behavior.
   identity-aware selection survive without serialized runtime topology.
 - Load `fixtures/multi-model.pdb`; confirm both coordinate models render and a
   saved selector for model 2 resolves despite duplicate atom serials.
+- Load an mmCIF structure with `_struct_conn` hydrogen-bond and salt-bridge
+  annotations. Confirm cyan and amber dashed overlays toggle independently,
+  water inclusion updates counts, and no covalent sticks or connected
+  components change.
+- Save and reopen with interactions enabled, then apply a saved view with
+  different interaction settings and confirm both states restore exactly.
+- Confirm the Interactions inspector identifies explicit and inferred totals,
+  labels safety-limited results as partial, and remains keyboard accessible.
 
 ## Release record
 

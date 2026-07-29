@@ -93,6 +93,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .ribbon-button[aria-pressed="true"] { border-color: rgba(88, 168, 255, .34); background: rgba(57, 132, 204, .16); color: #eaf5ff; }
 .ribbon-button:disabled { opacity: .3; cursor: default; }
 .ribbon-button svg { grid-row: 1 / 3; width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.interaction-glyph { grid-row: 1 / 3; position: relative; width: 24px; height: 24px; display: flex; align-items: center; justify-content: space-between; }
+.interaction-glyph::before { content: ""; position: absolute; left: 3px; right: 3px; top: 11px; border-top: 2px dashed currentColor; opacity: .78; }
+.interaction-glyph i { position: relative; width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 2px #0d1c2d; }
 .ribbon-button span { align-self: end; white-space: nowrap; font-size: 11px; font-weight: 740; }
 .ribbon-button small { align-self: start; color: #667f98; white-space: nowrap; font-size: 8px; }
 .ribbon-button.compact { min-width: 78px; }
@@ -212,6 +215,11 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
 .visibility-option > span:first-child { display: grid; gap: 3px; }
 .visibility-option strong { font-size: 11px; }
 .visibility-option small { color: var(--muted); font-size: 9px; line-height: 1.4; }
+.interaction-visibility-list { margin-bottom: 14px; }
+.interaction-results { display: grid; gap: 5px; padding: 12px; border: 1px solid rgba(73, 215, 255, .2); border-radius: 9px; background: rgba(73, 215, 255, .05); }
+.interaction-results strong { color: #dff8ff; font-size: 11px; }
+.interaction-results span { color: var(--muted); font-size: 9px; line-height: 1.45; }
+.interaction-warning { margin: 10px 0 0; padding: 9px 10px; border: 1px solid rgba(255, 184, 77, .34); border-radius: 8px; background: rgba(255, 184, 77, .08); color: #ffd28c; font-size: 9px; line-height: 1.5; }
 .toggle { flex: 0 0 auto; display: block; position: relative; width: 32px; height: 18px; }
 .toggle input { position: absolute; opacity: 0; pointer-events: none; }
 .toggle i { display: block; width: 32px; height: 18px; position: relative; border-radius: 999px; background: #24364a; transition: .18s ease; }
@@ -376,6 +384,11 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
 .viewer-badges { display: flex; align-items: center; gap: 7px; }
 .structure-chip, .controls-hint { border: 1px solid rgba(170, 204, 237, .17); background: rgba(7, 17, 31, .76); backdrop-filter: blur(12px); box-shadow: var(--shadow); }
 .structure-chip { padding: 8px 11px; border-radius: 8px; color: #aac7e4; font-size: 9px; font-weight: 800; letter-spacing: .13em; }
+.interaction-legend { position: absolute; top: 55px; left: 15px; display: grid; gap: 7px; padding: 9px 10px; border: 1px solid rgba(170, 204, 237, .17); border-radius: 8px; background: rgba(7, 17, 31, .8); backdrop-filter: blur(12px); box-shadow: var(--shadow); color: #bfd3e7; font-size: 9px; pointer-events: none; }
+.interaction-legend span { display: flex; align-items: center; gap: 7px; }
+.interaction-legend i { width: 23px; height: 0; border-top: 2px dashed; }
+.interaction-legend .hydrogen-bond { border-color: #49d7ff; }
+.interaction-legend .salt-bridge { border-color: #ffb84d; }
 .controls-hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); padding: 8px 12px; border-radius: 8px; color: var(--muted); font-size: 9px; white-space: nowrap; }
 .controls-hint span { margin-left: 9px; color: #d9e9f8; font-weight: 700; }
 .controls-hint span:first-child { margin-left: 0; }
@@ -495,6 +508,14 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
     "background": "#07111f",
     "showHydrogens": false,
     "showWater": false,
+    "interactions": {
+      "enabled": false,
+      "types": {
+        "hydrogenBonds": true,
+        "saltBridges": true
+      },
+      "includeWater": false
+    },
     "selection": null,
     "customColors": [],
     "measurements": [],
@@ -601,6 +622,10 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
           <button id="ligands-button" class="ribbon-button" type="button" data-inspector-target="ligands" aria-controls="inspector" aria-pressed="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5.5 12 3l5 2.5v5L12 13l-5-2.5zM12 13v5.5m-5-8L4 15m13-4.5 3 4.5"/><circle cx="4" cy="17" r="2"/><circle cx="12" cy="20" r="2"/><circle cx="20" cy="17" r="2"/></svg>
             <span>Ligands</span><small id="ligands-ribbon-value">Scanning</small>
+          </button>
+          <button id="interactions-button" class="ribbon-button" type="button" data-inspector-target="interactions" aria-controls="inspector" aria-pressed="false">
+            <b class="interaction-glyph" aria-hidden="true"><i></i><i></i><i></i></b>
+            <span>Interactions</span><small id="interactions-ribbon-value">Off</small>
           </button>
         </div>
         <div class="ribbon-group-label">Analyze</div>
@@ -882,6 +907,22 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
             </div>
           </section>
 
+          <section id="panel-interactions" class="inspector-panel" data-inspector-panel="interactions" hidden>
+            <p class="panel-intro">Show explicit and conservatively inferred non-covalent interactions without changing molecular topology.</p>
+            <div class="visibility-list interaction-visibility-list">
+              <label class="visibility-option"><span><strong>Show interactions</strong><small>Master overlay visibility</small></span><span class="toggle"><input id="interactions-enabled" type="checkbox"><i></i></span></label>
+              <label class="visibility-option"><span><strong>Hydrogen bonds</strong><small>Cyan dashed lines, 2.5–3.5 Å</small></span><span class="toggle"><input id="interaction-hydrogen-bonds" type="checkbox"><i></i></span></label>
+              <label class="visibility-option"><span><strong>Salt bridges</strong><small>Amber dashed lines, at most 4.0 Å</small></span><span class="toggle"><input id="interaction-salt-bridges" type="checkbox"><i></i></span></label>
+              <label class="visibility-option"><span><strong>Include water</strong><small>Include interactions with a water endpoint</small></span><span class="toggle"><input id="interaction-include-water" type="checkbox"><i></i></span></label>
+            </div>
+            <div class="interaction-results" aria-live="polite">
+              <strong id="interaction-summary">Scanning interactions…</strong>
+              <span id="interaction-provenance"></span>
+            </div>
+            <p id="interaction-truncation" class="interaction-warning" role="status" hidden></p>
+            <p class="panel-note">Explicit mmCIF annotations are identified as source records. Inferred interactions use local geometry and conservative atom-name or formal-charge typing; they are not energy calculations. Legacy PDB HYDBND/SLTBRG records, symmetry mates, protonation prediction, and solvent energetics are not included.</p>
+          </section>
+
           <section id="panel-inspect" class="inspector-panel" data-inspector-panel="inspect" hidden>
             <div class="selection-panel-heading"><span>ACTIVE SELECTION</span><button id="clear-selection-panel" class="text-button" type="button" disabled>Clear</button></div>
             <div id="empty-selection" class="empty-selection">
@@ -913,6 +954,10 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
           <div class="viewer-badges">
             <div id="structure-chip" class="structure-chip">STARTER · PDB</div>
           </div>
+        </div>
+        <div id="interaction-legend" class="interaction-legend" aria-label="Interaction line legend" hidden>
+          <span id="interaction-legend-hydrogen"><i class="hydrogen-bond"></i>Hydrogen bond</span>
+          <span id="interaction-legend-salt"><i class="salt-bridge"></i>Salt bridge</span>
         </div>
         <div id="external-banner" class="external-banner" hidden>
           <span><strong>File changed on disk.</strong> Reload to use the agent's changes.</span>
@@ -1614,6 +1659,18 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     return !left?.altLoc || !right?.altLoc || left.altLoc === right.altLoc;
   }
 
+  function parseFormalCharge(value) {
+    const charge = String(value ?? '').trim();
+    if (!charge || charge === '.' || charge === '?') return null;
+    if (/^[+-]$/.test(charge)) return charge === '+' ? 1 : -1;
+    let match = charge.match(/^([1-9])([+-])$/);
+    if (match) return Number(match[1]) * (match[2] === '+' ? 1 : -1);
+    match = charge.match(/^([+-])([1-9])$/);
+    if (match) return Number(match[2]) * (match[1] === '+' ? 1 : -1);
+    const number = Number(charge);
+    return Number.isInteger(number) ? number : null;
+  }
+
   function normalizeStructureFormat(value) {
     const format = String(value || '').trim().toLowerCase().replace(/^\./, '');
     if (['pdb', 'ent'].includes(format)) return 'pdb';
@@ -1702,6 +1759,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
           occupancy: finiteOr(line.slice(54, 60), 0),
           bfactor: finiteOr(line.slice(60, 66), 0),
           element: inferElement(rawName, line.slice(76, 78)),
+          formalCharge: parseFormalCharge(line.slice(78, 80)),
           het: record === 'HETATM',
           model,
           sourceFormat: 'pdb',
@@ -2094,6 +2152,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         occupancy: cifNumber(row.occupancy, 0) || 0,
         bfactor: cifNumber(row.b_iso_or_equiv, 0) || 0,
         element: inferElement(labelAtomId, cifValue(row.type_symbol)),
+        formalCharge: parseFormalCharge(row.pdbx_formal_charge),
         het: String(row.group_pdb || '').toUpperCase() === 'HETATM',
         model,
         sourceFormat: 'mmcif',
@@ -2122,11 +2181,11 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
 
     const entityDefinitions = mmcifEntityDefinitions(block.categories);
     const instanceDefinitions = mmcifInstanceDefinitions(block.categories);
-    const explicitTopology = mmcifExplicitBonds(block.categories, atoms, diagnostics);
-    const bonds = explicitTopology.bonds;
-    inferBonds(atoms, bonds, explicitTopology.deniedInferencePairs);
+    const explicitConnections = mmcifExplicitConnections(block.categories, atoms, diagnostics);
+    const bonds = explicitConnections.bonds;
+    inferBonds(atoms, bonds, explicitConnections.deniedInferencePairs);
     return finalizeStructure({
-      format: 'mmcif', atoms, bonds,
+      format: 'mmcif', atoms, bonds, interactions: explicitConnections.interactions,
       assemblies: mmcifAssemblies(block.categories),
       diagnostics, entityDefinitions, instanceDefinitions,
       dataBlock: block.name,
@@ -2365,6 +2424,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       source: { format: input.format, dataBlock: input.dataBlock || null },
       atoms,
       bonds: input.bonds,
+      interactions: input.interactions || [],
       chains,
       topology: { atoms, residues, instances, entities, bonds: input.bonds, connectedComponents: components },
       coordinateSets,
@@ -2474,13 +2534,17 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     return components;
   }
 
-  function mmcifExplicitBonds(categories, atoms, diagnostics) {
+  function mmcifExplicitConnections(categories, atoms, diagnostics) {
     const bonds = [];
+    const interactions = [];
     const deniedInferencePairs = new Set();
     let deniedPairAttempts = 0;
-    const existing = new Set();
+    const existingBonds = new Set();
+    const interactionByKey = new Map();
     const modelNumbers = [...new Set(atoms.map(atom => atom.model))];
-    const connections = (categories.struct_conn || []).filter(row => isTopologyConnectionType(row.conn_type_id));
+    const connections = (categories.struct_conn || []).filter(row =>
+      isTopologyConnectionType(row.conn_type_id) || interactionTypeForStructConn(row.conn_type_id)
+    );
     const scopedConnections = connections.map(row => {
       const leftModel = cifNumber(row.pdbx_ptnr1_pdb_model_num);
       const rightModel = cifNumber(row.pdbx_ptnr2_pdb_model_num);
@@ -2497,9 +2561,11 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       throw new Error('Connection limit exceeded while resolving struct_conn endpoints.');
     }
     for (const { row, leftModel, rightModel, applicableModels } of scopedConnections) {
+      const interactionType = interactionTypeForStructConn(row.conn_type_id);
+      const targetName = interactionType ? 'interactions' : 'topology';
       if (leftModel != null && rightModel != null && leftModel !== rightModel) {
         if (diagnostics?.parserWarnings?.length < 50) {
-          diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} connects different coordinate models and was excluded from topology.`);
+          diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} connects different coordinate models and was excluded from ${targetName}.`);
         }
         continue;
       }
@@ -2507,12 +2573,13 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       const leftAtoms = findStructConnAtoms(atoms, row, 'ptnr1');
       const rightAtoms = findStructConnAtoms(atoms, row, 'ptnr2');
       if (!baseCoordinates && diagnostics?.parserWarnings?.length < 50) {
-        diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} references a crystallographic symmetry mate and was excluded from base topology.`);
+        diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} references a crystallographic symmetry mate and was excluded from base-coordinate ${targetName}.`);
       }
       for (const modelNumber of applicableModels) {
         const leftMatches = leftAtoms.filter(atom => atom.model === modelNumber);
         const rightMatches = rightAtoms.filter(atom => atom.model === modelNumber);
         if (!baseCoordinates) {
+          if (interactionType) continue;
           deniedPairAttempts += leftMatches.length * rightMatches.length;
           if (deniedPairAttempts > MAX_DENIED_INFERENCE_PAIRS) {
             throw new Error('Connection limit exceeded while materializing symmetry-denied atom pairs.');
@@ -2530,7 +2597,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         }
         if (leftMatches.length !== 1 || rightMatches.length !== 1) {
           if (diagnostics?.parserWarnings?.length < 50) {
-            diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} is ambiguous or unresolved in model ${modelNumber}.`);
+            diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} is ambiguous or unresolved in model ${modelNumber} and was excluded from ${targetName}.`);
           }
           continue;
         }
@@ -2538,8 +2605,42 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         const right = rightMatches[0];
         if (left.index === right.index) continue;
         const key = left.index < right.index ? `${left.index}:${right.index}` : `${right.index}:${left.index}`;
-        if (!existing.has(key)) {
-          existing.add(key);
+        if (interactionType) {
+          const interactionKey = `${interactionType}|${key}`;
+          const source = {
+            kind: 'mmcif-struct-conn',
+            connectionId: cifValue(row.id),
+            connectionType: String(cifValue(row.conn_type_id) || '').toLowerCase(),
+            details: cifValue(row.details)
+          };
+          const reportedDistance = cifNumber(row.pdbx_dist_value);
+          const roles = structConnParticipantRoles(row, interactionType, left, right);
+          const existing = interactionByKey.get(interactionKey);
+          if (existing) {
+            existing.sources.push(source);
+            if (existing.reportedDistance == null && reportedDistance != null) existing.reportedDistance = reportedDistance;
+            continue;
+          }
+          const record = {
+            type: interactionType,
+            participants: [
+              { atomIndex: left.index, role: roles[0] },
+              { atomIndex: right.index, role: roles[1] }
+            ],
+            direction: interactionType === 'hydrogen-bond'
+              ? (roles[0] === 'donor' && roles[1] === 'acceptor') || (roles[1] === 'donor' && roles[0] === 'acceptor')
+                ? 'directed' : 'ambiguous'
+              : null,
+            distance: Math.hypot(left.x - right.x, left.y - right.y, left.z - right.z),
+            reportedDistance,
+            sources: [source],
+            heuristicQuality: null,
+            model: modelNumber
+          };
+          interactionByKey.set(interactionKey, record);
+          interactions.push(record);
+        } else if (!existingBonds.has(key)) {
+          existingBonds.add(key);
           bonds.push(bondRecord(
             left.index, right.index, mmcifBondOrder(row.pdbx_value_order),
             'mmcif-struct-conn', String(cifValue(row.conn_type_id) || '').toLowerCase()
@@ -2547,7 +2648,33 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         }
       }
     }
-    return { bonds, deniedInferencePairs };
+    return { bonds, interactions, deniedInferencePairs };
+  }
+
+  function interactionTypeForStructConn(value) {
+    const type = String(cifValue(value) || '').trim().toLowerCase();
+    if (['hydrog', 'hydbnd'].includes(type)) return 'hydrogen-bond';
+    if (['saltbr', 'sltbrg'].includes(type)) return 'salt-bridge';
+    return null;
+  }
+
+  function normalizeStructConnRole(value, type) {
+    const role = String(cifValue(value) || '').trim().toLowerCase();
+    if (/(^|[^a-z])don(or|ating)?([^a-z]|$)/.test(role)) return 'donor';
+    if (/(^|[^a-z])acc(eptor|epting)?([^a-z]|$)/.test(role)) return 'acceptor';
+    if (/(positive|cation)/.test(role)) return 'positive';
+    if (/(negative|anion)/.test(role)) return 'negative';
+    return type === 'hydrogen-bond' ? 'donor-or-acceptor' : 'charged-site';
+  }
+
+  function structConnParticipantRoles(row, type, left, right) {
+    let leftRole = normalizeStructConnRole(row.ptnr1_role ?? row.pdbx_ptnr1_role, type);
+    let rightRole = normalizeStructConnRole(row.ptnr2_role ?? row.pdbx_ptnr2_role, type);
+    if (type === 'salt-bridge' && leftRole === 'charged-site' && rightRole === 'charged-site') {
+      if (Number(left.formalCharge) > 0 && Number(right.formalCharge) < 0) [leftRole, rightRole] = ['positive', 'negative'];
+      else if (Number(left.formalCharge) < 0 && Number(right.formalCharge) > 0) [leftRole, rightRole] = ['negative', 'positive'];
+    }
+    return [leftRole, rightRole];
   }
 
   function isTopologyConnectionType(value) {
@@ -2820,6 +2947,60 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     return index;
   }
 
+  function forEachNearbyPair(atoms, cutoffValue, visit, options = {}) {
+    if (!Array.isArray(atoms) || typeof visit !== 'function') {
+      return { candidatePairs: 0, qualifyingPairs: 0, indexedAtomCount: 0, truncated: false };
+    }
+    const cutoff = Math.max(.1, Number(cutoffValue) || 1);
+    const cutoffSquared = cutoff * cutoff;
+    const leftIndices = Array.isArray(options.leftIndices) ? options.leftIndices : atoms.map(atom => atom.index);
+    const rightIndices = options.rightIndices == null
+      ? null : new Set(options.rightIndices);
+    const unique = options.unique !== false;
+    const compatibleAlternates = options.compatibleAlternates === true;
+    const maxCandidatePairs = Number.isFinite(Number(options.maxCandidatePairs))
+      ? Math.max(0, Number(options.maxCandidatePairs)) : Infinity;
+    const cells = spatialIndex(atoms, cutoff).cells;
+    let candidatePairs = 0;
+    let qualifyingPairs = 0;
+    let truncated = false;
+
+    outer: for (const leftIndex of leftIndices) {
+      const left = atoms[leftIndex];
+      if (!left) continue;
+      const cx = Math.floor(left.x / cutoff);
+      const cy = Math.floor(left.y / cutoff);
+      const cz = Math.floor(left.z / cutoff);
+      for (let dx = -1; dx <= 1; dx += 1) for (let dy = -1; dy <= 1; dy += 1) for (let dz = -1; dz <= 1; dz += 1) {
+        const nearby = cells.get(`${left.model}|${cx + dx}|${cy + dy}|${cz + dz}`);
+        if (!nearby) continue;
+        for (const rightIndex of nearby) {
+          if (rightIndex === leftIndex || (rightIndices && !rightIndices.has(rightIndex))) continue;
+          if (unique && rightIndex < leftIndex) continue;
+          candidatePairs += 1;
+          if (candidatePairs > maxCandidatePairs) {
+            truncated = true;
+            break outer;
+          }
+          const right = atoms[rightIndex];
+          if (!right || left.model !== right.model) continue;
+          if (compatibleAlternates && !alternateLocationsCompatible(left, right)) continue;
+          const x = left.x - right.x;
+          const y = left.y - right.y;
+          const z = left.z - right.z;
+          const distanceSquared = x * x + y * y + z * z;
+          if (distanceSquared > cutoffSquared) continue;
+          qualifyingPairs += 1;
+          if (visit(left, right, Math.sqrt(distanceSquared)) === false) {
+            truncated = true;
+            break outer;
+          }
+        }
+      }
+    }
+    return { candidatePairs: Math.min(candidatePairs, maxCandidatePairs), qualifyingPairs, indexedAtomCount: atoms.length, truncated };
+  }
+
   function finiteOr(value, fallback) {
     const number = Number.parseFloat(value);
     return Number.isFinite(number) ? number : fallback;
@@ -2836,7 +3017,10 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     inferElement,
     labelIdentityKey,
     authorIdentityKey,
-    spatialIndex
+    spatialIndex,
+    forEachNearbyPair,
+    alternateLocationsCompatible,
+    parseFormalCharge
   });
 })();
 
@@ -2858,6 +3042,17 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   const LIGAND_ANALYSIS_DEFAULTS = Object.freeze({
     cutoff: 4, showLigand: true, showPocket: true, showContacts: true, polarOnly: false
   });
+  const INTERACTION_DEFAULTS = Object.freeze({
+    enabled: false,
+    types: Object.freeze({ hydrogenBonds: true, saltBridges: true }),
+    includeWater: false
+  });
+  const INTERACTION_CLASSIFIER_VERSION = 'mvp-1';
+  const INTERACTION_PARTITION_LIMIT = 500;
+  const INTERACTION_RENDER_LIMIT = 500;
+  const INTERACTION_CANDIDATE_WORK_LIMIT = 10_000_000;
+  const INTERACTION_SALT_SITE_PAIR_LIMIT = 10_000;
+  const interactionAnalysisCache = new WeakMap();
   const MEASUREMENT_ATOM_COUNTS = Object.freeze({ distance: 2, angle: 3, dihedral: 4 });
   const REPRESENTATIONS = new Set(['cartoon', 'ball-and-stick', 'sticks', 'spacefill', 'lines', 'surface']);
   const COLOR_MODES = new Set(['element', 'chain', 'author-chain', 'instance', 'entity', 'role', 'residue', 'uniform']);
@@ -2868,6 +3063,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   });
   const SAVED_VIEW_SCENE_FIELDS = Object.freeze([
     'representation', 'colorMode', 'background', 'showHydrogens', 'showWater',
+    'interactions',
     'selection', 'customColors', 'activeAnalysis', 'analysisHighlight',
     'highlight', 'highlights', 'activeHighlight', 'activeLigandId', 'ligandHighlight'
   ]);
@@ -3328,6 +3524,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       measurements: normalizeMeasurements(doc.scene.measurements),
       savedSelections: normalizeSavedSelections(doc.scene.savedSelections),
       ligandAnalysis: normalizeLigandAnalysis(doc.scene.ligandAnalysis, doc.structure.id),
+      interactions: normalizeInteractions(doc.scene.interactions),
       savedViews: normalizeSavedViews(doc.scene.savedViews),
       camera: normalizeCamera(doc.scene.camera)
     });
@@ -3380,6 +3577,8 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       doc.scene.savedSelections = normalizeSavedSelections(command.savedSelections);
     } else if (type === 'set-ligand-analysis') {
       doc.scene.ligandAnalysis = normalizeLigandAnalysis(command.ligandAnalysis, doc.structure.id, true);
+    } else if (type === 'set-interactions') {
+      doc.scene.interactions = normalizeInteractions(command.interactions);
     } else if (type === 'set-saved-views') {
       doc.scene.savedViews = normalizeSavedViews(command.savedViews);
     } else if (type === 'set-camera') {
@@ -3389,7 +3588,8 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     } else if (type === 'reset-appearance') {
       Object.assign(doc.scene, {
         representation: 'ball-and-stick', colorMode: 'element', background: '#07111f',
-        showHydrogens: false, showWater: false, customColors: []
+        showHydrogens: false, showWater: false, customColors: [],
+        interactions: normalizeInteractions(null)
       });
     } else if (type === 'replace-structure') {
       if (!command.structure?.data) throw new Error('A replacement structure requires coordinate data.');
@@ -3718,6 +3918,24 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     return analysis;
   }
 
+  function normalizeInteractions(value) {
+    const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const sourceTypes = source.types && typeof source.types === 'object' && !Array.isArray(source.types)
+      ? source.types : {};
+    return {
+      ...source,
+      enabled: 'enabled' in source ? Boolean(source.enabled) : INTERACTION_DEFAULTS.enabled,
+      types: {
+        ...sourceTypes,
+        hydrogenBonds: 'hydrogenBonds' in sourceTypes
+          ? Boolean(sourceTypes.hydrogenBonds) : INTERACTION_DEFAULTS.types.hydrogenBonds,
+        saltBridges: 'saltBridges' in sourceTypes
+          ? Boolean(sourceTypes.saltBridges) : INTERACTION_DEFAULTS.types.saltBridges
+      },
+      includeWater: 'includeWater' in source ? Boolean(source.includeWater) : INTERACTION_DEFAULTS.includeWater
+    };
+  }
+
   function ligandSelector(atom, structureId) {
     const selector = {
       structureId, model: atom.model, chain: atom.chain, resi: atom.resi,
@@ -3796,30 +4014,12 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
 
     const eligible = atoms.filter(atom => atom.model === ligand.model && atom.element !== 'H'
       && (atom.role === 'polymer' || (!atom.het && ['protein', 'nucleic'].includes(residueDescriptor(atom.resn).kind))));
-    const cellSize = cutoff;
-    const cells = requireStructureLayer().spatialIndex(atoms, cellSize).cells;
-    const eligibleIndices = new Set(eligible.map(atom => atom.index));
-    const cellKey = (model, x, y, z) => `${model}|${x}|${y}|${z}`;
-
     const contacts = [];
-    const seen = new Set();
-    let candidatePairs = 0;
-    for (const ligandAtom of ligand.atoms.filter(atom => atom.element !== 'H')) {
-      const cx = Math.floor(ligandAtom.x / cellSize);
-      const cy = Math.floor(ligandAtom.y / cellSize);
-      const cz = Math.floor(ligandAtom.z / cellSize);
-      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
-        const nearby = cells.get(cellKey(ligandAtom.model, cx + dx, cy + dy, cz + dz));
-        if (!nearby) continue;
-        for (const targetIndex of nearby) {
-          if (!eligibleIndices.has(targetIndex)) continue;
-          const targetAtom = atoms[targetIndex];
-          candidatePairs += 1;
-          const pairKey = `${ligandAtom.index}:${targetAtom.index}`;
-          if (seen.has(pairKey)) continue;
-          seen.add(pairKey);
-          const distance = magnitude(subtract(ligandAtom, targetAtom));
-          if (distance > cutoff || distance < .1) continue;
+    const search = requireStructureLayer().forEachNearbyPair(
+      atoms,
+      cutoff,
+      (ligandAtom, targetAtom, distance) => {
+          if (distance < .1) return;
           const vdwLimit = vdwRadius(ligandAtom.element) + vdwRadius(targetAtom.element) + .5;
           const close = distance <= Math.min(cutoff, vdwLimit);
           const polar = distance <= Math.min(cutoff, 3.5)
@@ -3828,9 +4028,13 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
             ligandAtom, targetAtom, distance, close, polar,
             classification: polar ? 'polar' : close ? 'close' : 'nearby'
           });
-        }
+      },
+      {
+        leftIndices: ligand.atoms.filter(atom => atom.element !== 'H').map(atom => atom.index),
+        rightIndices: eligible.map(atom => atom.index),
+        unique: false
       }
-    }
+    );
     contacts.sort((left, right) => left.distance - right.distance);
 
     const residueMap = new Map();
@@ -3854,7 +4058,463 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       residue.hasPolar ||= contact.polar;
     }
     const residues = [...residueMap.values()].sort((left, right) => left.minimumDistance - right.minimumDistance);
-    return { cutoff, ligand, residues, contacts, candidatePairs, indexedAtomCount: eligible.length };
+    return { cutoff, ligand, residues, contacts, candidatePairs: search.candidatePairs, indexedAtomCount: eligible.length };
+  }
+
+  const STANDARD_AMINO_ACIDS = new Set([
+    'ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE',
+    'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL'
+  ]);
+  const AMINO_DONORS = Object.freeze({
+    ARG: new Set(['NE', 'NH1', 'NH2']), ASN: new Set(['ND2']), GLN: new Set(['NE2']),
+    LYS: new Set(['NZ']), SER: new Set(['OG']), THR: new Set(['OG1']),
+    TRP: new Set(['NE1']), TYR: new Set(['OH'])
+  });
+  const AMINO_ACCEPTORS = Object.freeze({
+    ASN: new Set(['OD1']), ASP: new Set(['OD1', 'OD2']), GLN: new Set(['OE1']),
+    GLU: new Set(['OE1', 'OE2']), MET: new Set(['SD']), SER: new Set(['OG']),
+    THR: new Set(['OG1']), TYR: new Set(['OH'])
+  });
+  const NUCLEOTIDE_DONORS = Object.freeze({
+    A: new Set(['N6']), DA: new Set(['N6']), ADE: new Set(['N6']),
+    C: new Set(['N4']), DC: new Set(['N4']), CYT: new Set(['N4']),
+    G: new Set(['N1', 'N2']), DG: new Set(['N1', 'N2']), GUA: new Set(['N1', 'N2']),
+    T: new Set(['N3']), DT: new Set(['N3']), THY: new Set(['N3']),
+    U: new Set(['N3']), DU: new Set(['N3']), URA: new Set(['N3']), URI: new Set(['N3']),
+    I: new Set(['N1']), DI: new Set(['N1'])
+  });
+  const NUCLEOTIDE_ACCEPTORS = Object.freeze({
+    A: new Set(['N1', 'N3', 'N7']), DA: new Set(['N1', 'N3', 'N7']), ADE: new Set(['N1', 'N3', 'N7']),
+    C: new Set(['N3', 'O2']), DC: new Set(['N3', 'O2']), CYT: new Set(['N3', 'O2']),
+    G: new Set(['O6', 'N3', 'N7']), DG: new Set(['O6', 'N3', 'N7']), GUA: new Set(['O6', 'N3', 'N7']),
+    T: new Set(['O2', 'O4']), DT: new Set(['O2', 'O4']), THY: new Set(['O2', 'O4']),
+    U: new Set(['O2', 'O4']), DU: new Set(['O2', 'O4']), URA: new Set(['O2', 'O4']), URI: new Set(['O2', 'O4']),
+    I: new Set(['O6', 'N3', 'N7']), DI: new Set(['O6', 'N3', 'N7'])
+  });
+  const NUCLEOTIDE_ACCEPTOR_ATOMS = new Set(['OP1', 'OP2', 'O1P', 'O2P', "O2'", "O3'", "O4'", "O5'"]);
+
+  function analyzeInteractions(value, structureId = '') {
+    const parsed = Array.isArray(value) ? { atoms: value, bonds: [], interactions: [] } : value;
+    if (!parsed || !Array.isArray(parsed.atoms)) return emptyInteractionAnalysis(structureId);
+    let cached = interactionAnalysisCache.get(parsed);
+    if (!cached || cached.classifierVersion !== INTERACTION_CLASSIFIER_VERSION) {
+      cached = buildInteractionInventory(parsed);
+      interactionAnalysisCache.set(parsed, cached);
+    }
+    cached.serializedByStructureId ||= new Map();
+    if (!cached.serializedByStructureId.has(structureId)) {
+      cached.serializedByStructureId.set(structureId, serializeInteractionAnalysis(cached, parsed.atoms, structureId));
+    }
+    return cached.serializedByStructureId.get(structureId);
+  }
+
+  function emptyInteractionAnalysis(structureId) {
+    return {
+      structureId,
+      classifierVersion: INTERACTION_CLASSIFIER_VERSION,
+      interactions: [],
+      counts: interactionCountSummary(new Map()),
+      partitionCounts: emptyInteractionPartitionCounts(),
+      search: {
+        candidatePairs: 0, qualifyingPairs: 0, indexedAtomCount: 0,
+        candidateWorkLimit: INTERACTION_CANDIDATE_WORK_LIMIT,
+        saltSitePairLimit: INTERACTION_SALT_SITE_PAIR_LIMIT,
+        retainedSaltSitePairs: 0,
+        saltSitePairLimitReached: false,
+        retainedRecords: 0, retainedLimit: INTERACTION_PARTITION_LIMIT * 4,
+        truncated: false, partial: false, nearestComplete: true
+      }
+    };
+  }
+
+  function buildInteractionInventory(parsed) {
+    const atoms = parsed.atoms;
+    const adjacency = atoms.map(() => new Set());
+    adjacency._atoms = atoms;
+    for (const bond of parsed.bonds || []) {
+      const [left, right] = bond.atomIndices || [];
+      if (!atoms[left] || !atoms[right]) continue;
+      adjacency[left].add(right);
+      adjacency[right].add(left);
+    }
+    const partitions = new Map();
+    const explicitKeys = new Set();
+    const explicitByKey = new Map();
+    for (const sourceRecord of parsed.interactions || []) {
+      const record = normalizeExplicitInteraction(sourceRecord, atoms);
+      if (!record) continue;
+      const key = interactionDedupKey(record);
+      explicitKeys.add(key);
+      const existing = explicitByKey.get(key);
+      if (existing) {
+        existing.sources.push(...record.sources);
+        if (existing.reportedDistance == null) existing.reportedDistance = record.reportedDistance;
+      } else {
+        explicitByKey.set(key, record);
+        accumulateInteraction(partitions, record);
+      }
+    }
+
+    const saltSitePairs = new Map();
+    let saltSitePairLimitReached = false;
+    const search = requireStructureLayer().forEachNearbyPair(
+      atoms,
+      4,
+      (left, right, distance) => {
+        if (left.element === 'H' || right.element === 'H') return;
+        if (!requireStructureLayer().alternateLocationsCompatible(left, right)) return;
+        if (left.residueIndex === right.residueIndex) return;
+        if (hasShortCovalentPath(left.index, right.index, adjacency)) return;
+
+        if (distance >= 2.5 && distance <= 3.5) {
+          const hydrogenBond = classifyHydrogenBond(left, right, distance, adjacency);
+          if (hydrogenBond && !explicitKeys.has(interactionDedupKey(hydrogenBond))) {
+            accumulateInteraction(partitions, hydrogenBond);
+          }
+        }
+
+        const leftSite = chargedSite(left);
+        const rightSite = chargedSite(right);
+        if (!leftSite || !rightSite || leftSite.sign === rightSite.sign) return;
+        const positive = leftSite.sign > 0 ? { atom: left, site: leftSite } : { atom: right, site: rightSite };
+        const negative = leftSite.sign < 0 ? { atom: left, site: leftSite } : { atom: right, site: rightSite };
+        const sitePairKey = `${positive.site.key}|${negative.site.key}`;
+        const existing = saltSitePairs.get(sitePairKey);
+        if (!existing && saltSitePairs.size >= INTERACTION_SALT_SITE_PAIR_LIMIT) {
+          saltSitePairLimitReached = true;
+          return false;
+        }
+        const candidate = inferredInteraction(
+          'salt-bridge', positive.atom, 'positive', negative.atom, 'negative', distance, 'possible'
+        );
+        if (!existing || compareInteractions(candidate, existing) < 0) saltSitePairs.set(sitePairKey, candidate);
+      },
+      { compatibleAlternates: true, maxCandidatePairs: INTERACTION_CANDIDATE_WORK_LIMIT }
+    );
+
+    for (const record of saltSitePairs.values()) {
+      if (!explicitKeys.has(interactionDedupKey(record))) accumulateInteraction(partitions, record);
+    }
+    const interactions = [...partitions.values()].flatMap(partition => heapSorted(partition.heap));
+    interactions.sort(compareInteractions);
+    const truncated = search.truncated || saltSitePairLimitReached;
+    return {
+      classifierVersion: INTERACTION_CLASSIFIER_VERSION,
+      interactions,
+      partitionCounts: partitionCountObject(partitions),
+      counts: interactionCountSummary(partitions),
+      search: {
+        ...search,
+        candidateWorkLimit: INTERACTION_CANDIDATE_WORK_LIMIT,
+        saltSitePairLimit: INTERACTION_SALT_SITE_PAIR_LIMIT,
+        retainedSaltSitePairs: saltSitePairs.size,
+        saltSitePairLimitReached,
+        retainedRecords: interactions.length,
+        retainedLimit: INTERACTION_PARTITION_LIMIT * 4,
+        truncated,
+        partial: truncated,
+        nearestComplete: !truncated
+      }
+    };
+  }
+
+  function normalizeExplicitInteraction(value, atoms) {
+    if (!value || !['hydrogen-bond', 'salt-bridge'].includes(value.type) || !Array.isArray(value.participants)) return null;
+    const participants = value.participants.slice(0, 2).map(participant => ({
+      atomIndex: Number(participant?.atomIndex), role: String(participant?.role || 'participant')
+    }));
+    if (participants.length !== 2 || participants.some(participant => !atoms[participant.atomIndex])) return null;
+    const left = atoms[participants[0].atomIndex];
+    const right = atoms[participants[1].atomIndex];
+    return {
+      type: value.type,
+      participants,
+      direction: value.type === 'hydrogen-bond' ? (value.direction === 'directed' ? 'directed' : 'ambiguous') : null,
+      distance: Number.isFinite(Number(value.distance)) ? Number(value.distance) : magnitude(subtract(left, right)),
+      reportedDistance: Number.isFinite(Number(value.reportedDistance)) ? Number(value.reportedDistance) : null,
+      sources: Array.isArray(value.sources) ? structuredClone(value.sources) : [],
+      heuristicQuality: null,
+      model: Number(value.model) || left.model,
+      hasWaterEndpoint: isWater(left) || isWater(right)
+    };
+  }
+
+  function classifyHydrogenBond(left, right, distance, adjacency) {
+    const forward = hydrogenBondDirection(left, right, adjacency);
+    const reverse = hydrogenBondDirection(right, left, adjacency);
+    if (!forward && !reverse) return null;
+    if (forward && !reverse) return inferredInteraction(
+      'hydrogen-bond', left, 'donor', right, 'acceptor', distance, forward.quality, 'directed'
+    );
+    if (reverse && !forward) return inferredInteraction(
+      'hydrogen-bond', right, 'donor', left, 'acceptor', distance, reverse.quality, 'directed'
+    );
+    if (forward.quality === 'strict' && reverse.quality !== 'strict') return inferredInteraction(
+      'hydrogen-bond', left, 'donor', right, 'acceptor', distance, 'strict', 'directed'
+    );
+    if (reverse.quality === 'strict' && forward.quality !== 'strict') return inferredInteraction(
+      'hydrogen-bond', right, 'donor', left, 'acceptor', distance, 'strict', 'directed'
+    );
+    if (forward.quality === 'strict' && reverse.quality === 'strict' && forward.score !== reverse.score) {
+      const selected = forward.score > reverse.score
+        ? [left, right] : [right, left];
+      return inferredInteraction(
+        'hydrogen-bond', selected[0], 'donor', selected[1], 'acceptor', distance, 'strict', 'directed'
+      );
+    }
+    return inferredInteraction(
+      'hydrogen-bond', left, 'donor-or-acceptor', right, 'donor-or-acceptor',
+      distance, 'possible', 'ambiguous'
+    );
+  }
+
+  function hydrogenBondDirection(donor, acceptor, adjacency) {
+    if (!isHydrogenBondAcceptor(acceptor, adjacency)) return null;
+    if (!['N', 'O', 'S'].includes(donor.element)) return null;
+    const hydrogens = [...adjacency[donor.index]].map(index => adjacencyAtom(index, donor, acceptor))
+      .filter(atom => atom?.element === 'H');
+    if (hydrogens.length) {
+      let best = null;
+      for (const hydrogen of hydrogens) {
+        const hydrogenDistance = magnitude(subtract(hydrogen, acceptor));
+        if (hydrogenDistance > 2.6) continue;
+        const angle = angleAt(hydrogen, donor, acceptor);
+        if (angle < 120) continue;
+        const score = angle * 10 - hydrogenDistance;
+        if (!best || score > best.score) best = { quality: 'strict', score };
+      }
+      return best;
+    }
+    return isPossibleHydrogenBondDonor(donor) ? { quality: 'possible', score: 0 } : null;
+
+    function adjacencyAtom(index) { return adjacency._atoms?.[index] || null; }
+  }
+
+  function isPossibleHydrogenBondDonor(atom) {
+    const residue = String(atom.resn || '').toUpperCase();
+    const name = canonicalAtomName(atom.name);
+    if (isWater(atom)) return atom.element === 'O';
+    if (STANDARD_AMINO_ACIDS.has(residue)) {
+      if (name === 'N') return residue !== 'PRO';
+      return AMINO_DONORS[residue]?.has(name) || false;
+    }
+    return NUCLEOTIDE_DONORS[residue]?.has(name) || false;
+  }
+
+  function isHydrogenBondAcceptor(atom, adjacency) {
+    if (!['N', 'O', 'S'].includes(atom.element) || Number(atom.formalCharge) > 0) return false;
+    if (Number(atom.formalCharge) < 0) return true;
+    const residue = String(atom.resn || '').toUpperCase();
+    const name = canonicalAtomName(atom.name);
+    if (isWater(atom)) return atom.element === 'O';
+    if (STANDARD_AMINO_ACIDS.has(residue)) {
+      if (name === 'O' || name === 'OXT') return true;
+      if (residue === 'HIS' && ['ND1', 'NE2'].includes(name)) {
+        const residueAtoms = adjacency._atoms?.filter(candidate => candidate.residueIndex === atom.residueIndex) || [];
+        const residuePositive = residueAtoms.some(candidate => Number(candidate.formalCharge) > 0);
+        const hasHydrogen = [...adjacency[atom.index]].some(index => adjacency._atoms?.[index]?.element === 'H');
+        return !residuePositive && !hasHydrogen;
+      }
+      return AMINO_ACCEPTORS[residue]?.has(name) || false;
+    }
+    return NUCLEOTIDE_ACCEPTORS[residue]?.has(name) || NUCLEOTIDE_ACCEPTOR_ATOMS.has(name) || false;
+  }
+
+  function canonicalAtomName(value) {
+    return String(value || '').trim().toUpperCase().replace(/\*$/, "'");
+  }
+
+  function chargedSite(atom) {
+    const residue = String(atom.resn || '').toUpperCase();
+    const name = canonicalAtomName(atom.name);
+    let sign = null;
+    let siteName = null;
+    if (atom.formalCharge != null) sign = Math.sign(Number(atom.formalCharge));
+    if (residue === 'ARG' && ['NE', 'NH1', 'NH2'].includes(name)) siteName = 'arginine-guanidinium';
+    else if (residue === 'LYS' && name === 'NZ') siteName = 'lysine-amino';
+    else if (residue === 'ASP' && ['OD1', 'OD2'].includes(name)) siteName = 'aspartate-carboxylate';
+    else if (residue === 'GLU' && ['OE1', 'OE2'].includes(name)) siteName = 'glutamate-carboxylate';
+    if (atom.formalCharge == null) {
+      if (siteName === 'arginine-guanidinium' || siteName === 'lysine-amino') sign = 1;
+      else if (siteName === 'aspartate-carboxylate' || siteName === 'glutamate-carboxylate') sign = -1;
+    }
+    if (!sign) return null;
+    return {
+      sign,
+      key: siteName
+        ? `${atom.model}|${atom.residueIndex}|${siteName}`
+        : `${atom.model}|${atom.index}|formal-charge`
+    };
+  }
+
+  function inferredInteraction(type, left, leftRole, right, rightRole, distance, quality, direction = null) {
+    return {
+      type,
+      participants: [
+        { atomIndex: left.index, role: leftRole },
+        { atomIndex: right.index, role: rightRole }
+      ],
+      direction: type === 'hydrogen-bond' ? direction : null,
+      distance,
+      reportedDistance: null,
+      sources: [{ kind: 'inferred', classifierVersion: INTERACTION_CLASSIFIER_VERSION }],
+      heuristicQuality: quality,
+      model: left.model,
+      hasWaterEndpoint: isWater(left) || isWater(right)
+    };
+  }
+
+  function hasShortCovalentPath(leftIndex, rightIndex, adjacency) {
+    if (adjacency[leftIndex].has(rightIndex)) return true;
+    for (const neighbor of adjacency[leftIndex]) if (adjacency[neighbor]?.has(rightIndex)) return true;
+    return false;
+  }
+
+  function angleAt(center, left, right) {
+    const a = subtract(left, center);
+    const b = subtract(right, center);
+    const denominator = magnitude(a) * magnitude(b);
+    if (denominator < 1e-12) return 0;
+    return Math.acos(clamp(dot(a, b) / denominator, -1, 1)) * 180 / Math.PI;
+  }
+
+  function interactionDedupKey(record) {
+    return `${record.type}|${canonicalInteractionPairKey(record)}`;
+  }
+
+  function canonicalInteractionPairKey(record) {
+    const [left, right] = record.participants.map(participant => participant.atomIndex);
+    return `${Math.min(left, right)}:${Math.max(left, right)}`;
+  }
+
+  function compareInteractions(left, right) {
+    const distanceDifference = Number(left.distance) - Number(right.distance);
+    if (Math.abs(distanceDifference) > 1e-12) return distanceDifference;
+    const pairDifference = canonicalInteractionPairKey(left)
+      .localeCompare(canonicalInteractionPairKey(right), 'en', { numeric: true });
+    return pairDifference || left.type.localeCompare(right.type);
+  }
+
+  function interactionPartitionKey(record) {
+    return `${record.type}|${record.hasWaterEndpoint ? 'water' : 'dry'}`;
+  }
+
+  function accumulateInteraction(partitions, record) {
+    const key = interactionPartitionKey(record);
+    let partition = partitions.get(key);
+    if (!partition) {
+      partition = { count: 0, explicit: 0, inferred: 0, heap: [] };
+      partitions.set(key, partition);
+    }
+    partition.count += 1;
+    if (record.heuristicQuality == null) partition.explicit += 1;
+    else partition.inferred += 1;
+    heapRetainNearest(partition.heap, record, INTERACTION_PARTITION_LIMIT);
+  }
+
+  function heapRetainNearest(heap, record, limit) {
+    if (heap.length < limit) {
+      heap.push(record);
+      let index = heap.length - 1;
+      while (index > 0) {
+        const parent = Math.floor((index - 1) / 2);
+        if (compareInteractions(heap[index], heap[parent]) <= 0) break;
+        [heap[index], heap[parent]] = [heap[parent], heap[index]];
+        index = parent;
+      }
+      return;
+    }
+    if (compareInteractions(record, heap[0]) >= 0) return;
+    heap[0] = record;
+    let index = 0;
+    while (true) {
+      const left = index * 2 + 1;
+      const right = left + 1;
+      let worst = index;
+      if (left < heap.length && compareInteractions(heap[left], heap[worst]) > 0) worst = left;
+      if (right < heap.length && compareInteractions(heap[right], heap[worst]) > 0) worst = right;
+      if (worst === index) break;
+      [heap[index], heap[worst]] = [heap[worst], heap[index]];
+      index = worst;
+    }
+  }
+
+  function heapSorted(heap) { return [...heap].sort(compareInteractions); }
+
+  function emptyInteractionPartitionCounts() {
+    return {
+      hydrogenBonds: { withoutWater: 0, withWater: 0 },
+      saltBridges: { withoutWater: 0, withWater: 0 }
+    };
+  }
+
+  function partitionCountObject(partitions) {
+    const counts = emptyInteractionPartitionCounts();
+    counts.hydrogenBonds.withoutWater = partitions.get('hydrogen-bond|dry')?.count || 0;
+    counts.hydrogenBonds.withWater = partitions.get('hydrogen-bond|water')?.count || 0;
+    counts.saltBridges.withoutWater = partitions.get('salt-bridge|dry')?.count || 0;
+    counts.saltBridges.withWater = partitions.get('salt-bridge|water')?.count || 0;
+    return counts;
+  }
+
+  function interactionCountSummary(partitions) {
+    let total = 0, explicit = 0, inferred = 0, hydrogenBonds = 0, saltBridges = 0, withWater = 0;
+    for (const [key, partition] of partitions) {
+      total += partition.count;
+      explicit += partition.explicit;
+      inferred += partition.inferred;
+      if (key.startsWith('hydrogen-bond|')) hydrogenBonds += partition.count;
+      else saltBridges += partition.count;
+      if (key.endsWith('|water')) withWater += partition.count;
+    }
+    return { total, hydrogenBonds, saltBridges, withWater, withoutWater: total - withWater, explicit, inferred };
+  }
+
+  function serializeInteractionAnalysis(analysis, atoms, structureId) {
+    return {
+      structureId,
+      classifierVersion: analysis.classifierVersion,
+      interactions: analysis.interactions.map(record => ({
+        ...structuredClone(record),
+        participants: record.participants.map(participant => ({
+          ...participant,
+          selector: { kind: 'atom', ...selectorForAtom(atoms[participant.atomIndex], 'atom', structureId) }
+        }))
+      })),
+      counts: structuredClone(analysis.counts),
+      partitionCounts: structuredClone(analysis.partitionCounts),
+      search: structuredClone(analysis.search)
+    };
+  }
+
+  function selectInteractions(analysis, value, limitValue = INTERACTION_RENDER_LIMIT) {
+    const state = normalizeInteractions(value);
+    const limit = Math.max(0, Math.min(INTERACTION_RENDER_LIMIT, Number(limitValue) || INTERACTION_RENDER_LIMIT));
+    const typeEnabled = type => type === 'hydrogen-bond'
+      ? state.types.hydrogenBonds : state.types.saltBridges;
+    const selected = state.enabled
+      ? (analysis?.interactions || []).filter(record =>
+        typeEnabled(record.type) && (state.includeWater || !record.hasWaterEndpoint)
+      ).sort(compareInteractions).slice(0, limit)
+      : [];
+    const partitionCounts = analysis?.partitionCounts || emptyInteractionPartitionCounts();
+    let total = 0;
+    if (state.enabled && state.types.hydrogenBonds) {
+      total += partitionCounts.hydrogenBonds.withoutWater;
+      if (state.includeWater) total += partitionCounts.hydrogenBonds.withWater;
+    }
+    if (state.enabled && state.types.saltBridges) {
+      total += partitionCounts.saltBridges.withoutWater;
+      if (state.includeWater) total += partitionCounts.saltBridges.withWater;
+    }
+    return {
+      interactions: selected,
+      total,
+      rendered: selected.length,
+      omitted: Math.max(0, total - selected.length),
+      truncated: Boolean(analysis?.search?.truncated),
+      partial: Boolean(analysis?.search?.partial)
+    };
   }
 
   function validCamera(camera) {
@@ -3875,6 +4535,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     if ('background' in snapshot) snapshot.background = String(snapshot.background || '#07111f');
     if ('showHydrogens' in snapshot) snapshot.showHydrogens = Boolean(snapshot.showHydrogens);
     if ('showWater' in snapshot) snapshot.showWater = Boolean(snapshot.showWater);
+    if ('interactions' in snapshot) snapshot.interactions = normalizeInteractions(snapshot.interactions);
     if ('selection' in snapshot) snapshot.selection = snapshot.selection && typeof snapshot.selection === 'object'
       ? structuredClone(snapshot.selection) : null;
     if ('customColors' in snapshot) snapshot.customColors = Array.isArray(snapshot.customColors)
@@ -4207,6 +4868,8 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     residueDescriptor, buildStructureHierarchy, representativeAtom,
     LIGAND_ANALYSIS_DEFAULTS, normalizeLigandAnalysis, ligandSelector, ligandKey, ligandLabel,
     groupLigands, findLigand, analyzeLigandPocket,
+    INTERACTION_DEFAULTS, INTERACTION_CLASSIFIER_VERSION, normalizeInteractions,
+    analyzeInteractions, selectInteractions,
     SAVED_VIEW_SCENE_FIELDS, normalizeSavedViews, normalizeSavedViewSnapshot,
     captureSavedViewSnapshot, applySavedViewSnapshot, reorderSavedViews, validCamera
   };
@@ -4228,7 +4891,12 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       this.parsed = null;
       this.model = null;
       this.models = [];
-      this.cacheKey = '';
+      this.structureSnapshot = null;
+      this.interactionAnalysis = null;
+      this.interactionDisplay = null;
+      this.interactionShapes = [];
+      this.foregroundShapes = [];
+      this.foregroundLabels = [];
       this.surfaceGeneration = 0;
       this.applyingDocument = false;
       this.lastReportedView = '';
@@ -4251,14 +4919,22 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
 
     setDocument(doc, { fit = false } = {}) {
       this.doc = doc;
-      const key = `${doc.structure.id}:${doc.structure.data.length}:${doc.structure.data.slice(0, 60)}`;
-      const structureChanged = key !== this.cacheKey;
+      const structureChanged = !this.structureSnapshot
+        || this.structureSnapshot.id !== doc.structure.id
+        || this.structureSnapshot.format !== doc.structure.format
+        || this.structureSnapshot.data !== doc.structure.data;
       this.applyingDocument = true;
 
       try {
         if (structureChanged) {
           this.parsed = Core.parseStructure(doc.structure.data, doc.structure.format);
-          this.cacheKey = key;
+          this.structureSnapshot = {
+            id: doc.structure.id,
+            format: doc.structure.format,
+            data: doc.structure.data
+          };
+          this.interactionAnalysis = null;
+          this.interactionDisplay = null;
           this.surfaceGeneration += 1;
           this.viewer.removeAllSurfaces();
           this.viewer.removeAllLabels();
@@ -4308,6 +4984,9 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       this.viewer.setBackgroundColor(this.doc.scene.background, 1);
       this.viewer.removeAllLabels();
       this.viewer.removeAllShapes();
+      this.interactionShapes = [];
+      this.foregroundShapes = [];
+      this.foregroundLabels = [];
       this.viewer.removeAllSurfaces();
       this.viewer.setStyle({}, {});
       for (const model of this.models) model?.setColorByFunction({}, colorfunc);
@@ -4347,6 +5026,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
 
       this.applySavedSelectionHighlight();
       this.applyLigandAnalysis();
+      this.applyInteractions();
       this.applySelectionHighlight();
       this.applyMeasurements();
       this.applyMeasurementDraft();
@@ -4357,7 +5037,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       });
     }
 
-    applySelectionHighlight() {
+    applySelectionHighlight(includeAtomStyle = true) {
       const selector = this.doc.scene.selection?.selector;
       if (!selector) return;
       const resolution = Core.resolveUniqueAtomSelector(selector, this.parsed.atoms, this.doc.structure.id);
@@ -4365,11 +5045,13 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       const atom = resolution.atom;
 
       const selection = this.selectionForAtoms([atom]);
-      this.viewer.addStyle(selection, {
-        stick: { radius: .28, color: '#ffe66d' },
-        sphere: { scale: .5, color: '#ffe66d' }
-      });
-      this.viewer.addLabel(Core.atomLabel(atom), {
+      if (includeAtomStyle) {
+        this.viewer.addStyle(selection, {
+          stick: { radius: .28, color: '#ffe66d' },
+          sphere: { scale: .5, color: '#ffe66d' }
+        });
+      }
+      const label = this.viewer.addLabel(Core.atomLabel(atom), {
         position: { x: atom.x, y: atom.y, z: atom.z },
         fontColor: '#07111f',
         backgroundColor: '#ffe66d',
@@ -4380,6 +5062,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         padding: 4,
         inFront: true
       });
+      if (label) this.foregroundLabels.push(label);
     }
 
     applySavedSelectionHighlight() {
@@ -4433,6 +5116,44 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       }
     }
 
+    applyInteractions() {
+      this.interactionAnalysis = Core.analyzeInteractions(this.parsed, this.doc.structure.id);
+      this.interactionDisplay = Core.selectInteractions(this.interactionAnalysis, this.doc.scene.interactions);
+      for (const interaction of this.interactionDisplay.interactions) {
+        const left = this.parsed.atoms[interaction.participants[0]?.atomIndex];
+        const right = this.parsed.atoms[interaction.participants[1]?.atomIndex];
+        if (!left || !right || left.model !== right.model) continue;
+        const shape = this.viewer.addLine({
+          start: point(left),
+          end: point(right),
+          color: interaction.type === 'hydrogen-bond' ? '#49d7ff' : '#ffb84d',
+          dashed: true,
+          linewidth: interaction.type === 'hydrogen-bond' ? 1.8 : 2.1,
+          opacity: .88
+        });
+        if (shape) this.interactionShapes.push(shape);
+      }
+    }
+
+    updateInteractions() {
+      if (!this.doc || !this.parsed) return;
+      if (typeof this.viewer.removeShape === 'function') {
+        for (const shape of this.interactionShapes) this.viewer.removeShape(shape);
+        for (const shape of this.foregroundShapes) this.viewer.removeShape(shape);
+      }
+      if (typeof this.viewer.removeLabel === 'function') {
+        for (const label of this.foregroundLabels) this.viewer.removeLabel(label);
+      }
+      this.interactionShapes = [];
+      this.foregroundShapes = [];
+      this.foregroundLabels = [];
+      this.applyInteractions();
+      this.applySelectionHighlight(false);
+      this.applyMeasurements();
+      this.applyMeasurementDraft(false);
+      this.viewer.render();
+    }
+
     applyMeasurements() {
       for (const measurement of this.doc.scene.measurements || []) {
         const atoms = Core.measurementAtoms(measurement, this.parsed.atoms, this.doc.structure.id);
@@ -4440,42 +5161,49 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         const active = measurement.id === this.activeMeasurementId;
         const color = active ? '#ffcf5a' : '#49d7ff';
         for (let index = 1; index < atoms.length; index++) {
-          this.viewer.addLine({
+          const line = this.viewer.addLine({
             start: point(atoms[index - 1]), end: point(atoms[index]),
             color, dashed: true, linewidth: active ? 3 : 2
           });
+          if (line) this.foregroundShapes.push(line);
         }
         for (const atom of atoms) {
-          this.viewer.addSphere({ center: point(atom), radius: active ? .18 : .13, color, opacity: .94 });
+          const sphere = this.viewer.addSphere({ center: point(atom), radius: active ? .18 : .13, color, opacity: .94 });
+          if (sphere) this.foregroundShapes.push(sphere);
         }
         const value = Core.formatMeasurementValue(measurement.type, Core.measurementValue(measurement.type, atoms));
         const label = String(measurement.label || '').trim();
-        this.viewer.addLabel(label ? `${label}: ${value}` : value, {
+        const renderedLabel = this.viewer.addLabel(label ? `${label}: ${value}` : value, {
           position: measurementLabelPosition(measurement.type, atoms),
           fontColor: '#07111f', backgroundColor: color, backgroundOpacity: .92,
           borderColor: '#ffffff', borderThickness: active ? 2 : 1,
           fontSize: active ? 13 : 11, padding: 4, inFront: true
         });
+        if (renderedLabel) this.foregroundLabels.push(renderedLabel);
       }
     }
 
-    applyMeasurementDraft() {
+    applyMeasurementDraft(includeAtomStyles = true) {
       if (!this.measurementDraft.length) return;
       for (let index = 0; index < this.measurementDraft.length; index++) {
         const atom = this.measurementDraft[index];
-        this.viewer.addStyle(this.to3DSelection(Core.selectorForAtom(atom, 'atom', this.doc.structure.id)), {
-          stick: { radius: .3, color: '#ff5e83' }, sphere: { scale: .54, color: '#ff5e83' }
-        });
-        this.viewer.addLabel(String(index + 1), {
+        if (includeAtomStyles) {
+          this.viewer.addStyle(this.to3DSelection(Core.selectorForAtom(atom, 'atom', this.doc.structure.id)), {
+            stick: { radius: .3, color: '#ff5e83' }, sphere: { scale: .54, color: '#ff5e83' }
+          });
+        }
+        const label = this.viewer.addLabel(String(index + 1), {
           position: point(atom), fontColor: '#ffffff', backgroundColor: '#d92d57',
           backgroundOpacity: .96, borderColor: '#ffffff', borderThickness: 1,
           fontSize: 12, padding: 4, inFront: true
         });
+        if (label) this.foregroundLabels.push(label);
         if (index > 0) {
-          this.viewer.addLine({
+          const line = this.viewer.addLine({
             start: point(this.measurementDraft[index - 1]), end: point(atom),
             color: '#ff5e83', dashed: true, linewidth: 3
           });
+          if (line) this.foregroundShapes.push(line);
         }
       }
     }
@@ -5090,6 +5818,10 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     'ligand-select', 'ligand-cutoff', 'ligand-cutoff-value', 'ligand-show-ligand',
     'ligand-show-pocket', 'ligand-show-contacts', 'ligand-polar-only', 'ligand-focus',
     'ligand-analysis-note', 'ligand-analysis-summary', 'empty-pocket', 'ligand-residue-list',
+    'interactions-button', 'interactions-ribbon-value', 'interactions-enabled',
+    'interaction-hydrogen-bonds', 'interaction-salt-bridges', 'interaction-include-water',
+    'interaction-summary', 'interaction-provenance', 'interaction-truncation',
+    'interaction-legend', 'interaction-legend-hydrogen', 'interaction-legend-salt',
     'metadata-button', 'metadata-ribbon-value', 'metadata-source', 'metadata-details',
     'metadata-entities-section', 'metadata-entities', 'metadata-citation-section', 'metadata-citation',
     'quality-stats', 'quality-observations',
@@ -5124,6 +5856,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     show: 'Show and hide', inspect: 'Selection inspector', measurements: 'Measurements',
     navigator: 'Structure navigator', 'saved-selections': 'Named selections',
     ligands: 'Ligands and pocket', metadata: 'Metadata and quality',
+    interactions: 'Interactions',
     'saved-views': 'Saved views and story'
   };
 
@@ -5158,7 +5891,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     doc.title = state.title; doc.structure = state.structure; doc.scene = state.scene;
   }
 
-  function commit(change, { history = true, fit = false, source = 'browser' } = {}) {
+  function commit(change, { history = true, fit = false, source = 'browser', interactionOnly = false } = {}) {
     if (history) {
       undoStack.push(snapshot());
       if (undoStack.length > 60) undoStack.shift();
@@ -5166,7 +5899,11 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     }
     change();
     touchDocument(source, true);
-    refresh({ fit });
+    if (interactionOnly) {
+      renderer.updateInteractions();
+      syncControls();
+      syncInteractions();
+    } else refresh({ fit });
   }
 
   function dispatch(command, options = {}) {
@@ -5228,6 +5965,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     syncSavedSelections();
     syncNavigator();
     syncLigandAnalysis();
+    syncInteractions();
     syncMetadata();
     syncSavedViews();
     syncStory();
@@ -5842,6 +6580,60 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       type: 'set-ligand-analysis', ligandAnalysis: normalized
     }), { source });
     return structuredClone(doc.scene.ligandAnalysis);
+  }
+
+  function setInteractions(changes = {}, source = 'browser') {
+    const next = {
+      ...doc.scene.interactions,
+      ...changes,
+      types: {
+        ...doc.scene.interactions.types,
+        ...(changes.types && typeof changes.types === 'object' ? changes.types : {})
+      }
+    };
+    const normalized = Core.normalizeInteractions(next);
+    commit(() => Core.applyDocumentCommand(doc, {
+      type: 'set-interactions', interactions: normalized
+    }), { source, interactionOnly: true });
+    return structuredClone(doc.scene.interactions);
+  }
+
+  function interactionResult() {
+    const analysis = parsed
+      ? Core.analyzeInteractions(parsed, doc.structure.id)
+      : Core.analyzeInteractions(null, doc.structure.id);
+    return { analysis, display: Core.selectInteractions(analysis, doc.scene.interactions) };
+  }
+
+  function syncInteractions() {
+    const state = doc.scene.interactions;
+    elements['interactions-enabled'].checked = state.enabled;
+    elements['interaction-hydrogen-bonds'].checked = state.types.hydrogenBonds;
+    elements['interaction-salt-bridges'].checked = state.types.saltBridges;
+    elements['interaction-include-water'].checked = state.includeWater;
+    elements['interaction-hydrogen-bonds'].disabled = !state.enabled;
+    elements['interaction-salt-bridges'].disabled = !state.enabled;
+    elements['interaction-include-water'].disabled = !state.enabled;
+    const { analysis, display } = interactionResult();
+    elements['interactions-ribbon-value'].textContent = state.enabled
+      ? `${display.total.toLocaleString()} visible` : 'Off';
+    elements['interaction-summary'].textContent = state.enabled
+      ? `${display.total.toLocaleString()} qualifying interaction${display.total === 1 ? '' : 's'} · ${display.rendered.toLocaleString()} drawn`
+      : `${analysis.counts.total.toLocaleString()} available · overlay hidden`;
+    elements['interaction-provenance'].textContent = [
+      `${analysis.counts.hydrogenBonds.toLocaleString()} hydrogen bond${analysis.counts.hydrogenBonds === 1 ? '' : 's'}`,
+      `${analysis.counts.saltBridges.toLocaleString()} salt bridge${analysis.counts.saltBridges === 1 ? '' : 's'}`,
+      `${analysis.counts.explicit.toLocaleString()} explicit`,
+      `${analysis.counts.inferred.toLocaleString()} inferred`
+    ].join(' · ');
+    const notices = [];
+    if (analysis.search.truncated) notices.push('Candidate safety limit reached; counts and displayed results are partial.');
+    if (display.omitted) notices.push(`${display.omitted.toLocaleString()} qualifying interactions are omitted by the 500-line display cap.`);
+    elements['interaction-truncation'].hidden = !notices.length;
+    elements['interaction-truncation'].textContent = notices.join(' ');
+    elements['interaction-legend'].hidden = !state.enabled || !display.rendered;
+    elements['interaction-legend-hydrogen'].hidden = !state.types.hydrogenBonds;
+    elements['interaction-legend-salt'].hidden = !state.types.saltBridges;
   }
 
   function focusLigandAnalysis() {
@@ -7044,6 +7836,10 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     try { focusLigandAnalysis(); }
     catch (error) { toast(error.message, 'error'); }
   });
+  elements['interactions-enabled'].addEventListener('change', event => setInteractions({ enabled: event.target.checked }));
+  elements['interaction-hydrogen-bonds'].addEventListener('change', event => setInteractions({ types: { hydrogenBonds: event.target.checked } }));
+  elements['interaction-salt-bridges'].addEventListener('change', event => setInteractions({ types: { saltBridges: event.target.checked } }));
+  elements['interaction-include-water'].addEventListener('change', event => setInteractions({ includeWater: event.target.checked }));
   elements['create-saved-view'].addEventListener('click', () => {
     const view = createSavedView();
     toast(`Captured “${view.title}”`, 'success');
@@ -7160,6 +7956,24 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       const result = ligandAnalysisResult();
       return structuredClone({ state: doc.scene.ligandAnalysis, ...serializeLigandAnalysisResult(result) });
     },
+    getInteractions() {
+      const { analysis, display } = interactionResult();
+      return structuredClone({
+        state: doc.scene.interactions,
+        counts: analysis.counts,
+        partitionCounts: analysis.partitionCounts,
+        summary: {
+          total: display.total,
+          rendered: display.rendered,
+          omitted: display.omitted,
+          partial: display.partial
+        },
+        interactions: analysis.interactions,
+        visibleInteractions: display.interactions,
+        search: analysis.search,
+        classifierVersion: analysis.classifierVersion
+      });
+    },
     getMetadata() { return structuredClone(doc.structure.metadata); },
     getDataQuality() { return structuredClone(currentQuality); },
     getStructureSummary() {
@@ -7233,6 +8047,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       );
       return structuredClone(serializeLigandAnalysisResult(result));
     },
+    setInteractions(changes) { return setInteractions(changes || {}, 'agent'); },
     createSavedView(options) { return createSavedView(options || {}, 'agent'); },
     updateSavedView(id, changes) { return updateSavedView(id, changes || {}, 'agent'); },
     recaptureSavedView(id) { return updateSavedView(id, { recapture: true }, 'agent'); },

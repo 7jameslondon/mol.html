@@ -67,7 +67,8 @@ assert(doc.format === 'molhtml/document' && doc.version === 1, 'document format 
 assert(doc.modified === '2026-07-28T00:00:00.000Z' && doc.modifiedBy === 'build', 'starter template metadata is deterministic');
 assert(doc.structure?.format === 'pdb' && doc.structure.data.includes('\nATOM'), 'PDB coordinates are embedded in the file');
 assert(!('topology' in doc.structure) && !('coordinateSets' in doc.structure)
-  && !('assemblies' in doc.structure) && !('indexes' in doc.structure),
+  && !('assemblies' in doc.structure) && !('indexes' in doc.structure)
+  && !('interactions' in doc.structure),
   'derived runtime topology and dense indexes are excluded from the serialized document');
 const coordinateLines = doc.structure.data.trimEnd().split('\n');
 assert(coordinateLines.filter(line => line.startsWith('ATOM  ')).length === 486, 'starter includes all 486 DNA atoms from 1BNA');
@@ -86,7 +87,10 @@ assert(doc.structure.source?.kind === 'rcsb-pdb'
   'starter embeds clear RCSB metadata and coordinate provenance');
 assert(doc.scene?.camera && 'view' in doc.scene.camera && Array.isArray(doc.scene.customColors)
   && Array.isArray(doc.scene.measurements) && Array.isArray(doc.scene.savedSelections)
-  && Array.isArray(doc.scene.savedViews) && doc.scene.ligandAnalysis?.cutoff === 4,
+  && Array.isArray(doc.scene.savedViews) && doc.scene.ligandAnalysis?.cutoff === 4
+  && doc.scene.interactions?.enabled === false
+  && doc.scene.interactions?.types?.hydrogenBonds === true
+  && doc.scene.interactions?.types?.saltBridges === true,
   'scene state is embedded and editable');
 
 const legacyProductStem = ['mol', 'view'].join('');

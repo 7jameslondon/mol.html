@@ -94,7 +94,11 @@ for (const colorMode of ['chain', 'instance', 'entity', 'role']) {
 const validV1 = {
   format: 'molhtml/document', version: 1, documentId: 'legacy', revision: 1,
   structure: { id: 'structure-1', format: 'pdb', data: 'ATOM fixture', futureStructureField: true },
-  scene: { representation: 'sticks', colorMode: 'chain', background: '#07111f', futureSceneField: true },
+  scene: {
+    representation: 'sticks', colorMode: 'chain', background: '#07111f',
+    interactions: { enabled: false, types: { hydrogenBonds: true, saltBridges: true }, includeWater: false },
+    futureSceneField: true
+  },
   futureDocumentField: { preserved: true }
 };
 const validV2 = {
@@ -130,10 +134,17 @@ const validV2 = {
       selectedLigand: { structureId: 'structure-2', model: 1, chain: 'B', resi: 201, resn: 'PIP' },
       cutoff: 4, showLigand: true, showPocket: true, showContacts: true, polarOnly: false
     },
+    interactions: {
+      enabled: true,
+      types: { hydrogenBonds: true, saltBridges: false, futureType: true },
+      includeWater: true,
+      futureInteractionField: true
+    },
     savedViews: [{
       id: 'view-1', title: 'Ligand', order: 0, structureId: 'structure-2',
       snapshot: {
         representation: 'sticks',
+        interactions: { enabled: true, types: { hydrogenBonds: true, saltBridges: false }, includeWater: false },
         selection: {
           kind: 'atom',
           selector: { structureId: 'structure-2', sourceIdentity: { modelNumber: 1, atomSiteId: '9' } }
@@ -155,6 +166,10 @@ assert.deepEqual(schemaErrors(v2, v2, validV2), [], 'a representative identity-a
 assert.match(schemaErrors(v2, v2, { ...validV2, version: 1 }).join('\n'), /constant 2/);
 assert.match(schemaErrors(v2, v2, { ...validV2, structure: { ...validV2.structure, format: 'bcif' } }).join('\n'), /enum/);
 assert.match(schemaErrors(v2, v2, { ...validV2, scene: { ...validV2.scene, background: 'navy' } }).join('\n'), /does not match/);
+assert.ok(schemaErrors(v2, v2, {
+  ...validV2,
+  scene: { ...validV2.scene, interactions: { ...validV2.scene.interactions, enabled: 'yes' } }
+}).length, 'interaction visibility fields require booleans');
 
 const withoutCurrentStructure = structuredClone(validV2);
 delete withoutCurrentStructure.scene.selection.selector.structureId;

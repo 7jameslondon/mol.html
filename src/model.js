@@ -15,6 +15,17 @@
   const LIGAND_ANALYSIS_DEFAULTS = Object.freeze({
     cutoff: 4, showLigand: true, showPocket: true, showContacts: true, polarOnly: false
   });
+  const INTERACTION_DEFAULTS = Object.freeze({
+    enabled: false,
+    types: Object.freeze({ hydrogenBonds: true, saltBridges: true }),
+    includeWater: false
+  });
+  const INTERACTION_CLASSIFIER_VERSION = 'mvp-1';
+  const INTERACTION_PARTITION_LIMIT = 500;
+  const INTERACTION_RENDER_LIMIT = 500;
+  const INTERACTION_CANDIDATE_WORK_LIMIT = 10_000_000;
+  const INTERACTION_SALT_SITE_PAIR_LIMIT = 10_000;
+  const interactionAnalysisCache = new WeakMap();
   const MEASUREMENT_ATOM_COUNTS = Object.freeze({ distance: 2, angle: 3, dihedral: 4 });
   const REPRESENTATIONS = new Set(['cartoon', 'ball-and-stick', 'sticks', 'spacefill', 'lines', 'surface']);
   const COLOR_MODES = new Set(['element', 'chain', 'author-chain', 'instance', 'entity', 'role', 'residue', 'uniform']);
@@ -25,6 +36,7 @@
   });
   const SAVED_VIEW_SCENE_FIELDS = Object.freeze([
     'representation', 'colorMode', 'background', 'showHydrogens', 'showWater',
+    'interactions',
     'selection', 'customColors', 'activeAnalysis', 'analysisHighlight',
     'highlight', 'highlights', 'activeHighlight', 'activeLigandId', 'ligandHighlight'
   ]);
@@ -485,6 +497,7 @@
       measurements: normalizeMeasurements(doc.scene.measurements),
       savedSelections: normalizeSavedSelections(doc.scene.savedSelections),
       ligandAnalysis: normalizeLigandAnalysis(doc.scene.ligandAnalysis, doc.structure.id),
+      interactions: normalizeInteractions(doc.scene.interactions),
       savedViews: normalizeSavedViews(doc.scene.savedViews),
       camera: normalizeCamera(doc.scene.camera)
     });
@@ -537,6 +550,8 @@
       doc.scene.savedSelections = normalizeSavedSelections(command.savedSelections);
     } else if (type === 'set-ligand-analysis') {
       doc.scene.ligandAnalysis = normalizeLigandAnalysis(command.ligandAnalysis, doc.structure.id, true);
+    } else if (type === 'set-interactions') {
+      doc.scene.interactions = normalizeInteractions(command.interactions);
     } else if (type === 'set-saved-views') {
       doc.scene.savedViews = normalizeSavedViews(command.savedViews);
     } else if (type === 'set-camera') {
@@ -546,7 +561,8 @@
     } else if (type === 'reset-appearance') {
       Object.assign(doc.scene, {
         representation: 'ball-and-stick', colorMode: 'element', background: '#07111f',
-        showHydrogens: false, showWater: false, customColors: []
+        showHydrogens: false, showWater: false, customColors: [],
+        interactions: normalizeInteractions(null)
       });
     } else if (type === 'replace-structure') {
       if (!command.structure?.data) throw new Error('A replacement structure requires coordinate data.');
@@ -875,6 +891,24 @@
     return analysis;
   }
 
+  function normalizeInteractions(value) {
+    const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const sourceTypes = source.types && typeof source.types === 'object' && !Array.isArray(source.types)
+      ? source.types : {};
+    return {
+      ...source,
+      enabled: 'enabled' in source ? Boolean(source.enabled) : INTERACTION_DEFAULTS.enabled,
+      types: {
+        ...sourceTypes,
+        hydrogenBonds: 'hydrogenBonds' in sourceTypes
+          ? Boolean(sourceTypes.hydrogenBonds) : INTERACTION_DEFAULTS.types.hydrogenBonds,
+        saltBridges: 'saltBridges' in sourceTypes
+          ? Boolean(sourceTypes.saltBridges) : INTERACTION_DEFAULTS.types.saltBridges
+      },
+      includeWater: 'includeWater' in source ? Boolean(source.includeWater) : INTERACTION_DEFAULTS.includeWater
+    };
+  }
+
   function ligandSelector(atom, structureId) {
     const selector = {
       structureId, model: atom.model, chain: atom.chain, resi: atom.resi,
@@ -953,30 +987,12 @@
 
     const eligible = atoms.filter(atom => atom.model === ligand.model && atom.element !== 'H'
       && (atom.role === 'polymer' || (!atom.het && ['protein', 'nucleic'].includes(residueDescriptor(atom.resn).kind))));
-    const cellSize = cutoff;
-    const cells = requireStructureLayer().spatialIndex(atoms, cellSize).cells;
-    const eligibleIndices = new Set(eligible.map(atom => atom.index));
-    const cellKey = (model, x, y, z) => `${model}|${x}|${y}|${z}`;
-
     const contacts = [];
-    const seen = new Set();
-    let candidatePairs = 0;
-    for (const ligandAtom of ligand.atoms.filter(atom => atom.element !== 'H')) {
-      const cx = Math.floor(ligandAtom.x / cellSize);
-      const cy = Math.floor(ligandAtom.y / cellSize);
-      const cz = Math.floor(ligandAtom.z / cellSize);
-      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
-        const nearby = cells.get(cellKey(ligandAtom.model, cx + dx, cy + dy, cz + dz));
-        if (!nearby) continue;
-        for (const targetIndex of nearby) {
-          if (!eligibleIndices.has(targetIndex)) continue;
-          const targetAtom = atoms[targetIndex];
-          candidatePairs += 1;
-          const pairKey = `${ligandAtom.index}:${targetAtom.index}`;
-          if (seen.has(pairKey)) continue;
-          seen.add(pairKey);
-          const distance = magnitude(subtract(ligandAtom, targetAtom));
-          if (distance > cutoff || distance < .1) continue;
+    const search = requireStructureLayer().forEachNearbyPair(
+      atoms,
+      cutoff,
+      (ligandAtom, targetAtom, distance) => {
+          if (distance < .1) return;
           const vdwLimit = vdwRadius(ligandAtom.element) + vdwRadius(targetAtom.element) + .5;
           const close = distance <= Math.min(cutoff, vdwLimit);
           const polar = distance <= Math.min(cutoff, 3.5)
@@ -985,9 +1001,13 @@
             ligandAtom, targetAtom, distance, close, polar,
             classification: polar ? 'polar' : close ? 'close' : 'nearby'
           });
-        }
+      },
+      {
+        leftIndices: ligand.atoms.filter(atom => atom.element !== 'H').map(atom => atom.index),
+        rightIndices: eligible.map(atom => atom.index),
+        unique: false
       }
-    }
+    );
     contacts.sort((left, right) => left.distance - right.distance);
 
     const residueMap = new Map();
@@ -1011,7 +1031,463 @@
       residue.hasPolar ||= contact.polar;
     }
     const residues = [...residueMap.values()].sort((left, right) => left.minimumDistance - right.minimumDistance);
-    return { cutoff, ligand, residues, contacts, candidatePairs, indexedAtomCount: eligible.length };
+    return { cutoff, ligand, residues, contacts, candidatePairs: search.candidatePairs, indexedAtomCount: eligible.length };
+  }
+
+  const STANDARD_AMINO_ACIDS = new Set([
+    'ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE',
+    'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL'
+  ]);
+  const AMINO_DONORS = Object.freeze({
+    ARG: new Set(['NE', 'NH1', 'NH2']), ASN: new Set(['ND2']), GLN: new Set(['NE2']),
+    LYS: new Set(['NZ']), SER: new Set(['OG']), THR: new Set(['OG1']),
+    TRP: new Set(['NE1']), TYR: new Set(['OH'])
+  });
+  const AMINO_ACCEPTORS = Object.freeze({
+    ASN: new Set(['OD1']), ASP: new Set(['OD1', 'OD2']), GLN: new Set(['OE1']),
+    GLU: new Set(['OE1', 'OE2']), MET: new Set(['SD']), SER: new Set(['OG']),
+    THR: new Set(['OG1']), TYR: new Set(['OH'])
+  });
+  const NUCLEOTIDE_DONORS = Object.freeze({
+    A: new Set(['N6']), DA: new Set(['N6']), ADE: new Set(['N6']),
+    C: new Set(['N4']), DC: new Set(['N4']), CYT: new Set(['N4']),
+    G: new Set(['N1', 'N2']), DG: new Set(['N1', 'N2']), GUA: new Set(['N1', 'N2']),
+    T: new Set(['N3']), DT: new Set(['N3']), THY: new Set(['N3']),
+    U: new Set(['N3']), DU: new Set(['N3']), URA: new Set(['N3']), URI: new Set(['N3']),
+    I: new Set(['N1']), DI: new Set(['N1'])
+  });
+  const NUCLEOTIDE_ACCEPTORS = Object.freeze({
+    A: new Set(['N1', 'N3', 'N7']), DA: new Set(['N1', 'N3', 'N7']), ADE: new Set(['N1', 'N3', 'N7']),
+    C: new Set(['N3', 'O2']), DC: new Set(['N3', 'O2']), CYT: new Set(['N3', 'O2']),
+    G: new Set(['O6', 'N3', 'N7']), DG: new Set(['O6', 'N3', 'N7']), GUA: new Set(['O6', 'N3', 'N7']),
+    T: new Set(['O2', 'O4']), DT: new Set(['O2', 'O4']), THY: new Set(['O2', 'O4']),
+    U: new Set(['O2', 'O4']), DU: new Set(['O2', 'O4']), URA: new Set(['O2', 'O4']), URI: new Set(['O2', 'O4']),
+    I: new Set(['O6', 'N3', 'N7']), DI: new Set(['O6', 'N3', 'N7'])
+  });
+  const NUCLEOTIDE_ACCEPTOR_ATOMS = new Set(['OP1', 'OP2', 'O1P', 'O2P', "O2'", "O3'", "O4'", "O5'"]);
+
+  function analyzeInteractions(value, structureId = '') {
+    const parsed = Array.isArray(value) ? { atoms: value, bonds: [], interactions: [] } : value;
+    if (!parsed || !Array.isArray(parsed.atoms)) return emptyInteractionAnalysis(structureId);
+    let cached = interactionAnalysisCache.get(parsed);
+    if (!cached || cached.classifierVersion !== INTERACTION_CLASSIFIER_VERSION) {
+      cached = buildInteractionInventory(parsed);
+      interactionAnalysisCache.set(parsed, cached);
+    }
+    cached.serializedByStructureId ||= new Map();
+    if (!cached.serializedByStructureId.has(structureId)) {
+      cached.serializedByStructureId.set(structureId, serializeInteractionAnalysis(cached, parsed.atoms, structureId));
+    }
+    return cached.serializedByStructureId.get(structureId);
+  }
+
+  function emptyInteractionAnalysis(structureId) {
+    return {
+      structureId,
+      classifierVersion: INTERACTION_CLASSIFIER_VERSION,
+      interactions: [],
+      counts: interactionCountSummary(new Map()),
+      partitionCounts: emptyInteractionPartitionCounts(),
+      search: {
+        candidatePairs: 0, qualifyingPairs: 0, indexedAtomCount: 0,
+        candidateWorkLimit: INTERACTION_CANDIDATE_WORK_LIMIT,
+        saltSitePairLimit: INTERACTION_SALT_SITE_PAIR_LIMIT,
+        retainedSaltSitePairs: 0,
+        saltSitePairLimitReached: false,
+        retainedRecords: 0, retainedLimit: INTERACTION_PARTITION_LIMIT * 4,
+        truncated: false, partial: false, nearestComplete: true
+      }
+    };
+  }
+
+  function buildInteractionInventory(parsed) {
+    const atoms = parsed.atoms;
+    const adjacency = atoms.map(() => new Set());
+    adjacency._atoms = atoms;
+    for (const bond of parsed.bonds || []) {
+      const [left, right] = bond.atomIndices || [];
+      if (!atoms[left] || !atoms[right]) continue;
+      adjacency[left].add(right);
+      adjacency[right].add(left);
+    }
+    const partitions = new Map();
+    const explicitKeys = new Set();
+    const explicitByKey = new Map();
+    for (const sourceRecord of parsed.interactions || []) {
+      const record = normalizeExplicitInteraction(sourceRecord, atoms);
+      if (!record) continue;
+      const key = interactionDedupKey(record);
+      explicitKeys.add(key);
+      const existing = explicitByKey.get(key);
+      if (existing) {
+        existing.sources.push(...record.sources);
+        if (existing.reportedDistance == null) existing.reportedDistance = record.reportedDistance;
+      } else {
+        explicitByKey.set(key, record);
+        accumulateInteraction(partitions, record);
+      }
+    }
+
+    const saltSitePairs = new Map();
+    let saltSitePairLimitReached = false;
+    const search = requireStructureLayer().forEachNearbyPair(
+      atoms,
+      4,
+      (left, right, distance) => {
+        if (left.element === 'H' || right.element === 'H') return;
+        if (!requireStructureLayer().alternateLocationsCompatible(left, right)) return;
+        if (left.residueIndex === right.residueIndex) return;
+        if (hasShortCovalentPath(left.index, right.index, adjacency)) return;
+
+        if (distance >= 2.5 && distance <= 3.5) {
+          const hydrogenBond = classifyHydrogenBond(left, right, distance, adjacency);
+          if (hydrogenBond && !explicitKeys.has(interactionDedupKey(hydrogenBond))) {
+            accumulateInteraction(partitions, hydrogenBond);
+          }
+        }
+
+        const leftSite = chargedSite(left);
+        const rightSite = chargedSite(right);
+        if (!leftSite || !rightSite || leftSite.sign === rightSite.sign) return;
+        const positive = leftSite.sign > 0 ? { atom: left, site: leftSite } : { atom: right, site: rightSite };
+        const negative = leftSite.sign < 0 ? { atom: left, site: leftSite } : { atom: right, site: rightSite };
+        const sitePairKey = `${positive.site.key}|${negative.site.key}`;
+        const existing = saltSitePairs.get(sitePairKey);
+        if (!existing && saltSitePairs.size >= INTERACTION_SALT_SITE_PAIR_LIMIT) {
+          saltSitePairLimitReached = true;
+          return false;
+        }
+        const candidate = inferredInteraction(
+          'salt-bridge', positive.atom, 'positive', negative.atom, 'negative', distance, 'possible'
+        );
+        if (!existing || compareInteractions(candidate, existing) < 0) saltSitePairs.set(sitePairKey, candidate);
+      },
+      { compatibleAlternates: true, maxCandidatePairs: INTERACTION_CANDIDATE_WORK_LIMIT }
+    );
+
+    for (const record of saltSitePairs.values()) {
+      if (!explicitKeys.has(interactionDedupKey(record))) accumulateInteraction(partitions, record);
+    }
+    const interactions = [...partitions.values()].flatMap(partition => heapSorted(partition.heap));
+    interactions.sort(compareInteractions);
+    const truncated = search.truncated || saltSitePairLimitReached;
+    return {
+      classifierVersion: INTERACTION_CLASSIFIER_VERSION,
+      interactions,
+      partitionCounts: partitionCountObject(partitions),
+      counts: interactionCountSummary(partitions),
+      search: {
+        ...search,
+        candidateWorkLimit: INTERACTION_CANDIDATE_WORK_LIMIT,
+        saltSitePairLimit: INTERACTION_SALT_SITE_PAIR_LIMIT,
+        retainedSaltSitePairs: saltSitePairs.size,
+        saltSitePairLimitReached,
+        retainedRecords: interactions.length,
+        retainedLimit: INTERACTION_PARTITION_LIMIT * 4,
+        truncated,
+        partial: truncated,
+        nearestComplete: !truncated
+      }
+    };
+  }
+
+  function normalizeExplicitInteraction(value, atoms) {
+    if (!value || !['hydrogen-bond', 'salt-bridge'].includes(value.type) || !Array.isArray(value.participants)) return null;
+    const participants = value.participants.slice(0, 2).map(participant => ({
+      atomIndex: Number(participant?.atomIndex), role: String(participant?.role || 'participant')
+    }));
+    if (participants.length !== 2 || participants.some(participant => !atoms[participant.atomIndex])) return null;
+    const left = atoms[participants[0].atomIndex];
+    const right = atoms[participants[1].atomIndex];
+    return {
+      type: value.type,
+      participants,
+      direction: value.type === 'hydrogen-bond' ? (value.direction === 'directed' ? 'directed' : 'ambiguous') : null,
+      distance: Number.isFinite(Number(value.distance)) ? Number(value.distance) : magnitude(subtract(left, right)),
+      reportedDistance: Number.isFinite(Number(value.reportedDistance)) ? Number(value.reportedDistance) : null,
+      sources: Array.isArray(value.sources) ? structuredClone(value.sources) : [],
+      heuristicQuality: null,
+      model: Number(value.model) || left.model,
+      hasWaterEndpoint: isWater(left) || isWater(right)
+    };
+  }
+
+  function classifyHydrogenBond(left, right, distance, adjacency) {
+    const forward = hydrogenBondDirection(left, right, adjacency);
+    const reverse = hydrogenBondDirection(right, left, adjacency);
+    if (!forward && !reverse) return null;
+    if (forward && !reverse) return inferredInteraction(
+      'hydrogen-bond', left, 'donor', right, 'acceptor', distance, forward.quality, 'directed'
+    );
+    if (reverse && !forward) return inferredInteraction(
+      'hydrogen-bond', right, 'donor', left, 'acceptor', distance, reverse.quality, 'directed'
+    );
+    if (forward.quality === 'strict' && reverse.quality !== 'strict') return inferredInteraction(
+      'hydrogen-bond', left, 'donor', right, 'acceptor', distance, 'strict', 'directed'
+    );
+    if (reverse.quality === 'strict' && forward.quality !== 'strict') return inferredInteraction(
+      'hydrogen-bond', right, 'donor', left, 'acceptor', distance, 'strict', 'directed'
+    );
+    if (forward.quality === 'strict' && reverse.quality === 'strict' && forward.score !== reverse.score) {
+      const selected = forward.score > reverse.score
+        ? [left, right] : [right, left];
+      return inferredInteraction(
+        'hydrogen-bond', selected[0], 'donor', selected[1], 'acceptor', distance, 'strict', 'directed'
+      );
+    }
+    return inferredInteraction(
+      'hydrogen-bond', left, 'donor-or-acceptor', right, 'donor-or-acceptor',
+      distance, 'possible', 'ambiguous'
+    );
+  }
+
+  function hydrogenBondDirection(donor, acceptor, adjacency) {
+    if (!isHydrogenBondAcceptor(acceptor, adjacency)) return null;
+    if (!['N', 'O', 'S'].includes(donor.element)) return null;
+    const hydrogens = [...adjacency[donor.index]].map(index => adjacencyAtom(index, donor, acceptor))
+      .filter(atom => atom?.element === 'H');
+    if (hydrogens.length) {
+      let best = null;
+      for (const hydrogen of hydrogens) {
+        const hydrogenDistance = magnitude(subtract(hydrogen, acceptor));
+        if (hydrogenDistance > 2.6) continue;
+        const angle = angleAt(hydrogen, donor, acceptor);
+        if (angle < 120) continue;
+        const score = angle * 10 - hydrogenDistance;
+        if (!best || score > best.score) best = { quality: 'strict', score };
+      }
+      return best;
+    }
+    return isPossibleHydrogenBondDonor(donor) ? { quality: 'possible', score: 0 } : null;
+
+    function adjacencyAtom(index) { return adjacency._atoms?.[index] || null; }
+  }
+
+  function isPossibleHydrogenBondDonor(atom) {
+    const residue = String(atom.resn || '').toUpperCase();
+    const name = canonicalAtomName(atom.name);
+    if (isWater(atom)) return atom.element === 'O';
+    if (STANDARD_AMINO_ACIDS.has(residue)) {
+      if (name === 'N') return residue !== 'PRO';
+      return AMINO_DONORS[residue]?.has(name) || false;
+    }
+    return NUCLEOTIDE_DONORS[residue]?.has(name) || false;
+  }
+
+  function isHydrogenBondAcceptor(atom, adjacency) {
+    if (!['N', 'O', 'S'].includes(atom.element) || Number(atom.formalCharge) > 0) return false;
+    if (Number(atom.formalCharge) < 0) return true;
+    const residue = String(atom.resn || '').toUpperCase();
+    const name = canonicalAtomName(atom.name);
+    if (isWater(atom)) return atom.element === 'O';
+    if (STANDARD_AMINO_ACIDS.has(residue)) {
+      if (name === 'O' || name === 'OXT') return true;
+      if (residue === 'HIS' && ['ND1', 'NE2'].includes(name)) {
+        const residueAtoms = adjacency._atoms?.filter(candidate => candidate.residueIndex === atom.residueIndex) || [];
+        const residuePositive = residueAtoms.some(candidate => Number(candidate.formalCharge) > 0);
+        const hasHydrogen = [...adjacency[atom.index]].some(index => adjacency._atoms?.[index]?.element === 'H');
+        return !residuePositive && !hasHydrogen;
+      }
+      return AMINO_ACCEPTORS[residue]?.has(name) || false;
+    }
+    return NUCLEOTIDE_ACCEPTORS[residue]?.has(name) || NUCLEOTIDE_ACCEPTOR_ATOMS.has(name) || false;
+  }
+
+  function canonicalAtomName(value) {
+    return String(value || '').trim().toUpperCase().replace(/\*$/, "'");
+  }
+
+  function chargedSite(atom) {
+    const residue = String(atom.resn || '').toUpperCase();
+    const name = canonicalAtomName(atom.name);
+    let sign = null;
+    let siteName = null;
+    if (atom.formalCharge != null) sign = Math.sign(Number(atom.formalCharge));
+    if (residue === 'ARG' && ['NE', 'NH1', 'NH2'].includes(name)) siteName = 'arginine-guanidinium';
+    else if (residue === 'LYS' && name === 'NZ') siteName = 'lysine-amino';
+    else if (residue === 'ASP' && ['OD1', 'OD2'].includes(name)) siteName = 'aspartate-carboxylate';
+    else if (residue === 'GLU' && ['OE1', 'OE2'].includes(name)) siteName = 'glutamate-carboxylate';
+    if (atom.formalCharge == null) {
+      if (siteName === 'arginine-guanidinium' || siteName === 'lysine-amino') sign = 1;
+      else if (siteName === 'aspartate-carboxylate' || siteName === 'glutamate-carboxylate') sign = -1;
+    }
+    if (!sign) return null;
+    return {
+      sign,
+      key: siteName
+        ? `${atom.model}|${atom.residueIndex}|${siteName}`
+        : `${atom.model}|${atom.index}|formal-charge`
+    };
+  }
+
+  function inferredInteraction(type, left, leftRole, right, rightRole, distance, quality, direction = null) {
+    return {
+      type,
+      participants: [
+        { atomIndex: left.index, role: leftRole },
+        { atomIndex: right.index, role: rightRole }
+      ],
+      direction: type === 'hydrogen-bond' ? direction : null,
+      distance,
+      reportedDistance: null,
+      sources: [{ kind: 'inferred', classifierVersion: INTERACTION_CLASSIFIER_VERSION }],
+      heuristicQuality: quality,
+      model: left.model,
+      hasWaterEndpoint: isWater(left) || isWater(right)
+    };
+  }
+
+  function hasShortCovalentPath(leftIndex, rightIndex, adjacency) {
+    if (adjacency[leftIndex].has(rightIndex)) return true;
+    for (const neighbor of adjacency[leftIndex]) if (adjacency[neighbor]?.has(rightIndex)) return true;
+    return false;
+  }
+
+  function angleAt(center, left, right) {
+    const a = subtract(left, center);
+    const b = subtract(right, center);
+    const denominator = magnitude(a) * magnitude(b);
+    if (denominator < 1e-12) return 0;
+    return Math.acos(clamp(dot(a, b) / denominator, -1, 1)) * 180 / Math.PI;
+  }
+
+  function interactionDedupKey(record) {
+    return `${record.type}|${canonicalInteractionPairKey(record)}`;
+  }
+
+  function canonicalInteractionPairKey(record) {
+    const [left, right] = record.participants.map(participant => participant.atomIndex);
+    return `${Math.min(left, right)}:${Math.max(left, right)}`;
+  }
+
+  function compareInteractions(left, right) {
+    const distanceDifference = Number(left.distance) - Number(right.distance);
+    if (Math.abs(distanceDifference) > 1e-12) return distanceDifference;
+    const pairDifference = canonicalInteractionPairKey(left)
+      .localeCompare(canonicalInteractionPairKey(right), 'en', { numeric: true });
+    return pairDifference || left.type.localeCompare(right.type);
+  }
+
+  function interactionPartitionKey(record) {
+    return `${record.type}|${record.hasWaterEndpoint ? 'water' : 'dry'}`;
+  }
+
+  function accumulateInteraction(partitions, record) {
+    const key = interactionPartitionKey(record);
+    let partition = partitions.get(key);
+    if (!partition) {
+      partition = { count: 0, explicit: 0, inferred: 0, heap: [] };
+      partitions.set(key, partition);
+    }
+    partition.count += 1;
+    if (record.heuristicQuality == null) partition.explicit += 1;
+    else partition.inferred += 1;
+    heapRetainNearest(partition.heap, record, INTERACTION_PARTITION_LIMIT);
+  }
+
+  function heapRetainNearest(heap, record, limit) {
+    if (heap.length < limit) {
+      heap.push(record);
+      let index = heap.length - 1;
+      while (index > 0) {
+        const parent = Math.floor((index - 1) / 2);
+        if (compareInteractions(heap[index], heap[parent]) <= 0) break;
+        [heap[index], heap[parent]] = [heap[parent], heap[index]];
+        index = parent;
+      }
+      return;
+    }
+    if (compareInteractions(record, heap[0]) >= 0) return;
+    heap[0] = record;
+    let index = 0;
+    while (true) {
+      const left = index * 2 + 1;
+      const right = left + 1;
+      let worst = index;
+      if (left < heap.length && compareInteractions(heap[left], heap[worst]) > 0) worst = left;
+      if (right < heap.length && compareInteractions(heap[right], heap[worst]) > 0) worst = right;
+      if (worst === index) break;
+      [heap[index], heap[worst]] = [heap[worst], heap[index]];
+      index = worst;
+    }
+  }
+
+  function heapSorted(heap) { return [...heap].sort(compareInteractions); }
+
+  function emptyInteractionPartitionCounts() {
+    return {
+      hydrogenBonds: { withoutWater: 0, withWater: 0 },
+      saltBridges: { withoutWater: 0, withWater: 0 }
+    };
+  }
+
+  function partitionCountObject(partitions) {
+    const counts = emptyInteractionPartitionCounts();
+    counts.hydrogenBonds.withoutWater = partitions.get('hydrogen-bond|dry')?.count || 0;
+    counts.hydrogenBonds.withWater = partitions.get('hydrogen-bond|water')?.count || 0;
+    counts.saltBridges.withoutWater = partitions.get('salt-bridge|dry')?.count || 0;
+    counts.saltBridges.withWater = partitions.get('salt-bridge|water')?.count || 0;
+    return counts;
+  }
+
+  function interactionCountSummary(partitions) {
+    let total = 0, explicit = 0, inferred = 0, hydrogenBonds = 0, saltBridges = 0, withWater = 0;
+    for (const [key, partition] of partitions) {
+      total += partition.count;
+      explicit += partition.explicit;
+      inferred += partition.inferred;
+      if (key.startsWith('hydrogen-bond|')) hydrogenBonds += partition.count;
+      else saltBridges += partition.count;
+      if (key.endsWith('|water')) withWater += partition.count;
+    }
+    return { total, hydrogenBonds, saltBridges, withWater, withoutWater: total - withWater, explicit, inferred };
+  }
+
+  function serializeInteractionAnalysis(analysis, atoms, structureId) {
+    return {
+      structureId,
+      classifierVersion: analysis.classifierVersion,
+      interactions: analysis.interactions.map(record => ({
+        ...structuredClone(record),
+        participants: record.participants.map(participant => ({
+          ...participant,
+          selector: { kind: 'atom', ...selectorForAtom(atoms[participant.atomIndex], 'atom', structureId) }
+        }))
+      })),
+      counts: structuredClone(analysis.counts),
+      partitionCounts: structuredClone(analysis.partitionCounts),
+      search: structuredClone(analysis.search)
+    };
+  }
+
+  function selectInteractions(analysis, value, limitValue = INTERACTION_RENDER_LIMIT) {
+    const state = normalizeInteractions(value);
+    const limit = Math.max(0, Math.min(INTERACTION_RENDER_LIMIT, Number(limitValue) || INTERACTION_RENDER_LIMIT));
+    const typeEnabled = type => type === 'hydrogen-bond'
+      ? state.types.hydrogenBonds : state.types.saltBridges;
+    const selected = state.enabled
+      ? (analysis?.interactions || []).filter(record =>
+        typeEnabled(record.type) && (state.includeWater || !record.hasWaterEndpoint)
+      ).sort(compareInteractions).slice(0, limit)
+      : [];
+    const partitionCounts = analysis?.partitionCounts || emptyInteractionPartitionCounts();
+    let total = 0;
+    if (state.enabled && state.types.hydrogenBonds) {
+      total += partitionCounts.hydrogenBonds.withoutWater;
+      if (state.includeWater) total += partitionCounts.hydrogenBonds.withWater;
+    }
+    if (state.enabled && state.types.saltBridges) {
+      total += partitionCounts.saltBridges.withoutWater;
+      if (state.includeWater) total += partitionCounts.saltBridges.withWater;
+    }
+    return {
+      interactions: selected,
+      total,
+      rendered: selected.length,
+      omitted: Math.max(0, total - selected.length),
+      truncated: Boolean(analysis?.search?.truncated),
+      partial: Boolean(analysis?.search?.partial)
+    };
   }
 
   function validCamera(camera) {
@@ -1032,6 +1508,7 @@
     if ('background' in snapshot) snapshot.background = String(snapshot.background || '#07111f');
     if ('showHydrogens' in snapshot) snapshot.showHydrogens = Boolean(snapshot.showHydrogens);
     if ('showWater' in snapshot) snapshot.showWater = Boolean(snapshot.showWater);
+    if ('interactions' in snapshot) snapshot.interactions = normalizeInteractions(snapshot.interactions);
     if ('selection' in snapshot) snapshot.selection = snapshot.selection && typeof snapshot.selection === 'object'
       ? structuredClone(snapshot.selection) : null;
     if ('customColors' in snapshot) snapshot.customColors = Array.isArray(snapshot.customColors)
@@ -1364,6 +1841,8 @@
     residueDescriptor, buildStructureHierarchy, representativeAtom,
     LIGAND_ANALYSIS_DEFAULTS, normalizeLigandAnalysis, ligandSelector, ligandKey, ligandLabel,
     groupLigands, findLigand, analyzeLigandPocket,
+    INTERACTION_DEFAULTS, INTERACTION_CLASSIFIER_VERSION, normalizeInteractions,
+    analyzeInteractions, selectInteractions,
     SAVED_VIEW_SCENE_FIELDS, normalizeSavedViews, normalizeSavedViewSnapshot,
     captureSavedViewSnapshot, applySavedViewSnapshot, reorderSavedViews, validCamera
   };

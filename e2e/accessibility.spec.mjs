@@ -14,7 +14,7 @@ test('has no serious or critical accessibility violations in primary UI states',
   await openArtifact(page);
   expect(await seriousViolations(page)).toEqual([]);
 
-  for (const target of ['representation', 'navigator', 'measurements', 'saved-selections', 'ligands', 'metadata', 'saved-views']) {
+  for (const target of ['representation', 'navigator', 'measurements', 'saved-selections', 'ligands', 'interactions', 'metadata', 'saved-views']) {
     await page.locator(`[data-inspector-target="${target}"]`).click();
     await expect(page.locator('#inspector')).toBeVisible();
     expect(await seriousViolations(page)).toEqual([]);
