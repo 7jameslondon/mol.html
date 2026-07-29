@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 const fixture = await readFile(new URL('../fixtures/mini-peptide.pdb', import.meta.url), 'utf8');
 globalThis.window = {};
+await import('../src/structure.js');
 await import('../src/model.js');
 const Core = window.MolhtmlCore;
 

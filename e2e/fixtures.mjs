@@ -12,7 +12,7 @@ export const miniPeptidePath = resolve(root, 'fixtures/mini-peptide.pdb');
 export const ligandPocketPath = resolve(root, 'fixtures/ligand-pocket.pdb');
 const collectCoverage = process.env.MOLHTML_COVERAGE === '1';
 const coverageRawDirectory = resolve(root, 'test-results/coverage-raw');
-const coverageEntryPattern = /^molhtml:\/\/\/src\/(?:model|renderer|persistence|app)\.js$/;
+const coverageEntryPattern = /^molhtml:\/\/\/src\/(?:structure|model|renderer|persistence|app)\.js$/;
 let activeCoverageRecorder = null;
 
 function createCoverageRecorder(testInfo) {

@@ -1,0 +1,6 @@
+HEADER    ALTERNATE CONFORMER BOND TEST
+HETATM    1  C1 ALIG A   1       0.000   0.000   0.000  0.50 10.00           C
+HETATM    2  N1 ALIG A   1       1.300   0.000   0.000  0.50 10.00           N
+HETATM    3  C1 BLIG A   1       0.050   0.000   0.000  0.50 10.00           C
+HETATM    4  N1 BLIG A   1       1.350   0.000   0.000  0.50 10.00           N
+END

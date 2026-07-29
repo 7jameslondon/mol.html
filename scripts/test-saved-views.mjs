@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 globalThis.window = {};
+await import('../src/structure.js');
 await import('../src/model.js');
 const Core = window.MolhtmlCore;
 

@@ -1,0 +1,8 @@
+HEADER    7RIL AUTHOR-CHAIN IDENTITY REGRESSION EXCERPT
+ATOM      1  P    DA B  11       0.000   0.000   0.000  1.00 20.00           P
+ATOM      2  O5'  DA B  11       1.500   0.000   0.000  1.00 20.00           O
+HETATM    3  C1  5N0 B 201       5.000   0.000   0.000  1.00 18.00           C
+HETATM    4  N1  5N0 B 201       6.300   0.000   0.000  1.00 18.00           N
+CONECT    1    2
+CONECT    3    4
+END

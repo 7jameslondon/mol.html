@@ -5,6 +5,7 @@ import {
 } from './fixtures.mjs';
 
 const coordinateText = await readFile(miniPeptidePath, 'utf8');
+const mmcifText = await readFile(resolve('fixtures/7ril-identity.cif'), 'utf8');
 const entryPayload = JSON.parse(await readFile(resolve('e2e/fixtures/rcsb-entry-1abc.json'), 'utf8'));
 const corsHeaders = {
   'access-control-allow-origin': '*',
@@ -29,8 +30,15 @@ async function installRcsbRoutes(context, mode = 'normal') {
 
     if (/^https:\/\/files\.rcsb\.org\/download\/[A-Z0-9]+\.pdb$/.test(url) && method === 'GET') {
       const id = url.match(/\/([A-Z0-9]+)\.pdb$/)[1];
-      if (id === '9ZZZ') await route.fulfill({ status: 404, headers: { ...corsHeaders, 'content-type': 'text/plain' }, body: 'Not found' });
+      if (id === '9ZZZ' || id === '8CIF') await route.fulfill({ status: 404, headers: { ...corsHeaders, 'content-type': 'text/plain' }, body: 'Not found' });
       else await route.fulfill({ status: 200, headers: { ...corsHeaders, 'content-type': 'text/plain' }, body: coordinateText });
+      return;
+    }
+
+    if (/^https:\/\/files\.rcsb\.org\/download\/[A-Z0-9]+\.cif$/.test(url) && method === 'GET') {
+      const id = url.match(/\/([A-Z0-9]+)\.cif$/)[1];
+      if (id === '8CIF') await route.fulfill({ status: 200, headers: { ...corsHeaders, 'content-type': 'text/plain' }, body: mmcifText });
+      else await route.fulfill({ status: 404, headers: { ...corsHeaders, 'content-type': 'text/plain' }, body: 'Not found' });
       return;
     }
 
@@ -98,14 +106,32 @@ test('fetches exact RCSB coordinates and metadata, then preserves state on 404',
   });
   const preservedId = fetched.structure.id;
   const failure = await page.evaluate(() => window.molhtml.fetchPDB('9ZZZ').then(() => '', error => error.message));
-  expect(failure).toContain('no legacy PDB file');
+  expect(failure).toContain('no downloadable PDB or text mmCIF');
   expect(await page.evaluate(() => window.molhtml.document.structure.id)).toBe(preservedId);
   await expect(page.locator('#pdb-fetch-form')).toHaveAttribute('aria-busy', 'false');
-  await expect(page.locator('#pdb-fetch-status')).toContainText('no legacy PDB file');
+  await expect(page.locator('#pdb-fetch-status')).toContainText('no downloadable PDB or text mmCIF');
 
   const coordinateRequests = requests.filter(request => request.url.includes('files.rcsb.org'));
-  expect(coordinateRequests.filter(request => request.method === 'GET')).toHaveLength(2);
+  expect(coordinateRequests.filter(request => request.method === 'GET')).toHaveLength(3);
   expect(requests.some(request => request.url === 'https://data.rcsb.org/graphql' && request.method === 'POST')).toBe(true);
+  assertNoRuntimeErrors();
+});
+
+test('falls back to text mmCIF when an entry has no legacy PDB coordinates', async ({ context, page }) => {
+  const requests = await installRcsbRoutes(context);
+  const assertNoRuntimeErrors = observeRuntime(page, {
+    allowConsole: [/Failed to load resource: the server responded with a status of 404/]
+  });
+  await openArtifact(page);
+
+  const fetched = await page.evaluate(() => window.molhtml.fetchStructure('8cif'));
+  expect(fetched.version).toBe(2);
+  expect(fetched.structure.format).toBe('mmcif');
+  expect(fetched.structure.source).toMatchObject({ kind: 'rcsb-mmcif', pdbId: '8CIF' });
+  await expect(page.locator('#structure-chip')).toContainText('MMCIF');
+  await expect(page.locator('#structure-stats')).toContainText('4 instances');
+  expect(requests.filter(request => request.url.includes('8CIF.pdb'))).toHaveLength(1);
+  expect(requests.filter(request => request.url.includes('8CIF.cif'))).toHaveLength(1);
   assertNoRuntimeErrors();
 });
 

@@ -1,13 +1,14 @@
 (function () {
   'use strict';
 
+  const Structure = window.MolhtmlStructure;
+
   const ELEMENT_COLORS = {
     H: '#f4f7fb', C: '#8492a6', N: '#4f7cff', O: '#ff4d5e', F: '#56d68b',
     P: '#ff9f43', S: '#ffd43b', CL: '#38d47a', BR: '#a85c3f', I: '#7b3fa1',
     FE: '#d17835', MG: '#31c48d', ZN: '#8b95a5', CA: '#5fd3bc'
   };
   const CHAIN_COLORS = ['#54a7ff', '#ff6b8a', '#63d7a5', '#ffc857', '#a98bff', '#44d6e8', '#ff9364'];
-  const COVALENT_RADII = { H: .31, C: .76, N: .71, O: .66, F: .57, P: 1.07, S: 1.05, CL: 1.02, BR: 1.2, I: 1.39, FE: 1.24, MG: 1.3, ZN: 1.22, CA: 1.76 };
   const VDW_RADII = { H: 1.2, C: 1.7, N: 1.55, O: 1.52, F: 1.47, P: 1.8, S: 1.8, CL: 1.75, BR: 1.85, I: 1.98, FE: 1.8, MG: 1.73, ZN: 1.39, CA: 2.31 };
   const WATER_NAMES = new Set(['HOH', 'WAT', 'H2O', 'DOD']);
   const POLAR_ELEMENTS = new Set(['N', 'O', 'S']);
@@ -16,12 +17,18 @@
   });
   const MEASUREMENT_ATOM_COUNTS = Object.freeze({ distance: 2, angle: 3, dihedral: 4 });
   const REPRESENTATIONS = new Set(['cartoon', 'ball-and-stick', 'sticks', 'spacefill', 'lines', 'surface']);
-  const COLOR_MODES = new Set(['element', 'chain', 'residue', 'uniform']);
+  const COLOR_MODES = new Set(['element', 'chain', 'author-chain', 'instance', 'entity', 'role', 'residue', 'uniform']);
+  const DOCUMENT_V2_COLOR_MODES = new Set(['author-chain', 'instance', 'entity', 'role']);
+  const DOCUMENT_V2_SELECTOR_KINDS = new Set(['instance', 'entity', 'role', 'connected-component']);
+  const ROLE_COLORS = Object.freeze({
+    polymer: '#54a7ff', ligand: '#ff6b8a', ion: '#ffc857', solvent: '#7c91a7', unknown: '#a98bff'
+  });
   const SAVED_VIEW_SCENE_FIELDS = Object.freeze([
     'representation', 'colorMode', 'background', 'showHydrogens', 'showWater',
     'selection', 'customColors', 'activeAnalysis', 'analysisHighlight',
     'highlight', 'highlights', 'activeHighlight', 'activeLigandId', 'ligandHighlight'
   ]);
+  const resolvedSelectorIndexCache = new WeakMap();
   const AMINO_ACID_CODES = Object.freeze({
     ALA: 'A', ARG: 'R', ASN: 'N', ASP: 'D', CYS: 'C', GLN: 'Q', GLU: 'E',
     GLY: 'G', HIS: 'H', ILE: 'I', LEU: 'L', LYS: 'K', MET: 'M', PHE: 'F',
@@ -37,17 +44,6 @@
   function uid(prefix = 'id') {
     if (globalThis.crypto?.randomUUID) return `${prefix}-${crypto.randomUUID()}`;
     return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-  }
-
-  function inferElement(rawName, explicit) {
-    const stated = (explicit || '').trim().toUpperCase();
-    if (stated) return stated;
-    const raw = rawName || '';
-    const clean = raw.replace(/[0-9'\s]/g, '').toUpperCase();
-    if (!clean) return 'C';
-    if (/^\s/.test(raw)) return clean[0];
-    const pair = clean.slice(0, 2);
-    return COVALENT_RADII[pair] ? pair : clean[0];
   }
 
   function compactStrings(values) {
@@ -246,75 +242,81 @@
     return normalizeMetadata(metadata);
   }
 
+  function requireStructureLayer() {
+    if (!Structure?.parseStructure) throw new Error('The molecular structure layer did not load.');
+    return Structure;
+  }
+
   function parsePDB(text) {
-    const atoms = [];
-    const explicitBonds = new Set();
-    const serialMap = new Map();
-    let model = 1;
-    const lines = String(text || '').replace(/\r/g, '').split('\n');
-    const diagnostics = { coordinateLines: 0, skippedCoordinateLines: 0, malformedCoordinateLines: 0, malformedLineNumbers: [] };
+    const parsed = requireStructureLayer().parseStructure(text, 'pdb');
+    parsed.metadata = parsePDBMetadata(text);
+    return parsed;
+  }
 
-    let lineNumber = 0;
-    for (const line of lines) {
-      lineNumber++;
-      const record = line.slice(0, 6).trim().toUpperCase();
-      if (record === 'MODEL') {
-        model = Number.parseInt(line.slice(10, 14), 10) || model;
-        continue;
-      }
-      if (record === 'ATOM' || record === 'HETATM') {
-        diagnostics.coordinateLines++;
-        const serial = Number.parseInt(line.slice(6, 11), 10) || atoms.length + 1;
-        const rawName = line.slice(12, 16);
-        const atom = {
-          index: atoms.length,
-          serial,
-          name: rawName.trim() || 'X',
-          altLoc: line.slice(16, 17).trim(),
-          resn: line.slice(17, 20).trim() || 'UNK',
-          chain: line.slice(21, 22).trim() || '_',
-          resi: Number.parseInt(line.slice(22, 26), 10) || 0,
-          icode: line.slice(26, 27).trim(),
-          x: Number.parseFloat(line.slice(30, 38)),
-          y: Number.parseFloat(line.slice(38, 46)),
-          z: Number.parseFloat(line.slice(46, 54)),
-          occupancy: Number.parseFloat(line.slice(54, 60)) || 0,
-          bfactor: Number.parseFloat(line.slice(60, 66)) || 0,
-          element: inferElement(rawName, line.slice(76, 78)),
-          het: record === 'HETATM',
-          model
-        };
-        if ([atom.x, atom.y, atom.z].every(Number.isFinite)) {
-          atoms.push(atom);
-          serialMap.set(serial, atom.index);
-        } else {
-          diagnostics.skippedCoordinateLines++;
-          diagnostics.malformedCoordinateLines++;
-          if (diagnostics.malformedLineNumbers.length < 20) diagnostics.malformedLineNumbers.push(lineNumber);
-        }
-        continue;
-      }
-      if (record === 'CONECT') {
-        const values = line.slice(6).match(/.{1,5}/g)?.map(v => Number.parseInt(v, 10)).filter(Number.isFinite) || [];
-        const source = values.shift();
-        for (const target of values) {
-          if (source === target) continue;
-          explicitBonds.add(source < target ? `${source}:${target}` : `${target}:${source}`);
-        }
-      }
-    }
+  function parseStructure(data, formatHint = '') {
+    const layer = requireStructureLayer();
+    const format = layer.detectStructureFormat(data, formatHint);
+    const parsed = layer.parseStructure(data, format);
+    parsed.metadata = format === 'mmcif' ? parseMmcifMetadata(parsed) : parsePDBMetadata(data);
+    return parsed;
+  }
 
-    if (!atoms.length) throw new Error('No ATOM or HETATM coordinates were found in this PDB file.');
-    const bonds = [];
-    for (const key of explicitBonds) {
-      const [aSerial, bSerial] = key.split(':').map(Number);
-      if (serialMap.has(aSerial) && serialMap.has(bSerial)) bonds.push([serialMap.get(aSerial), serialMap.get(bSerial)]);
-    }
-    inferBonds(atoms, bonds);
-    return {
-      atoms, bonds, chains: [...new Set(atoms.map(a => a.chain))],
-      metadata: parsePDBMetadata(text), diagnostics
+  function parseMmcifMetadata(value) {
+    const parsed = value?.cifCategories
+      ? value
+      : requireStructureLayer().parseStructure(value, 'mmcif');
+    const categories = parsed.cifCategories || {};
+    const first = name => categories[name]?.[0] || {};
+    const clean = input => input == null || input === '.' || input === '?' ? '' : String(input).trim();
+    const values = (name, field) => compactStrings((categories[name] || []).map(row => clean(row[field])));
+    const struct = first('struct');
+    const keywords = first('struct_keywords');
+    const entry = first('entry');
+    const databaseRows = categories.database_2 || [];
+    const pdbDatabase = databaseRows.find(row => /pdb/i.test(clean(row.database_id))) || {};
+    const refineResolution = (categories.refine || []).map(row => Number(row.ls_d_res_high)).filter(Number.isFinite);
+    const emResolution = (categories.em_3d_reconstruction || []).map(row => Number(row.resolution)).filter(Number.isFinite);
+    const citationRows = categories.citation || [];
+    const citation = citationRows.find(row => clean(row.id).toLowerCase() === 'primary') || citationRows[0];
+    const citationAuthors = (categories.citation_author || [])
+      .filter(row => !citation || clean(row.citation_id) === clean(citation.id))
+      .sort((left, right) => Number(left.ordinal) - Number(right.ordinal))
+      .map(row => clean(row.name)).filter(Boolean);
+    const metadata = {
+      title: clean(struct.title),
+      classification: clean(keywords.pdbx_keywords) || clean(keywords.text),
+      pdbId: (clean(pdbDatabase.database_code) || clean(entry.id)).toUpperCase(),
+      depositionDate: clean(first('pdbx_database_status').recvd_initial_deposition_date),
+      releaseDate: clean(first('pdbx_audit_revision_history').revision_date),
+      organisms: compactStrings([
+        ...values('entity_src_gen', 'pdbx_gene_src_scientific_name'),
+        ...values('entity_src_nat', 'pdbx_organism_scientific'),
+        ...values('pdbx_entity_src_syn', 'organism_scientific')
+      ]),
+      experimentalMethods: values('exptl', 'method'),
+      resolutionAngstroms: [...new Set([...refineResolution, ...emResolution])],
+      authors: values('audit_author', 'name'),
+      entityDescriptions: values('entity', 'pdbx_description'),
+      provenance: { kind: 'embedded-mmcif' }
     };
+    if (citation) {
+      const primaryCitation = {
+        title: clean(citation.title),
+        authors: citationAuthors,
+        journal: clean(citation.journal_abbrev),
+        doi: clean(citation.pdbx_database_id_doi),
+        pubmedId: clean(citation.pdbx_database_id_pubmed)
+      };
+      const year = Number(citation.year);
+      if (Number.isFinite(year)) primaryCitation.year = year;
+      metadata.primaryCitation = primaryCitation;
+    }
+    const identifiers = {};
+    if (metadata.pdbId) identifiers.pdbId = metadata.pdbId;
+    if (metadata.primaryCitation?.doi) identifiers.doi = metadata.primaryCitation.doi;
+    if (metadata.primaryCitation?.pubmedId) identifiers.pubmedId = metadata.primaryCitation.pubmedId;
+    if (Object.keys(identifiers).length) metadata.identifiers = identifiers;
+    return normalizeMetadata(metadata);
   }
 
   function deriveDataQuality(value, pdbText = '') {
@@ -351,7 +353,7 @@
         bFactorMax = Math.max(bFactorMax, value);
       }
       if (isWater(atom)) waters.add(residueKey);
-      else if (atom.het) ligands.add(residueKey);
+      else if (isLigandLike(atom)) ligands.add(residueKey);
     }
     const bFactor = bFactorCount ? {
       min: bFactorMin, max: bFactorMax,
@@ -452,46 +454,11 @@
       || null;
   }
 
-  function inferBonds(atoms, bonds) {
-    const existing = new Set(bonds.map(([a, b]) => a < b ? `${a}:${b}` : `${b}:${a}`));
-    const cellSize = 2.6;
-    const cells = new Map();
-    const cellKey = (x, y, z) => `${x}|${y}|${z}`;
-    for (const atom of atoms) {
-      const cell = [Math.floor(atom.x / cellSize), Math.floor(atom.y / cellSize), Math.floor(atom.z / cellSize)];
-      atom._cell = cell;
-      const key = cellKey(...cell);
-      if (!cells.has(key)) cells.set(key, []);
-      cells.get(key).push(atom.index);
-    }
-    for (const atom of atoms) {
-      const [cx, cy, cz] = atom._cell;
-      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
-        const nearby = cells.get(cellKey(cx + dx, cy + dy, cz + dz));
-        if (!nearby) continue;
-        for (const otherIndex of nearby) {
-          if (otherIndex <= atom.index) continue;
-          const other = atoms[otherIndex];
-          if (atom.model !== other.model) continue;
-          const x = atom.x - other.x, y = atom.y - other.y, z = atom.z - other.z;
-          const distance2 = x * x + y * y + z * z;
-          const max = (COVALENT_RADII[atom.element] || .77) + (COVALENT_RADII[other.element] || .77) + .46;
-          if (distance2 < .16 || distance2 > max * max) continue;
-          const key = atom.index < otherIndex ? `${atom.index}:${otherIndex}` : `${otherIndex}:${atom.index}`;
-          if (!existing.has(key)) {
-            existing.add(key);
-            bonds.push([atom.index, otherIndex]);
-          }
-        }
-      }
-      delete atom._cell;
-    }
-  }
-
   function normalizeDocument(input) {
     if (!input || input.format !== 'molhtml/document') throw new Error('This is not a molhtml/document file.');
     const doc = structuredClone(input);
     doc.version = Number(doc.version) || 1;
+    if (![1, 2].includes(doc.version)) throw new Error(`Unsupported mol.html document version: ${doc.version}.`);
     doc.documentId ||= uid('document');
     doc.title ||= 'Untitled molecule';
     doc.revision = Number(doc.revision) || 0;
@@ -500,13 +467,16 @@
     if (!doc.structure?.data) throw new Error('The document does not contain molecular coordinate data.');
     doc.structure.id ||= uid('structure');
     doc.structure.name ||= 'Molecule';
-    doc.structure.format = String(doc.structure.format || 'pdb').toLowerCase();
-    if (doc.structure.format !== 'pdb') throw new Error(`Unsupported structure format: ${doc.structure.format}. This version accepts PDB.`);
-    doc.structure.metadata = mergeMetadata(parsePDBMetadata(doc.structure.data), doc.structure.metadata);
+    doc.structure.format = requireStructureLayer().detectStructureFormat(doc.structure.data, doc.structure.format || '');
+    const sourceMetadata = doc.structure.format === 'mmcif'
+      ? parseMmcifMetadata(doc.structure.data)
+      : parsePDBMetadata(doc.structure.data);
+    doc.structure.metadata = mergeMetadata(sourceMetadata, doc.structure.metadata);
     doc.scene ||= {};
+    if (doc.version === 1) migrateV1StructureBindings(doc.scene, doc.structure.id);
     Object.assign(doc.scene, {
-      representation: doc.scene.representation || 'ball-and-stick',
-      colorMode: doc.scene.colorMode || 'element',
+      representation: REPRESENTATIONS.has(doc.scene.representation) ? doc.scene.representation : 'ball-and-stick',
+      colorMode: COLOR_MODES.has(doc.scene.colorMode) ? doc.scene.colorMode : 'element',
       background: doc.scene.background || '#07111f',
       showHydrogens: Boolean(doc.scene.showHydrogens),
       showWater: Boolean(doc.scene.showWater),
@@ -518,7 +488,126 @@
       savedViews: normalizeSavedViews(doc.scene.savedViews),
       camera: normalizeCamera(doc.scene.camera)
     });
+    if (requiresDocumentV2(doc)) doc.version = 2;
     return doc;
+  }
+
+  function migrateV1StructureBindings(scene, structureId) {
+    const bindSelector = selector => {
+      if (!selector || typeof selector !== 'object' || Array.isArray(selector)) return;
+      selector.structureId ||= structureId;
+      bindSelector(selector.target);
+    };
+    bindSelector(scene.selection?.selector);
+    for (const rule of Array.isArray(scene.customColors) ? scene.customColors : []) bindSelector(rule?.selector);
+    for (const measurement of Array.isArray(scene.measurements) ? scene.measurements : []) {
+      for (const selector of Array.isArray(measurement?.atoms) ? measurement.atoms : []) bindSelector(selector);
+    }
+    for (const saved of Array.isArray(scene.savedSelections) ? scene.savedSelections : []) bindSelector(saved?.selector);
+    bindSelector(scene.ligandAnalysis?.selectedLigand);
+    for (const view of Array.isArray(scene.savedViews) ? scene.savedViews : []) {
+      if (view && typeof view === 'object' && !Array.isArray(view)) view.structureId ||= structureId;
+      bindSelector(view?.snapshot?.selection?.selector);
+      for (const rule of Array.isArray(view?.snapshot?.customColors) ? view.snapshot.customColors : []) bindSelector(rule?.selector);
+    }
+  }
+
+  function applyDocumentCommand(doc, value) {
+    if (!doc || typeof doc !== 'object') throw new Error('A command requires a document.');
+    const command = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const type = String(command.type || '').trim().toLowerCase();
+    if (type === 'set-scene-field') {
+      const field = String(command.field || '');
+      if (!['representation', 'colorMode', 'background', 'showHydrogens', 'showWater'].includes(field)) {
+        throw new Error(`Unsupported scene field: ${field || '(missing)'}.`);
+      }
+      if (field === 'representation' && !REPRESENTATIONS.has(command.value)) throw new Error(`Unsupported representation: ${command.value}.`);
+      if (field === 'colorMode' && !COLOR_MODES.has(command.value)) throw new Error(`Unsupported color mode: ${command.value}.`);
+      if (field === 'background' && !/^#[0-9a-f]{6}$/i.test(command.value || '')) throw new Error('Background must be a six-digit hex color.');
+      doc.scene[field] = field === 'showHydrogens' || field === 'showWater' ? Boolean(command.value) : command.value;
+    } else if (type === 'set-selection') {
+      doc.scene.selection = command.selection == null ? null : structuredClone(command.selection);
+    } else if (type === 'add-custom-color') {
+      if (!command.rule || typeof command.rule !== 'object' || Array.isArray(command.rule)) throw new Error('A custom-color command requires a rule.');
+      if (!/^#[0-9a-f]{6}$/i.test(command.rule.color || '')) throw new Error('Custom color must be a six-digit hex color.');
+      doc.scene.customColors.push(structuredClone(command.rule));
+    } else if (type === 'set-measurements') {
+      doc.scene.measurements = normalizeMeasurements(command.measurements);
+    } else if (type === 'set-saved-selections') {
+      doc.scene.savedSelections = normalizeSavedSelections(command.savedSelections);
+    } else if (type === 'set-ligand-analysis') {
+      doc.scene.ligandAnalysis = normalizeLigandAnalysis(command.ligandAnalysis, doc.structure.id, true);
+    } else if (type === 'set-saved-views') {
+      doc.scene.savedViews = normalizeSavedViews(command.savedViews);
+    } else if (type === 'set-camera') {
+      doc.scene.camera = normalizeCamera(command.camera);
+    } else if (type === 'apply-saved-view') {
+      doc.scene = applySavedViewSnapshot(doc.scene, command.snapshot);
+    } else if (type === 'reset-appearance') {
+      Object.assign(doc.scene, {
+        representation: 'ball-and-stick', colorMode: 'element', background: '#07111f',
+        showHydrogens: false, showWater: false, customColors: []
+      });
+    } else if (type === 'replace-structure') {
+      if (!command.structure?.data) throw new Error('A replacement structure requires coordinate data.');
+      doc.title = String(command.title || command.structure.name || 'Molecule');
+      doc.structure = structuredClone(command.structure);
+      Object.assign(doc.scene, {
+        selection: null,
+        customColors: [],
+        measurements: [],
+        savedSelections: [],
+        ligandAnalysis: normalizeLigandAnalysis(null, doc.structure.id),
+        savedViews: [],
+        camera: { view: null }
+      });
+    } else {
+      throw new Error(`Unsupported document command: ${type || '(missing)'}.`);
+    }
+    if (requiresDocumentV2(doc)) doc.version = 2;
+    return doc;
+  }
+
+  function selectorRequiresDocumentV2(value) {
+    const pending = [value];
+    while (pending.length) {
+      const candidate = pending.pop();
+      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue;
+      if (candidate.sourceIdentity != null
+        || candidate.instanceId != null
+        || candidate.entityId != null
+        || candidate.role != null
+        || candidate.connectedComponentId != null
+        || DOCUMENT_V2_SELECTOR_KINDS.has(candidate.kind || candidate.scope)) {
+        return true;
+      }
+      pending.push(candidate.selector, candidate.target);
+    }
+    return false;
+  }
+
+  function requiresDocumentV2(doc) {
+    if (doc?.structure?.format === 'mmcif') return true;
+
+    const scene = doc?.scene || {};
+    const savedViews = Array.isArray(scene.savedViews) ? scene.savedViews : [];
+    if (DOCUMENT_V2_COLOR_MODES.has(scene.colorMode)
+      || savedViews.some(view => DOCUMENT_V2_COLOR_MODES.has(view?.snapshot?.colorMode))) {
+      return true;
+    }
+
+    const persistedSelectorValues = [scene.selection, scene.ligandAnalysis?.selectedLigand];
+    persistedSelectorValues.push(...(Array.isArray(scene.customColors) ? scene.customColors : []));
+    persistedSelectorValues.push(...(Array.isArray(scene.savedSelections) ? scene.savedSelections : []));
+    for (const measurement of Array.isArray(scene.measurements) ? scene.measurements : []) {
+      persistedSelectorValues.push(...(Array.isArray(measurement?.atoms) ? measurement.atoms : []));
+    }
+    for (const view of savedViews) {
+      persistedSelectorValues.push(view?.snapshot?.selection);
+      persistedSelectorValues.push(...(Array.isArray(view?.snapshot?.customColors)
+        ? view.snapshot.customColors : []));
+    }
+    return persistedSelectorValues.some(selectorRequiresDocumentV2);
   }
 
   function normalizeMeasurements(value) {
@@ -553,7 +642,7 @@
     if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
     const selector = { ...value };
     selector.kind = String(value.kind || '').trim().toLowerCase();
-    for (const key of ['structureId', 'chain', 'icode', 'resn', 'atom', 'altLoc']) {
+    for (const key of ['structureId', 'chain', 'icode', 'resn', 'atom', 'altLoc', 'instanceId', 'entityId', 'role', 'connectedComponentId']) {
       if (key in value && value[key] != null) selector[key] = String(value[key]);
     }
     for (const key of ['model', 'resi', 'serial', 'cutoff']) {
@@ -571,7 +660,25 @@
     if (depth < 2 && value.target && typeof value.target === 'object' && !Array.isArray(value.target)) {
       selector.target = normalizeCompoundSelector(value.target, depth + 1);
     }
+    if (value.sourceIdentity && typeof value.sourceIdentity === 'object' && !Array.isArray(value.sourceIdentity)) {
+      selector.sourceIdentity = normalizeSourceIdentity(value.sourceIdentity);
+    }
     return selector;
+  }
+
+  function normalizeSourceIdentity(value) {
+    const identity = { ...value };
+    for (const key of [
+      'atomSiteId', 'labelEntityId', 'labelAsymId', 'labelSeqId', 'labelCompId', 'labelAtomId', 'labelAltId',
+      'authAsymId', 'authSeqId', 'authCompId', 'authAtomId', 'authAltId', 'insertionCode', 'pdbSerial'
+    ]) {
+      if (key in value && value[key] != null) identity[key] = String(value[key]);
+    }
+    if ('modelNumber' in value) {
+      const modelNumber = Number(value.modelNumber);
+      identity.modelNumber = Number.isFinite(modelNumber) ? modelNumber : value.modelNumber;
+    }
+    return identity;
   }
 
   function matchSavedSelection(value, atoms, structureId) {
@@ -588,25 +695,61 @@
     const kind = String(selector.kind || '').toLowerCase();
     let matched;
     if (kind === 'atom') {
-      if (!validRequiredSelectorFields(selector, ['model', 'chain', 'resi', 'atom'])) {
+      if (!selector.sourceIdentity && !validRequiredSelectorFields(selector, ['model', 'chain', 'resi', 'atom'])) {
         return selectionMatchError('Atom selector is missing model, chain, residue, or atom name.');
       }
-      matched = candidates.filter(atom => atomMatchesSelector(atom, selector, structureId));
+      const resolution = resolveUniqueAtomSelector(selector, candidates, structureId);
+      if (!resolution.valid) return selectionMatchError(resolution.error);
+      matched = [resolution.atom];
     } else if (kind === 'residue') {
-      if (!validRequiredSelectorFields(selector, ['model', 'chain', 'resi'])) {
+      if (selector.sourceIdentity) {
+        matched = resolveAtomSelectorMatches(selector, candidates, structureId);
+      } else if (!validRequiredSelectorFields(selector, ['model', 'chain', 'resi'])) {
         return selectionMatchError('Residue selector is missing model, chain, or residue number.');
+      } else {
+        matched = candidates.filter(atom =>
+          atom.model === Number(selector.model) && atom.chain === selector.chain
+          && atom.resi === Number(selector.resi)
+          && (selector.icode == null || atom.icode === selector.icode)
+          && (selector.resn == null || atom.resn === selector.resn)
+        );
       }
-      matched = candidates.filter(atom =>
-        atom.model === Number(selector.model) && atom.chain === selector.chain
-        && atom.resi === Number(selector.resi)
-        && (selector.icode == null || atom.icode === selector.icode)
-        && (selector.resn == null || atom.resn === selector.resn)
-      );
     } else if (kind === 'chain') {
       if (!validRequiredSelectorFields(selector, ['model', 'chain'])) {
         return selectionMatchError('Chain selector is missing model or chain.');
       }
       matched = candidates.filter(atom => atom.model === Number(selector.model) && atom.chain === selector.chain);
+    } else if (kind === 'instance') {
+      if (!selector.instanceId && !selector.sourceIdentity?.labelAsymId) {
+        return selectionMatchError('Molecular instance selector is missing instanceId or labelAsymId.');
+      }
+      matched = candidates.filter(atom =>
+        (selector.instanceId == null || atom.instanceId === selector.instanceId)
+        && (selector.sourceIdentity?.labelAsymId == null || atom.labelAsymId === selector.sourceIdentity.labelAsymId)
+        && (selector.model == null || atom.model === Number(selector.model))
+      );
+    } else if (kind === 'entity') {
+      if (!selector.entityId && !selector.sourceIdentity?.labelEntityId) {
+        return selectionMatchError('Entity selector is missing entityId or labelEntityId.');
+      }
+      matched = candidates.filter(atom =>
+        (selector.entityId == null || atom.entityId === selector.entityId)
+        && (selector.sourceIdentity?.labelEntityId == null || atom.labelEntityId === selector.sourceIdentity.labelEntityId)
+        && (selector.model == null || atom.model === Number(selector.model))
+      );
+    } else if (kind === 'role') {
+      if (!['polymer', 'ligand', 'ion', 'solvent', 'unknown'].includes(selector.role)) {
+        return selectionMatchError('Role selector must name polymer, ligand, ion, solvent, or unknown.');
+      }
+      matched = candidates.filter(atom => atom.role === selector.role
+        && (selector.model == null || atom.model === Number(selector.model)));
+    } else if (kind === 'connected-component') {
+      if (selector.connectedComponentId == null) {
+        return selectionMatchError('Connected-component selector is missing connectedComponentId.');
+      }
+      const componentIndex = Number(String(selector.connectedComponentId).replace(/^component-/, '')) - 1;
+      matched = candidates.filter(atom => atom.connectedComponentIndex === componentIndex
+        && (selector.model == null || atom.model === Number(selector.model)));
     } else if (kind === 'residue-range') {
       const start = Number(selector.start?.resi);
       const end = Number(selector.end?.resi);
@@ -625,7 +768,7 @@
         return selectionMatchError('Ligand selector model must be a number.');
       }
       matched = candidates.filter(atom =>
-        atom.het && !isWater(atom)
+        isLigandLike(atom) && !isWater(atom)
         && (selector.model == null || atom.model === Number(selector.model))
       );
     } else if (kind === 'within') {
@@ -642,6 +785,11 @@
       matched = atomsWithin(candidates, target.atoms, cutoff);
     } else {
       return selectionMatchError(`Unsupported selector kind: ${kind || '(missing)'}.`);
+    }
+
+    if (!matched.length) return selectionMatchError('Selector did not resolve to any atoms.');
+    if (kind === 'residue' && countMatchedResidues(matched) !== 1) {
+      return selectionMatchError('Residue selector is ambiguous across multiple residues.');
     }
 
     return {
@@ -666,7 +814,9 @@
   }
 
   function countMatchedResidues(atoms) {
-    return new Set(atoms.map(atom => `${atom.model}|${atom.chain}|${atom.resi}|${atom.icode}|${atom.resn}`)).size;
+    return new Set(atoms.map(atom => Number.isInteger(atom.residueIndex)
+      ? atom.residueIndex
+      : `${atom.model}|${atom.chain}|${atom.resi}|${atom.icode}|${atom.resn}`)).size;
   }
 
   function atomsWithin(atoms, targets, cutoff) {
@@ -701,19 +851,22 @@
     if (kind === 'atom') return `${selector.resn || 'Residue'} ${selector.resi}${selector.icode || ''} · ${selector.atom} · ${chain}`;
     if (kind === 'residue') return `${selector.resn || 'Residue'} ${selector.resi}${selector.icode || ''} · ${chain}`;
     if (kind === 'chain') return `${chain} · model ${selector.model}`;
+    if (kind === 'instance') return `Molecular instance ${selector.instanceId || selector.sourceIdentity?.labelAsymId || '?'}`;
+    if (kind === 'entity') return `Entity ${selector.entityId || selector.sourceIdentity?.labelEntityId || '?'}`;
+    if (kind === 'role') return `${selector.role || 'Unknown'} role`;
+    if (kind === 'connected-component') return `Connected component ${selector.connectedComponentId || '?'}`;
     if (kind === 'residue-range') return `${chain} · residues ${selector.start?.resi ?? '?'}–${selector.end?.resi ?? '?'}`;
     if (kind === 'ligands') return selector.model == null ? 'All non-water ligands' : `Non-water ligands · model ${selector.model}`;
     if (kind === 'within') return `Within ${selector.cutoff ?? '?'} Å of ${describeSavedSelector(selector.target)}`;
     return 'Invalid or unsupported selector';
   }
 
-  function normalizeLigandAnalysis(value, structureId) {
+  function normalizeLigandAnalysis(value, structureId, bindMissingStructureId = false) {
     const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
     const analysis = { ...source };
     const selected = source.selectedLigand;
     analysis.selectedLigand = selected && typeof selected === 'object' && !Array.isArray(selected)
-      && (!selected.structureId || selected.structureId === structureId)
-      ? { ...selected, structureId }
+      ? { ...selected, ...(bindMissingStructureId && !selected.structureId ? { structureId } : {}) }
       : null;
     analysis.cutoff = clamp(Number(source.cutoff) || LIGAND_ANALYSIS_DEFAULTS.cutoff, 2.5, 8);
     for (const key of ['showLigand', 'showPocket', 'showContacts', 'polarOnly']) {
@@ -723,14 +876,25 @@
   }
 
   function ligandSelector(atom, structureId) {
-    return {
+    const selector = {
       structureId, model: atom.model, chain: atom.chain, resi: atom.resi,
       icode: atom.icode, resn: atom.resn
     };
+    if (atom.sourceFormat === 'mmcif') {
+      selector.instanceId = atom.instanceId;
+      selector.sourceIdentity = sourceIdentityForAtom(atom, 'residue');
+    }
+    return selector;
   }
 
   function ligandKey(selector) {
     if (!selector) return '';
+    if (selector.sourceIdentity?.labelAsymId) {
+      const identity = selector.sourceIdentity;
+      return [selector.structureId || '', Number(selector.model) || 1, identity.labelAsymId,
+        identity.labelSeqId || identity.authSeqId || '', identity.labelCompId || identity.authCompId || '',
+        identity.insertionCode || ''].join('|');
+    }
     return `${selector.structureId || ''}|${Number(selector.model) || 1}|${selector.chain || '_'}|${Number(selector.resi) || 0}|${selector.icode || ''}|${selector.resn || 'UNK'}`;
   }
 
@@ -740,7 +904,7 @@
     const ligands = [];
     const byKey = new Map();
     for (const atom of atoms) {
-      if (!atom.het || isWater(atom)) continue;
+      if (!isLigandLike(atom) || isWater(atom)) continue;
       const selector = ligandSelector(atom, structureId);
       const key = ligandKey(selector);
       let ligand = byKey.get(key);
@@ -768,7 +932,10 @@
 
   function findLigand(ligands, selector, structureId) {
     if (!selector) return null;
-    if (selector.structureId && selector.structureId !== structureId) return null;
+    if (!selector.structureId || selector.structureId !== structureId) return null;
+    const key = ligandKey(selector);
+    const exact = ligands.find(ligand => ligand.key === key);
+    if (exact) return exact;
     return ligands.find(ligand => ligand.selector.model === Number(selector.model)
       && ligand.selector.chain === selector.chain
       && ligand.selector.resi === Number(selector.resi)
@@ -784,17 +951,12 @@
     const empty = { cutoff, ligand, residues: [], contacts: [], candidatePairs: 0, indexedAtomCount: 0 };
     if (!ligand || !Array.isArray(atoms)) return empty;
 
-    const eligible = atoms.filter(atom => atom.model === ligand.model && !atom.het && atom.element !== 'H'
-      && ['protein', 'nucleic'].includes(residueDescriptor(atom.resn).kind));
+    const eligible = atoms.filter(atom => atom.model === ligand.model && atom.element !== 'H'
+      && (atom.role === 'polymer' || (!atom.het && ['protein', 'nucleic'].includes(residueDescriptor(atom.resn).kind))));
     const cellSize = cutoff;
-    const cells = new Map();
-    const cellKey = (x, y, z) => `${x}|${y}|${z}`;
-    for (const atom of eligible) {
-      const cell = [Math.floor(atom.x / cellSize), Math.floor(atom.y / cellSize), Math.floor(atom.z / cellSize)];
-      const key = cellKey(...cell);
-      if (!cells.has(key)) cells.set(key, []);
-      cells.get(key).push(atom);
-    }
+    const cells = requireStructureLayer().spatialIndex(atoms, cellSize).cells;
+    const eligibleIndices = new Set(eligible.map(atom => atom.index));
+    const cellKey = (model, x, y, z) => `${model}|${x}|${y}|${z}`;
 
     const contacts = [];
     const seen = new Set();
@@ -804,9 +966,11 @@
       const cy = Math.floor(ligandAtom.y / cellSize);
       const cz = Math.floor(ligandAtom.z / cellSize);
       for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
-        const nearby = cells.get(cellKey(cx + dx, cy + dy, cz + dz));
+        const nearby = cells.get(cellKey(ligandAtom.model, cx + dx, cy + dy, cz + dz));
         if (!nearby) continue;
-        for (const targetAtom of nearby) {
+        for (const targetIndex of nearby) {
+          if (!eligibleIndices.has(targetIndex)) continue;
+          const targetAtom = atoms[targetIndex];
           candidatePairs += 1;
           const pairKey = `${ligandAtom.index}:${targetAtom.index}`;
           if (seen.has(pairKey)) continue;
@@ -829,13 +993,13 @@
     const residueMap = new Map();
     for (const contact of contacts) {
       const atom = contact.targetAtom;
-      const key = `${atom.model}|${atom.chain}|${atom.resi}|${atom.icode}|${atom.resn}`;
+      const key = atom.residueIndex ?? `${atom.model}|${atom.chain}|${atom.resi}|${atom.icode}|${atom.resn}`;
       let residue = residueMap.get(key);
       if (!residue) {
         const descriptor = residueDescriptor(atom.resn);
         residue = {
           key, model: atom.model, chain: atom.chain, resi: atom.resi, icode: atom.icode,
-          resn: atom.resn, kind: descriptor.kind, atoms: [], contacts: [],
+          resn: atom.resn, kind: descriptor.kind, selector: selectorForAtom(atom, 'residue', structureId), atoms: [], contacts: [],
           minimumDistance: contact.distance, hasClose: false, hasPolar: false
         };
         residueMap.set(key, residue);
@@ -936,14 +1100,58 @@
   function selectorForAtom(atom, scope, structureId) {
     const base = { structureId, model: atom.model };
     if (scope === 'chain') return { ...base, chain: atom.chain };
-    if (scope === 'residue') return { ...base, chain: atom.chain, resi: atom.resi, icode: atom.icode, resn: atom.resn };
-    return { ...base, chain: atom.chain, resi: atom.resi, icode: atom.icode, atom: atom.name, altLoc: atom.altLoc, serial: atom.serial };
+    if (scope === 'instance') return {
+      ...base, instanceId: atom.instanceId,
+      sourceIdentity: compactSourceIdentity({ modelNumber: atom.model, labelAsymId: atom.labelAsymId })
+    };
+    if (scope === 'entity') return {
+      ...base, entityId: atom.entityId,
+      sourceIdentity: compactSourceIdentity({ modelNumber: atom.model, labelEntityId: atom.labelEntityId })
+    };
+    if (scope === 'role') return { ...base, role: atom.role || 'unknown' };
+    if (scope === 'connected-component') return { ...base, connectedComponentId: `component-${Number(atom.connectedComponentIndex) + 1}` };
+    const legacyResidue = { ...base, chain: atom.chain, resi: atom.resi, icode: atom.icode, resn: atom.resn };
+    if (scope === 'residue') {
+      return atom.sourceFormat === 'mmcif'
+        ? { ...legacyResidue, sourceIdentity: sourceIdentityForAtom(atom, 'residue') }
+        : legacyResidue;
+    }
+    const legacyAtom = { ...legacyResidue, atom: atom.name, altLoc: atom.altLoc, serial: atom.serial };
+    return atom.sourceFormat === 'mmcif'
+      ? { ...legacyAtom, sourceIdentity: sourceIdentityForAtom(atom, 'atom') }
+      : legacyAtom;
   }
 
-  function atomMatchesSelector(atom, selector, structureId) {
-    if (!selector) return false;
-    if (selector.structureId && selector.structureId !== structureId) return false;
-    if (selector.model != null && Number(selector.model) !== atom.model) return false;
+  function sourceIdentityForAtom(atom, scope = 'atom') {
+    const identity = {
+      modelNumber: atom.model,
+      labelEntityId: atom.labelEntityId,
+      labelAsymId: atom.labelAsymId,
+      labelSeqId: atom.labelSeqId,
+      labelCompId: atom.labelCompId,
+      authAsymId: atom.authAsymId,
+      authSeqId: atom.authSeqId,
+      authCompId: atom.authCompId,
+      insertionCode: atom.icode
+    };
+    if (scope === 'atom') Object.assign(identity, {
+      atomSiteId: atom.atomSiteId,
+      labelAtomId: atom.labelAtomId,
+      labelAltId: atom.labelAltId,
+      authAtomId: atom.authAtomId,
+      authAltId: atom.authAltId,
+      pdbSerial: atom.sourceFormat === 'pdb' ? atom.serial : null
+    });
+    return compactSourceIdentity(identity);
+  }
+
+  function compactSourceIdentity(value) {
+    return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry != null && entry !== ''));
+  }
+
+  function atomMatchesLegacyIdentity(atom, selector) {
+    const model = selector.model ?? selector.sourceIdentity?.modelNumber;
+    if (model != null && Number(model) !== atom.model) return false;
     if (selector.chain != null && selector.chain !== atom.chain) return false;
     if (selector.resi != null && Number(selector.resi) !== atom.resi) return false;
     if (selector.icode != null && selector.icode !== atom.icode) return false;
@@ -954,20 +1162,108 @@
     return true;
   }
 
+  function atomMatchesSelectorSemantics(atom, selector) {
+    if (selector.instanceId != null && selector.instanceId !== atom.instanceId) return false;
+    if (selector.entityId != null && selector.entityId !== atom.entityId) return false;
+    if (selector.role != null && selector.role !== atom.role) return false;
+    if (selector.connectedComponentId != null
+      && Number(String(selector.connectedComponentId).replace(/^component-/, '')) - 1 !== atom.connectedComponentIndex) return false;
+    return true;
+  }
+
+  function atomMatchesSelector(atom, selector, structureId) {
+    if (!selector || selector.structureId !== structureId) return false;
+    if (!atomMatchesSelectorSemantics(atom, selector)) return false;
+    if (!selector.sourceIdentity) return atomMatchesLegacyIdentity(atom, selector);
+    const identity = normalizeSourceIdentity(selector.sourceIdentity);
+    const tier = preferredSourceIdentityTier(identity);
+    return tier ? sourceIdentityMatchesTier(atom, identity, tier) : atomMatchesLegacyIdentity(atom, selector);
+  }
+
+  function resolveAtomSelectorMatches(selector, atoms, structureId) {
+    if (!selector || typeof selector !== 'object' || Array.isArray(selector)) return [];
+    if (!selector.structureId || selector.structureId !== structureId) return [];
+    const candidates = Array.isArray(atoms) ? atoms : [];
+    if (selector.sourceIdentity) {
+      const sourceMatches = resolveSourceIdentityMatches(selector.sourceIdentity, candidates);
+      if (sourceMatches.length) return sourceMatches.filter(atom => atomMatchesSelectorSemantics(atom, selector));
+    }
+    return candidates.filter(atom => atomMatchesLegacyIdentity(atom, selector)
+      && atomMatchesSelectorSemantics(atom, selector));
+  }
+
+  function resolveUniqueAtomSelector(selector, atoms, structureId) {
+    if (!selector?.structureId) return { valid: false, error: 'Atom selector is missing structureId.', atom: null };
+    if (selector.structureId !== structureId) return { valid: false, error: 'Atom selector belongs to a different structure.', atom: null };
+    const matches = resolveAtomSelectorMatches(selector, atoms, structureId);
+    if (!matches.length) return { valid: false, error: 'Atom selector did not resolve to any atoms.', atom: null };
+    if (matches.length > 1) return { valid: false, error: 'Atom selector is ambiguous across multiple atoms.', atom: null };
+    return { valid: true, error: null, atom: matches[0] };
+  }
+
+  const LABEL_IDENTITY_FIELDS = [
+    ['labelEntityId', 'labelEntityId'], ['labelAsymId', 'labelAsymId'], ['labelSeqId', 'labelSeqId'],
+    ['labelCompId', 'labelCompId'], ['labelAtomId', 'labelAtomId'], ['labelAltId', 'labelAltId']
+  ];
+  const AUTHOR_IDENTITY_FIELDS = [
+    ['authAsymId', 'authAsymId'], ['authSeqId', 'authSeqId'], ['authCompId', 'authCompId'],
+    ['authAtomId', 'authAtomId'], ['authAltId', 'authAltId'], ['insertionCode', 'icode']
+  ];
+
+  function preferredSourceIdentityTier(identity) {
+    if (identity.atomSiteId != null) return 'atom-site';
+    if (LABEL_IDENTITY_FIELDS.some(([key]) => identity[key] != null)) return 'label';
+    if (AUTHOR_IDENTITY_FIELDS.some(([key]) => identity[key] != null)) return 'author';
+    if (identity.pdbSerial != null) return 'legacy-serial';
+    return null;
+  }
+
+  function sourceIdentityMatchesTier(atom, identity, tier) {
+    if (identity.modelNumber != null && Number(identity.modelNumber) !== atom.model) return false;
+    if (tier === 'atom-site') return String(atom.atomSiteId) === String(identity.atomSiteId);
+    if (tier === 'label') {
+      return LABEL_IDENTITY_FIELDS.every(([key, atomKey]) =>
+        identity[key] == null || String(atom[atomKey] ?? '') === String(identity[key]));
+    }
+    if (tier === 'author') return AUTHOR_IDENTITY_FIELDS.every(([key, atomKey]) =>
+      identity[key] == null || String(atom[atomKey] ?? '') === String(identity[key]));
+    if (tier === 'legacy-serial') return Number(identity.pdbSerial) === atom.serial;
+    return false;
+  }
+
+  function resolveSourceIdentityMatches(value, atoms) {
+    const identity = normalizeSourceIdentity(value);
+    const tiers = [];
+    if (identity.atomSiteId != null) tiers.push('atom-site');
+    if (LABEL_IDENTITY_FIELDS.some(([key]) => identity[key] != null)) tiers.push('label');
+    if (AUTHOR_IDENTITY_FIELDS.some(([key]) => identity[key] != null)) tiers.push('author');
+    if (identity.pdbSerial != null) tiers.push('legacy-serial');
+    for (const tier of tiers) {
+      let matched = atoms.filter(atom => sourceIdentityMatchesTier(atom, identity, tier));
+      if (tier === 'label' && matched.length > 1 && identity.labelAltId == null && identity.authAltId != null) {
+        const narrowed = matched.filter(atom => String(atom.authAltId ?? '') === String(identity.authAltId));
+        if (narrowed.length) matched = narrowed;
+      }
+      if (matched.length) return matched;
+    }
+    return [];
+  }
+
   function atomIdentity(atom, structureId) {
     return {
       kind: 'atom', structureId, model: atom.model, chain: atom.chain,
       residueName: atom.resn, residueNumber: atom.resi, insertionCode: atom.icode,
       atomName: atom.name, alternateLocation: atom.altLoc, serial: atom.serial,
-      element: atom.element
+      element: atom.element, instanceId: atom.instanceId, entityId: atom.entityId,
+      role: atom.role || 'unknown', sourceIdentity: sourceIdentityForAtom(atom, 'atom')
     };
   }
 
   function measurementAtoms(measurement, atoms, structureId) {
     const expected = MEASUREMENT_ATOM_COUNTS[measurement?.type];
     if (!expected || !Array.isArray(measurement.atoms) || measurement.atoms.length !== expected) return null;
-    const resolved = measurement.atoms.map(selector => atoms.find(atom => atomMatchesSelector(atom, selector, structureId)));
-    return resolved.every(Boolean) ? resolved : null;
+    const resolved = measurement.atoms.map(selector => resolveUniqueAtomSelector(selector, atoms, structureId));
+    return resolved.every(match => match.valid) ? resolved.map(match => match.atom) : null;
   }
 
   function measurementValue(type, atoms) {
@@ -1021,27 +1317,50 @@
   function colorForAtom(atom, doc, parsed) {
     const rules = doc.scene.customColors || [];
     for (let i = rules.length - 1; i >= 0; i--) {
-      if (atomMatchesSelector(atom, rules[i].selector, doc.structure.id)) return rules[i].color;
+      if (resolvedSelectorAtomIndexes(rules[i].selector, parsed?.atoms || [], doc.structure.id).has(atom.index)) return rules[i].color;
     }
-    if (doc.scene.colorMode === 'chain') return chainColor(atom.chain, parsed.chains);
+    if (doc.scene.colorMode === 'chain' || doc.scene.colorMode === 'author-chain') return chainColor(atom.chain, parsed.chains);
+    if (doc.scene.colorMode === 'instance') {
+      const instances = parsed.topology?.instances?.map(instance => instance.id) || [...new Set(parsed.atoms.map(candidate => candidate.instanceId))];
+      return chainColor(atom.instanceId, instances);
+    }
+    if (doc.scene.colorMode === 'entity') {
+      const entities = parsed.topology?.entities?.map(entity => entity.id) || [...new Set(parsed.atoms.map(candidate => candidate.entityId))];
+      return chainColor(atom.entityId, entities);
+    }
+    if (doc.scene.colorMode === 'role') return ROLE_COLORS[atom.role] || ROLE_COLORS.unknown;
     if (doc.scene.colorMode === 'residue') {
-      const residueIndex = Math.abs((atom.resi * 31 + atom.chain.charCodeAt(0)) | 0);
-      return CHAIN_COLORS[residueIndex % CHAIN_COLORS.length];
+      const key = `${atom.instanceId}|${atom.sourceFormat === 'mmcif' && atom.labelSeqId || atom.authSeqId || atom.resi}|${atom.icode}`;
+      const index = [...key].reduce((hash, character) => (hash * 31 + character.charCodeAt()) | 0, 0);
+      return CHAIN_COLORS[Math.abs(index) % CHAIN_COLORS.length];
     }
     if (doc.scene.colorMode === 'uniform') return '#7db7ff';
     return ELEMENT_COLORS[atom.element] || '#d5d9e0';
   }
 
+  function resolvedSelectorAtomIndexes(selector, atoms, structureId) {
+    if (!selector || typeof selector !== 'object' || Array.isArray(selector)) return new Set();
+    const cached = resolvedSelectorIndexCache.get(selector);
+    if (cached?.atoms === atoms && cached.structureId === structureId) return cached.indexes;
+    const indexes = new Set(resolveAtomSelectorMatches(selector, atoms, structureId).map(atom => atom.index));
+    resolvedSelectorIndexCache.set(selector, { atoms, structureId, indexes });
+    return indexes;
+  }
+
   function isWater(atom) { return WATER_NAMES.has(atom.resn); }
+  function isLigandLike(atom) {
+    return atom.role && atom.role !== 'unknown' ? ['ligand', 'ion'].includes(atom.role) : Boolean(atom.het);
+  }
   function vdwRadius(element) { return VDW_RADII[element] || 1.7; }
 
   window.MolhtmlCore = {
-    ELEMENT_COLORS, CHAIN_COLORS, parsePDB, parsePDBMetadata, normalizeMetadata, mergeMetadata,
-    metadataFromRCSBEntry, deriveDataQuality, normalizeDocument, selectorForAtom,
+    ELEMENT_COLORS, CHAIN_COLORS, ROLE_COLORS, parsePDB, parseStructure, parsePDBMetadata, parseMmcifMetadata,
+    normalizeMetadata, mergeMetadata, metadataFromRCSBEntry, deriveDataQuality, normalizeDocument,
+    requiresDocumentV2, applyDocumentCommand, selectorForAtom, sourceIdentityForAtom,
     atomMatchesSelector, atomIdentity, atomLabel, colorForAtom, isWater, vdwRadius, uid,
     MEASUREMENT_ATOM_COUNTS, normalizeMeasurements, measurementAtoms, measurementValue,
     formatMeasurementValue,
-    normalizeSavedSelections, normalizeCompoundSelector, matchSavedSelection, describeSavedSelector,
+    normalizeSavedSelections, normalizeCompoundSelector, matchSavedSelection, resolveUniqueAtomSelector, describeSavedSelector,
     residueDescriptor, buildStructureHierarchy, representativeAtom,
     LIGAND_ANALYSIS_DEFAULTS, normalizeLigandAnalysis, ligandSelector, ligandKey, ligandLabel,
     groupLigands, findLigand, analyzeLigandPocket,

@@ -45,7 +45,7 @@
     "test:artifact": "node scripts/check.mjs artifact",
     "test:e2e": "node scripts/check.mjs e2e",
     "test:performance": "node scripts/run-playwright.mjs --scheduled test e2e/performance.spec.mjs",
-    "coverage:node": "c8 --all --include=src/model.js --exclude-after-remap --check-coverage --statements=90 --branches=65 --functions=85 --lines=90 --reporter=text --reporter=html --reporter=lcovonly --reporter=json-summary --reports-dir=coverage/node node scripts/check.mjs model",
+    "coverage:node": "c8 --all --include=src/model.js --include=src/structure.js --exclude-after-remap --check-coverage --statements=90 --branches=65 --functions=85 --lines=90 --reporter=text --reporter=html --reporter=lcovonly --reporter=json-summary --reports-dir=coverage/node node scripts/check.mjs model",
     "coverage:playwright": "node scripts/playwright-coverage.mjs",
     "setup:e2e": "node scripts/run-playwright.mjs install chromium"
   },

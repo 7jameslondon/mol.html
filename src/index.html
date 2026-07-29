@@ -38,15 +38,15 @@ __DOCUMENT__
         <div class="ribbon-buttons">
           <button id="open-file-button" class="ribbon-button" type="button">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5h6l2-2h9v13h-17zM3.5 9.5h17"/></svg>
-            <span>Open</span><small>Local PDB</small>
+            <span>Open</span><small>PDB or mmCIF</small>
           </button>
           <button class="ribbon-button" type="button" data-inspector-target="fetch" aria-controls="inspector" aria-pressed="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17.5H5.8a3.8 3.8 0 0 1-.4-7.6A6 6 0 0 1 17 8.5a4.5 4.5 0 0 1 1.2 8.9H17M12 10v9m-3-3 3 3 3-3"/></svg>
-            <span>Fetch</span><small>RCSB PDB</small>
+            <span>Fetch</span><small>RCSB structure</small>
           </button>
           <button id="navigator-button" class="ribbon-button" type="button" data-inspector-target="navigator" aria-controls="inspector" aria-pressed="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h4m-4 7h8m-8 7h12M9 5v7m4 0v7"/><circle cx="5" cy="5" r="1.5"/><circle cx="5" cy="12" r="1.5"/><circle cx="5" cy="19" r="1.5"/></svg>
-            <span>Navigator</span><small>Chains &amp; sequence</small>
+            <span>Navigator</span><small>Author chains &amp; sequence</small>
           </button>
         </div>
         <div class="ribbon-group-label">Structure</div>
@@ -60,7 +60,7 @@ __DOCUMENT__
           </button>
           <button class="ribbon-button" type="button" data-inspector-target="color" aria-controls="inspector" aria-pressed="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5c3.4 4 5.2 6.8 5.2 9.2A5.2 5.2 0 0 1 6.8 12.7C6.8 10.3 8.6 7.5 12 3.5z"/><path d="M9.2 14.2c.4 1.4 1.4 2.1 2.8 2.1"/></svg>
-            <span>Color</span><small id="color-ribbon-value">By chain</small>
+            <span>Color</span><small id="color-ribbon-value">By author chain</small>
           </button>
           <button class="ribbon-button" type="button" data-inspector-target="show" aria-controls="inspector" aria-pressed="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.8 12s3.4-5.5 9.2-5.5 9.2 5.5 9.2 5.5-3.4 5.5-9.2 5.5S2.8 12 2.8 12z"/><circle cx="12" cy="12" r="2.6"/></svg>
@@ -182,14 +182,14 @@ __DOCUMENT__
           <section id="panel-navigator" class="inspector-panel" data-inspector-panel="navigator" hidden>
             <p class="panel-intro">Browse chains and residues locally. Expand a residue only when you need its atoms.</p>
             <label class="field-label navigator-search-label" for="navigator-search">Search structure</label>
-            <input id="navigator-search" class="navigator-search" type="search" placeholder="Chain, residue, atom, or serial" autocomplete="off" spellcheck="false" aria-describedby="navigator-status">
+            <input id="navigator-search" class="navigator-search" type="search" placeholder="Author chain, residue, atom, or serial" autocomplete="off" spellcheck="false" aria-describedby="navigator-status">
             <div class="navigator-toolbar">
               <span id="navigator-count">Building structure index…</span>
               <button id="navigator-clear-search" class="text-button" type="button" hidden>Clear</button>
             </div>
             <div class="navigator-section-heading"><span>SEQUENCE</span><small>Choose a residue to select and focus it</small></div>
             <div id="navigator-sequences" class="navigator-sequences" role="region" aria-label="Per-chain residue sequences"></div>
-            <div class="navigator-section-heading"><span>STRUCTURE</span><small>Chain → residue → atom</small></div>
+            <div class="navigator-section-heading"><span>STRUCTURE</span><small>Author chain → residue → atom</small></div>
             <div id="navigator-tree" class="navigator-tree" role="tree" aria-label="Structure navigator"></div>
             <p id="navigator-status" class="navigator-status" aria-live="polite"></p>
           </section>
@@ -216,7 +216,10 @@ __DOCUMENT__
             <label class="field-label" for="color-mode">Color molecule by</label>
             <select id="color-mode">
               <option value="element">Element</option>
-              <option value="chain">Chain</option>
+              <option value="chain">Author chain</option>
+              <option value="instance">Molecular instance</option>
+              <option value="entity">Entity identity</option>
+              <option value="role">Functional role</option>
               <option value="residue">Residue</option>
               <option value="uniform">Uniform blue</option>
             </select>
@@ -290,7 +293,10 @@ __DOCUMENT__
                 <select id="saved-selection-scope" aria-label="Current selection scope">
                   <option value="atom">This atom</option>
                   <option value="residue">This residue</option>
-                  <option value="chain">This chain</option>
+                  <option value="chain">This author chain</option>
+                  <option value="instance">This molecular instance</option>
+                  <option value="entity">This entity</option>
+                  <option value="role">This functional role</option>
                 </select>
                 <button id="create-current-selection" class="button accent" type="button">Save</button>
               </div>
@@ -387,7 +393,7 @@ __DOCUMENT__
               </dl>
               <label class="field-label" for="selection-scope">Apply color to</label>
               <div class="inline-fields">
-                <select id="selection-scope"><option value="atom">This atom</option><option value="residue">This residue</option><option value="chain">This chain</option></select>
+                <select id="selection-scope"><option value="atom">This atom</option><option value="residue">This residue</option><option value="chain">This author chain</option><option value="instance">This molecular instance</option><option value="entity">This entity</option><option value="role">This functional role</option></select>
                 <input id="selection-color" type="color" value="#ff3b5c" aria-label="Selection color">
               </div>
               <button id="apply-color" class="button accent full-width">Apply color</button>
@@ -424,13 +430,15 @@ __DOCUMENT__
     </main>
   </div>
 
-  <input id="file-input" type="file" accept=".pdb,.ent,.txt" hidden>
+  <input id="file-input" type="file" accept=".pdb,.ent,.cif,.mmcif,.txt" hidden>
   <div id="toast-region" class="toast-region" aria-live="polite"></div>
   <script type="text/plain" id="molhtml-license-notices" data-notice-sha256="__LICENSE_NOTICES_SHA256__">
 __LICENSE_NOTICES__
 </script>
   <script data-role="renderer-compatibility">if (typeof globalThis.OffscreenCanvas === 'undefined') globalThis.OffscreenCanvas = null;</script>
   <script>__THREEDMOL_JS__</script>
+  <script>__STRUCTURE_JS__
+//# sourceURL=molhtml:///src/structure.js</script>
   <script>__MODEL_JS__
 //# sourceURL=molhtml:///src/model.js</script>
   <script>__RENDERER_JS__
