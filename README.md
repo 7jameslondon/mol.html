@@ -136,9 +136,10 @@ Chromium UI snapshot.
 A separate metadata-only workflow maintains one build-size comment on every
 pull request. It reports `dist/example.mol.html` in decimal MB and exact bytes,
 plus the absolute and percentage change from the pull request's current merge
-branch. The comment refreshes after commits to either the pull request branch or
-`main`; it reads committed artifact metadata and never executes pull-request
-code with its comment-write permission.
+branch. The comment refreshes from trusted default-branch code after pull-request
+validation completes and directly after commits to `main`; it reads committed
+artifact metadata and never executes pull-request code with its comment-write
+permission.
 
 Separate Node and Playwright coverage workflows run for pull requests and every
 commit to `main`. They enforce the same local coverage floors and retain HTML,

@@ -1,8 +1,9 @@
 name: Report build size
 
 on:
-  pull_request_target:
-    types: [opened, reopened, synchronize, edited]
+  workflow_run:
+    workflows: [Validate]
+    types: [completed]
   push:
     branches: [main]
 
@@ -18,10 +19,11 @@ concurrency:
 jobs:
   report:
     name: update PR build-size report
+    if: ${{ github.event_name == 'push' || github.event.workflow_run.event == 'pull_request' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      # pull_request_target deliberately checks out only the trusted merge branch.
+      # workflow_run deliberately checks out only the trusted default branch.
       # The reporter reads PR artifact metadata through the API and never executes PR code.
       - name: Check out trusted reporting code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

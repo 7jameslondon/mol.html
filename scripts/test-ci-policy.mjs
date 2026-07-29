@@ -77,11 +77,20 @@ assert.deepEqual(
   { contents: 'read', 'pull-requests': 'write' },
   'Build-size reporting grants only the permissions needed to read artifacts and update PR comments'
 );
-assert.ok(buildSizePolicy.on.pull_request_target, 'Build-size reporting refreshes for PR-head changes');
+assert.deepEqual(
+  buildSizePolicy.on.workflow_run,
+  { workflows: ['Validate'], types: ['completed'] },
+  'Build-size reporting refreshes from trusted code after PR validation completes'
+);
 assert.deepEqual(
   buildSizePolicy.on.push.branches,
   ['main'],
   'Build-size reporting refreshes open PRs after merge-branch changes'
+);
+assert.equal(
+  buildSizePolicy.on.pull_request_target,
+  undefined,
+  'Dependabot cannot force the comment writer onto a read-only pull-request token'
 );
 assert.equal(
   buildSizePolicy.on.workflow_dispatch,
@@ -97,9 +106,14 @@ assert.deepEqual(
   },
   'Build-size comment writers are serialized without dropping pending refreshes'
 );
+assert.equal(
+  buildSizePolicy.jobs.report.if,
+  "${{ github.event_name == 'push' || github.event.workflow_run.event == 'pull_request' }}",
+  'Only PR validation completions and direct merge-branch pushes update reports'
+);
 assert.match(
   buildSizeWorkflow,
-  /pull_request_target deliberately checks out only the trusted merge branch/,
+  /workflow_run deliberately checks out only the trusted default branch/,
   'The privileged PR trigger documents its trust boundary'
 );
 assert.match(
@@ -109,7 +123,7 @@ assert.match(
 );
 assert.doesNotMatch(
   buildSizeWorkflow,
-  /pnpm|npm|github\.event\.pull_request\.head\.sha/,
+  /pnpm|npm|github\.event\.pull_request\.head\.sha|github\.event\.workflow_run\.head_sha/,
   'Build-size reporting never installs dependencies, builds, or checks out PR code'
 );
 

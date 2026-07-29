@@ -86,7 +86,12 @@ const apiPullRequest = {
     repo: { full_name: 'contributor/repository' }
   }
 };
-await writeFile(eventPath, JSON.stringify({ pull_request: { number: 22 } }), 'utf8');
+await writeFile(eventPath, JSON.stringify({
+  workflow_run: {
+    event: 'pull_request',
+    pull_requests: [{ number: 22 }]
+  }
+}), 'utf8');
 const originalFetch = globalThis.fetch;
 let updatedComment = null;
 globalThis.fetch = async (url, options = {}) => {

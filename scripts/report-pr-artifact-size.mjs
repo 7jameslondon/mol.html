@@ -198,7 +198,20 @@ export async function main(environment = process.env) {
   const request = createGitHubClient(environment.GITHUB_TOKEN, environment.GITHUB_API_URL);
 
   let pullRequests;
-  if (event.pull_request?.number) {
+  if (event.workflow_run) {
+    const pullNumbers = [...new Set(
+      (event.workflow_run.pull_requests || [])
+        .map(pullRequest => pullRequest.number)
+        .filter(Number.isSafeInteger)
+    )];
+    if (pullNumbers.length === 0) {
+      console.log('The completed workflow run is not associated with an open pull request.');
+      return;
+    }
+    pullRequests = await Promise.all(
+      pullNumbers.map(pullNumber => getPullRequest(request, repository, pullNumber))
+    );
+  } else if (event.pull_request?.number) {
     pullRequests = [await getPullRequest(request, repository, event.pull_request.number)];
   } else {
     const baseBranch = branchFromRef(event.ref || environment.GITHUB_REF);
