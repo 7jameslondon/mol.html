@@ -16,14 +16,57 @@ The latest build from `main` is published at
 The same self-contained artifact is also available as
 [`example.mol.html`](https://7jameslondon.github.io/mol.html/example.mol.html).
 
-## Build
+## Development
 
-Install the pinned dependencies and required Chromium binary once, then run the
-complete local quality gate:
+### Prerequisites
+
+Install these tools before setting up the project:
+
+- [Git](https://git-scm.com/) to work with the repository.
+- [Node.js](https://nodejs.org/) 24.x. The supported range is `>=24 <25`.
+- [pnpm](https://pnpm.io/installation) 11.9.0. The package manager version is
+  pinned in `package.json` and CI.
+
+This project uses pnpm directly; it does not require `npx`. Confirm that the
+expected tools are available before continuing:
+
+```powershell
+node --version
+pnpm --version
+```
+
+The Node.js version should begin with `v24.` and the pnpm version should be
+`11.9.0`.
+
+### First-time setup
+
+Install the pinned project dependencies, then install the Chromium binary used
+by the browser tests:
 
 ```powershell
 pnpm install --frozen-lockfile
 pnpm setup:e2e
+```
+
+On Linux, use the following command instead of `pnpm setup:e2e`. It installs
+Chromium and Playwright's required system libraries, matching CI:
+
+```bash
+pnpm exec playwright install --with-deps chromium
+```
+
+The dependency and browser setup commands require an internet connection the
+first time. The frozen lockfile option installs the versions recorded in
+`pnpm-lock.yaml` and fails instead of rewriting the lockfile if it disagrees
+with `package.json`.
+`pnpm setup:e2e` is a separate, explicit browser download; dependency
+installation never downloads a browser implicitly.
+
+### Build and test
+
+Run the complete local quality gate:
+
+```powershell
 pnpm check
 ```
 
@@ -36,20 +79,23 @@ a corresponding license review.
 
 `pnpm check` builds once, verifies a second byte-identical build, runs the pure
 model and adversarial single-file tests, enforces the artifact budget, and then
-exercises the built `file://` artifact in pinned Chromium. It never downloads a
-browser implicitly; `pnpm setup:e2e` is the explicit local setup step.
+exercises the built `file://` artifact in pinned Chromium.
 
 Focused commands are also available:
 
-```powershell
-pnpm test:model
-pnpm test:artifact
-pnpm build
-pnpm test:e2e
-pnpm test:performance
-pnpm coverage:node
-pnpm coverage:playwright
-```
+| Command | Purpose |
+| --- | --- |
+| `pnpm build` | Build `dist/example.mol.html`. |
+| `pnpm test:model` | Run the pure model tests. |
+| `pnpm test:artifact` | Run the built single-file artifact tests. |
+| `pnpm test:e2e` | Exercise the built artifact in the configured browser. |
+| `pnpm test:performance` | Run the scheduled performance checks. |
+| `pnpm coverage:node` | Measure model-code coverage and enforce its floors. |
+| `pnpm coverage:playwright` | Measure browser coverage and enforce its floors. |
+
+The artifact, end-to-end, and performance commands test the existing
+`dist/example.mol.html`; they do not rebuild it. After changing source files,
+run `pnpm build` first, or use `pnpm check` to build and validate in one command.
 
 Model and artifact checks require no network. Browser tests abort unexpected
 HTTP(S) traffic and mock exact RCSB coordinate, Search API, and Data API
@@ -58,9 +104,26 @@ CI retains failure traces, screenshots, video, and console diagnostics; local
 runs keep screenshots and an HTML report without the trace/video overhead.
 The two coverage commands enforce regression floors and write browsable reports
 to `coverage/node/` and `coverage/playwright/`. Playwright coverage uses
-Chromium's native JavaScript coverage API, so run `pnpm setup:e2e` first. The
-Node floor is 90% statements/lines, 85% functions, and 65% branches; the
-Playwright floor is 70% statements, 50% branches, 60% functions, and 75% lines.
+Chromium's native JavaScript coverage API, so complete the platform-specific
+Chromium setup above first. The Node floor is 90% statements/lines, 85%
+functions, and 65% branches; the Playwright floor is 70% statements, 50%
+branches, 60% functions, and 75% lines.
+
+Once built, `dist/example.mol.html` does not require Node.js, pnpm, or a network
+connection to open. The development tools are needed only to install
+dependencies, rebuild the file, and run checks.
+
+### Troubleshooting
+
+- If a command reports an unsupported Node.js version, confirm that
+  `node --version` reports Node.js 24.x.
+- If pnpm reports a package-manager version mismatch, confirm that
+  `pnpm --version` reports 11.9.0.
+- If `pnpm install --frozen-lockfile` reports that the lockfile is outdated, do
+  not bypass the check for a normal setup. `package.json` and `pnpm-lock.yaml`
+  must be updated together when dependencies are intentionally changed.
+- If a browser test reports that Chromium is missing, run `pnpm setup:e2e`, or
+  use the Linux command above to install Chromium and its system dependencies.
 
 ## Continuous integration
 
