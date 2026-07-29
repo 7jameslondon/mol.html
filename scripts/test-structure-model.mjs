@@ -304,6 +304,15 @@ const modelSpecificConnection = Core.parseStructure(multiModelCif
   .replace('ligand-link covale A LIG C1 A LIG C2 doub', 'ligand-link covale A LIG C1 A LIG C2 1 1 doub'), 'mmcif');
 assert.equal(modelSpecificConnection.bonds.map(bond => bond.atomIndices.join(':')).join(','), '0:1',
   'struct_conn partner model numbers restrict explicit topology to the named coordinate model');
+assert.ok(!modelSpecificConnection.diagnostics.parserWarnings.some(warning => /ambiguous or unresolved/i.test(warning)),
+  'model-specific struct_conn rows do not emit false diagnostics for other coordinate models');
+const crossModelConnection = Core.parseStructure(multiModelCif
+  .replace('_struct_conn.pdbx_value_order',
+    '_struct_conn.pdbx_ptnr1_PDB_model_num\n_struct_conn.pdbx_ptnr2_PDB_model_num\n_struct_conn.pdbx_value_order')
+  .replace('ligand-link covale A LIG C1 A LIG C2 doub', 'ligand-link covale A LIG C1 A LIG C2 1 2 doub'), 'mmcif');
+assert.equal(crossModelConnection.bonds.length, 0, 'cross-model struct_conn rows do not create base topology');
+assert.equal(crossModelConnection.diagnostics.parserWarnings.filter(warning => /different coordinate models/i.test(warning)).length, 1,
+  'unsupported cross-model struct_conn rows emit one explicit diagnostic');
 for (const connectionType of ['disulf', 'modres', 'metalc']) {
   const connected = Core.parseStructure(multiModelCif.replace('covale', connectionType), 'mmcif');
   assert.deepEqual(JSON.parse(JSON.stringify(connected.bonds.map(bond => bond.atomIndices))), [[0, 1], [2, 3]],
@@ -390,6 +399,30 @@ loop_
 _atom_site.group_PDB`);
 assert.throws(() => Core.parseStructure(connectionScaleFixture, 'mmcif'), /connection limit/i,
   'struct_conn resolution work is bounded before scanning atom endpoints');
+const secondRepeatedAtom = alternateConformerCif.match(/^HETATM.*$/gm)[1];
+const deniedPairScaleFixture = alternateConformerCif
+  .replace(/^HETATM.*(?:\nHETATM.*){3}/m, [
+    ...Array.from({ length: 1001 }, (_, index) =>
+      repeatedAtom.replace(/^HETATM\s+\d+/, `HETATM ${index + 1}`)),
+    ...Array.from({ length: 1000 }, (_, index) =>
+      secondRepeatedAtom.replace(/^HETATM\s+\d+/, `HETATM ${index + 1002}`))
+  ].join('\n'))
+  .replace('loop_\n_atom_site.group_PDB', `loop_
+_struct_conn.id
+_struct_conn.conn_type_id
+_struct_conn.ptnr1_label_asym_id
+_struct_conn.ptnr1_label_comp_id
+_struct_conn.ptnr1_label_atom_id
+_struct_conn.ptnr2_label_asym_id
+_struct_conn.ptnr2_label_comp_id
+_struct_conn.ptnr2_label_atom_id
+_struct_conn.ptnr1_symmetry
+_struct_conn.ptnr2_symmetry
+broad-symmetry covale A LIG C1 A LIG N1 1_555 2_555
+loop_
+_atom_site.group_PDB`);
+assert.throws(() => Core.parseStructure(deniedPairScaleFixture, 'mmcif'), /connection limit/i,
+  'symmetry-denied pair materialization is capped before Cartesian expansion');
 const modelScaleAtoms = Array.from({ length: 5001 }, (_, index) => repeatedAtom
   .replace(/^HETATM\s+\d+/, `HETATM ${index + 1}`)
   .replace(/\s1$/, ` ${index + 1}`)).join('\n');

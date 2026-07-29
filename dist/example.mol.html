@@ -2440,25 +2440,45 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
 
   function mmcifExplicitBonds(categories, atoms, diagnostics) {
     const bonds = [];
-    const deniedInferencePairs = [];
+    const deniedInferencePairs = new Set();
+    let deniedPairAttempts = 0;
     const existing = new Set();
     const modelNumbers = [...new Set(atoms.map(atom => atom.model))];
     const connections = (categories.struct_conn || []).filter(row => isTopologyConnectionType(row.conn_type_id));
-    if (connections.length * atoms.length * modelNumbers.length > 25e6) throw new Error('Connection limit.');
-    for (const row of connections) {
+    const scopedConnections = connections.map(row => {
+      const leftModel = cifNumber(row.pdbx_ptnr1_pdb_model_num);
+      const rightModel = cifNumber(row.pdbx_ptnr2_pdb_model_num);
+      return { row, leftModel, rightModel, modelNumbers: leftModel == null && rightModel == null
+        ? modelNumbers : [leftModel ?? rightModel] };
+    });
+    if (scopedConnections.reduce((sum, connection) => sum + connection.modelNumbers.length, 0)
+      * atoms.length > 25e6) throw new Error('Connection limit.');
+    for (const { row, leftModel, rightModel, modelNumbers: rowModels } of scopedConnections) {
+      if (leftModel != null && rightModel != null && leftModel !== rightModel) {
+        if (diagnostics?.parserWarnings?.length < 50) {
+          diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} connects different coordinate models and was excluded from topology.`);
+        }
+        continue;
+      }
       const baseCoordinates = isBaseStructConnSymmetry(row.ptnr1_symmetry) && isBaseStructConnSymmetry(row.ptnr2_symmetry);
       const leftAtoms = findStructConnAtoms(atoms, row, 'ptnr1');
       const rightAtoms = findStructConnAtoms(atoms, row, 'ptnr2');
       if (!baseCoordinates && diagnostics?.parserWarnings?.length < 50) {
         diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} references a crystallographic symmetry mate and was excluded from base topology.`);
       }
-      for (const modelNumber of modelNumbers) {
+      for (const modelNumber of rowModels) {
         const leftMatches = leftAtoms.filter(atom => atom.model === modelNumber);
         const rightMatches = rightAtoms.filter(atom => atom.model === modelNumber);
         if (!baseCoordinates) {
-          if (leftMatches.length && rightMatches.length) deniedInferencePairs.push([
-            new Set(leftMatches.map(atom => atom.index)), new Set(rightMatches.map(atom => atom.index))
-          ]);
+          deniedPairAttempts += leftMatches.length * rightMatches.length;
+          if (deniedPairAttempts > 1e6) throw new Error('Connection limit.');
+          for (const left of leftMatches) for (const right of rightMatches) {
+            if (left.index === right.index) continue;
+            const key = left.index < right.index
+              ? left.index * atoms.length + right.index : right.index * atoms.length + left.index;
+            deniedInferencePairs.add(key);
+            if (deniedInferencePairs.size > 1e6) throw new Error('Connection limit.');
+          }
           continue;
         }
         if (leftMatches.length !== 1 || rightMatches.length !== 1) {
@@ -2660,7 +2680,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     });
   }
 
-  function inferBonds(atoms, bonds, deniedPairs = []) {
+  function inferBonds(atoms, bonds, deniedPairs = new Set()) {
     const existing = new Set(bonds.map(bond => {
       const [left, right] = bond.atomIndices;
       return left < right ? `${left}:${right}` : `${right}:${left}`;
@@ -2695,9 +2715,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
           const maximum = (COVALENT_RADII[atom.element] || .77) + (COVALENT_RADII[other.element] || .77) + .46;
           if (distanceSquared < .16 || distanceSquared > maximum * maximum) continue;
           const key = atom.index < otherIndex ? `${atom.index}:${otherIndex}` : `${otherIndex}:${atom.index}`;
-          const denied = deniedPairs.some(pair => (pair[0].has(atom.index) && pair[1].has(otherIndex))
-            || (pair[0].has(otherIndex) && pair[1].has(atom.index)));
-          if (!existing.has(key) && !denied) {
+          if (!existing.has(key) && !deniedPairs.has(atom.index * atoms.length + otherIndex)) {
             existing.add(key);
             bonds.push(bondRecord(atom.index, otherIndex));
           }
