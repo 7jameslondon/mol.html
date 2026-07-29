@@ -1,6 +1,9 @@
 # mol.html
 
 [![Validate](https://github.com/7jameslondon/mol.html/actions/workflows/ci.yml/badge.svg)](https://github.com/7jameslondon/mol.html/actions/workflows/ci.yml)
+[![Deploy Pages](https://github.com/7jameslondon/mol.html/actions/workflows/pages.yml/badge.svg)](https://github.com/7jameslondon/mol.html/actions/workflows/pages.yml)
+[![Node coverage](https://github.com/7jameslondon/mol.html/actions/workflows/node-coverage.yml/badge.svg)](https://github.com/7jameslondon/mol.html/actions/workflows/node-coverage.yml)
+[![Playwright coverage](https://github.com/7jameslondon/mol.html/actions/workflows/playwright-coverage.yml/badge.svg)](https://github.com/7jameslondon/mol.html/actions/workflows/playwright-coverage.yml)
 
 `mol.html` is a molecular viewer whose final document is one self-contained,
 self-editing HTML file. The HTML carries the viewer, editor, PDB or PDBx/mmCIF coordinates,
@@ -87,6 +90,8 @@ Focused commands are also available:
 | `pnpm test:artifact` | Run the built single-file artifact tests. |
 | `pnpm test:e2e` | Exercise the built artifact in the configured browser. |
 | `pnpm test:performance` | Run the scheduled performance checks. |
+| `pnpm coverage:node` | Measure model-code coverage and enforce its floors. |
+| `pnpm coverage:playwright` | Measure browser coverage and enforce its floors. |
 
 The artifact, end-to-end, and performance commands test the existing
 `dist/example.mol.html`; they do not rebuild it. After changing source files,
@@ -97,6 +102,11 @@ HTTP(S) traffic and mock exact RCSB coordinate, Search API, and Data API
 requests. Test output is isolated under Playwright's per-test output directory.
 CI retains failure traces, screenshots, video, and console diagnostics; local
 runs keep screenshots and an HTML report without the trace/video overhead.
+The two coverage commands enforce regression floors and write browsable reports
+to `coverage/node/` and `coverage/playwright/`. Playwright coverage uses
+Chromium's native JavaScript coverage API, so run `pnpm setup:e2e` first. The
+Node floor is 90% statements/lines, 85% functions, and 65% branches; the
+Playwright floor is 70% statements, 50% branches, 60% functions, and 75% lines.
 
 Once built, `dist/example.mol.html` does not require Node.js, pnpm, or a network
 connection to open. The development tools are needed only to install
@@ -121,6 +131,11 @@ every commit to `main`. It uses read-only repository permission, immutable
 action SHAs, a frozen lockfile, and no release credentials. A weekly and manual
 job adds Firefox/WebKit smoke coverage, timing observations, and a masked
 Chromium UI snapshot.
+
+Separate Node and Playwright coverage workflows run for pull requests and every
+commit to `main`. They enforce the same local coverage floors and retain HTML,
+LCOV, and summary reports as workflow artifacts; the badges above show the
+status of those evaluations without requiring repository write credentials.
 
 After the `validate` job is stable on the repository, configure branch
 protection to require it and require the branch to be current before merge (or

@@ -1,13 +1,9 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import vm from 'node:vm';
 
-const structureSource = await readFile('src/structure.js', 'utf8');
-const source = await readFile('src/model.js', 'utf8');
-const context = vm.createContext({ window: {}, structuredClone, console });
-vm.runInContext(structureSource, context, { filename: 'src/structure.js' });
-vm.runInContext(source, context);
-const Core = context.window.MolhtmlCore;
+globalThis.window = {};
+await import('../src/structure.js');
+await import('../src/model.js');
+const Core = window.MolhtmlCore;
 
 const cameraA = { view: [1, 2, 3, 25, 0, 0, 0, 1], futureCameraField: 'kept' };
 const views = Core.normalizeSavedViews([
