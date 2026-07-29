@@ -298,6 +298,12 @@ const residueColorDocument = { structure: { id: 'multi-model' }, scene: { colorM
 assert.equal(Core.colorForAtom(multiModelMmcif.atoms[0], residueColorDocument, multiModelMmcif),
   Core.colorForAtom(multiModelMmcif.atoms[2], residueColorDocument, multiModelMmcif),
   'the same normalized residue keeps its color across coordinate models');
+const modelSpecificConnection = Core.parseStructure(multiModelCif
+  .replace('_struct_conn.pdbx_value_order',
+    '_struct_conn.pdbx_ptnr1_PDB_model_num\n_struct_conn.pdbx_ptnr2_PDB_model_num\n_struct_conn.pdbx_value_order')
+  .replace('ligand-link covale A LIG C1 A LIG C2 doub', 'ligand-link covale A LIG C1 A LIG C2 1 1 doub'), 'mmcif');
+assert.equal(modelSpecificConnection.bonds.map(bond => bond.atomIndices.join(':')).join(','), '0:1',
+  'struct_conn partner model numbers restrict explicit topology to the named coordinate model');
 for (const connectionType of ['disulf', 'modres', 'metalc']) {
   const connected = Core.parseStructure(multiModelCif.replace('covale', connectionType), 'mmcif');
   assert.deepEqual(JSON.parse(JSON.stringify(connected.bonds.map(bond => bond.atomIndices))), [[0, 1], [2, 3]],
@@ -384,6 +390,25 @@ loop_
 _atom_site.group_PDB`);
 assert.throws(() => Core.parseStructure(connectionScaleFixture, 'mmcif'), /connection limit/i,
   'struct_conn resolution work is bounded before scanning atom endpoints');
+const modelScaleAtoms = Array.from({ length: 5001 }, (_, index) => repeatedAtom
+  .replace(/^HETATM\s+\d+/, `HETATM ${index + 1}`)
+  .replace(/\s1$/, ` ${index + 1}`)).join('\n');
+const modelScaleFixture = alternateConformerCif
+  .replace(/^HETATM.*(?:\nHETATM.*){3}/m, modelScaleAtoms)
+  .replace('loop_\n_atom_site.group_PDB', `loop_
+_struct_conn.id
+_struct_conn.conn_type_id
+_struct_conn.ptnr1_label_asym_id
+_struct_conn.ptnr1_label_comp_id
+_struct_conn.ptnr1_label_atom_id
+_struct_conn.ptnr2_label_asym_id
+_struct_conn.ptnr2_label_comp_id
+_struct_conn.ptnr2_label_atom_id
+one-connection covale A LIG C1 A LIG N1
+loop_
+_atom_site.group_PDB`);
+assert.throws(() => Core.parseStructure(modelScaleFixture, 'mmcif'), /connection limit/i,
+  'struct_conn resolution work is bounded across many coordinate models');
 const crossConformerStructConn = Core.parseStructure(
   authorStructConnCif.replace('N1 A 1_555', 'N1 B 1_555'),
   'mmcif'
@@ -535,6 +560,8 @@ assert.throws(() => Core.parseStructure(conformanceCif.replace('(1-2)(3)', '(1-1
   /assembly limit/i, 'assembly operator ranges have a materialization safety limit');
 assert.throws(() => Core.parseStructure(conformanceCif.replace('(1-2)(3)', '(1-101)(1-101)'), 'mmcif'),
   /assembly limit/i, 'assembly operator Cartesian products have a safety limit');
+assert.throws(() => Core.parseStructure(conformanceCif.replace('(1-2)(3)', '(1)'.repeat(101)), 'mmcif'),
+  /assembly limit/i, 'assembly operator sequence length is bounded before repeated array copying');
 assert.throws(() => Core.parseStructure(conformanceCif.replace(
   "1 '(1-2)(3)' A,B", "1 '(1-10000)' A\n1 '(1-10000)' B"
 ), 'mmcif'), /assembly limit/i, 'assembly transforms are capped across generator rows');
@@ -578,6 +605,11 @@ const extensionV1 = Core.normalizeDocument({
   scene: { ...v1.scene, extension: { accessibility: { role: 'presentation', entityId: 'visual-only' } } }
 });
 assert.equal(extensionV1.version, 1, 'unknown nested scene fields do not trigger identity-aware version gating');
+const savedViewColorV1 = Core.normalizeDocument({
+  ...v1, version: 1,
+  scene: { ...v1.scene, savedViews: [{ title: 'Instances', snapshot: { colorMode: 'instance' } }] }
+});
+assert.equal(savedViewColorV1.version, 2, 'semantic color modes in saved views upgrade PDB documents to v2');
 const semanticColorV1 = Core.normalizeDocument({
   ...v1, version: 1,
   scene: { ...v1.scene, colorMode: 'chain', customColors: [{

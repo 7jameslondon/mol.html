@@ -164,20 +164,21 @@ assert.equal(addedLabels.length, 1, 'a uniquely resolved current atom creates on
 
 addedStyles.length = 0;
 const pocketData = ligandPocketPdb.replace('END',
-  'ATOM      9  CB  ALA A   1     -10.000   0.000   0.000  1.00 20.00           C\nEND');
+  'ATOM      9  CB  ALA A   1     -10.000   0.000   0.000  1.00 20.00           C\nATOM     10  H   ALA A   1      -1.500   0.000   0.000  1.00 20.00           H\nEND');
 const pocketStructure = Core.parseStructure(pocketData, 'pdb');
 const pocketDoc = Core.normalizeDocument({
   format: 'molhtml/document', version: 1, documentId: 'renderer-pocket', revision: 1,
   structure: { id: 'pocket', name: 'pocket.pdb', format: 'pdb', data: pocketData },
-  scene: { ligandAnalysis: {
+  scene: { showWater: true, ligandAnalysis: {
     selectedLigand: Core.groupLigands(pocketStructure, 'pocket')[0].selector,
     cutoff: 4, showLigand: false, showPocket: true, showContacts: false
   } }
 });
 const pocketRenderer = new context.window.MoleculeRenderer({}, {});
 pocketRenderer.setDocument(pocketDoc, { fit: true });
-const completeResidueStyle = addedStyles.find(entry => entry.selection.index?.includes(8));
-assert.deepEqual(JSON.parse(JSON.stringify(completeResidueStyle.selection)), { model: 0, index: [0, 1, 8] },
-  'pocket styling includes non-contacting atoms from each normalized residue');
+const completeResidueStyle = addedStyles.find(entry => entry.selection.and?.[0]?.index?.includes(8));
+assert.deepEqual(JSON.parse(JSON.stringify(completeResidueStyle.selection)), {
+  and: [{ model: 0, index: [0, 1, 8, 9] }, { not: { elem: 'H' } }]
+}, 'pocket styling includes complete normalized residues without overriding hydrogen visibility');
 
 console.log('Normalized PDB/mmCIF renderer bond, mapping, and strict selection tests passed.');

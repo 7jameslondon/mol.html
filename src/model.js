@@ -568,11 +568,13 @@
 
   function requiresDocumentV2(doc) {
     const scene = doc?.scene || {};
+    const views = scene.savedViews || [];
     if (doc?.structure?.format === 'mmcif'
-      || ['author-chain', 'instance', 'entity', 'role'].includes(scene.colorMode)) return true;
+      || ['author-chain', 'instance', 'entity', 'role'].some(mode =>
+        mode === scene.colorMode || views.some(view => mode === view?.snapshot?.colorMode))) return true;
     const pending = [scene.selection, scene.ligandAnalysis?.selectedLigand, ...(scene.customColors || []),
       ...(scene.measurements || []).flatMap(record => record?.atoms || []),
-      ...(scene.savedSelections || []), ...(scene.savedViews || []).flatMap(view =>
+      ...(scene.savedSelections || []), ...views.flatMap(view =>
         [view?.snapshot?.selection, ...(view?.snapshot?.customColors || [])])];
     for (const value of pending) {
       if (!value || typeof value !== 'object') continue;
