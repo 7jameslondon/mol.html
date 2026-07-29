@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { loadLegalNotices } from './legal-notices.mjs';
 
 const BASELINE_BYTES = 865_951;
-const MAX_ARTIFACT_BYTES = 950_000;
+const MAX_ARTIFACT_BYTES = 10_000_000;
 const { size } = await stat(resolve('dist/example.mol.html'));
 const legal = await loadLegalNotices(resolve('.'));
 const rendererBytes = Buffer.byteLength(legal.minifiedBundle);

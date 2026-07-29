@@ -88,8 +88,11 @@ Native file permissions and real-GPU behavior remain release checks; see
 - Press `Ctrl+S` or use **Save**. Chromium browsers can rewrite a selected file
   in place; other browsers download a new complete copy.
 
-The included starter structure has synthetic demonstration coordinates and must
-not be used for scientific analysis.
+The included starter structure is the experimentally determined Dickerson–Drew
+B-DNA dodecamer ([PDB 1BNA](https://www.rcsb.org/structure/1BNA)). Its embedded
+coordinate payload retains all 486 DNA atoms while omitting the 80
+crystallographic waters and non-coordinate PDB headers. RCSB metadata and file
+provenance remain embedded in the molecular document.
 
 ## Renderer
 

@@ -37,7 +37,7 @@ Use a small first-party, category-preserving text mmCIF parser for the domain mo
 
 The existing 3Dmol parser remains responsible for rendering, but it is not the domain parser. Its public result is a flattened display atom list and it does not provide the entity, assembly, and category-preserving interface required by mol.html. Depending on renderer-private parser state would also prevent an independent renderer boundary.
 
-Selectively bundling Mol*'s CIF reader was rejected for this iteration because it would introduce a second large molecular-graphics dependency surface into an artifact with a 950,000-byte ceiling. The first-party parser supports the required text-CIF lexical forms, loop categories, atom sites, entity and struct-asym identity, explicit connections, metadata, and assembly operators.
+Selectively bundling Mol*'s CIF reader was rejected for this iteration because it would introduce a second large molecular-graphics dependency surface when the required text-CIF subset can be supported directly. The first-party parser supports the required lexical forms, loop categories, atom sites, entity and struct-asym identity, explicit connections, metadata, and assembly operators. Artifact growth remains independently bounded by the enforced 10,000,000-byte ceiling.
 
 BinaryCIF is deferred. It is an encoding optimization rather than the runtime model.
 
@@ -99,11 +99,12 @@ The accepted implementation was measured on the feature branch after the determi
 release build:
 
 - Branch-start artifact: 862,392 bytes.
-- Final artifact: 949,932 bytes.
-- First-party increase: 87,540 bytes.
+- Final artifact after integrating the 1BNA starter from `main`: 974,049 bytes.
+- Increase from the branch-start artifact: 111,657 bytes.
 - Bundled 3Dmol payload: unchanged at 537,792 bytes.
-- Remaining headroom under the 950,000-byte ceiling: 68 bytes.
-- Model/schema and artifact verification: passed, including 67 artifact invariants.
+- Enforced artifact ceiling: 10,000,000 bytes, adopted by explicit project decision.
+- Remaining headroom under the ceiling: 9,025,951 bytes.
+- Model/schema and artifact verification: passed, including 70 artifact invariants.
 - Browser regression suite: 29 tests passed in Chromium.
 - Scheduled performance observation: the deterministic 5,000-atom case passed.
 

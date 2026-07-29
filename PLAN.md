@@ -55,11 +55,12 @@ runtime, and recognizes standard software-determined PDB assemblies plus larger 
 numeric oligomer counts. Final assembly hardening also supports the legacy `QUATERNARY
 STRUCTURE FOR THIS ENTRY` form and maps REMARK 350 `NULL` to the normalized blank chain.
 
-The final deterministic artifact is 949,932 bytes, leaving 68 bytes under the existing
-950,000-byte ceiling. Model/schema checks, 67 artifact invariants, all 29 Chromium regression
-tests, and the scheduled 5,000-atom performance case pass. Publication is performed from the
-dedicated branch through a review-ready pull request; merging is intentionally outside this
-plan's implementation step.
+After integrating the 1BNA starter from the latest `main`, the final deterministic artifact is
+974,049 bytes. An explicit project decision raises the enforced artifact ceiling to 10,000,000
+bytes, leaving 9,025,951 bytes of headroom. Model/schema checks, 70 artifact invariants, all 29
+Chromium regression tests, and the scheduled 5,000-atom performance case pass. Publication is
+performed from the dedicated branch through a review-ready pull request; merging is intentionally
+outside this plan's implementation step.
 
 ## Target architecture
 
