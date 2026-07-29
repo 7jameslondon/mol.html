@@ -567,15 +567,18 @@
   }
 
   function requiresDocumentV2(doc) {
-    if (doc?.structure?.format === 'mmcif') return true;
-    if (['author-chain', 'instance', 'entity', 'role'].includes(doc?.scene?.colorMode)) return true;
-    const values = [doc?.scene];
-    for (const value of values) {
+    const scene = doc?.scene || {};
+    if (doc?.structure?.format === 'mmcif'
+      || ['author-chain', 'instance', 'entity', 'role'].includes(scene.colorMode)) return true;
+    const pending = [scene.selection, scene.ligandAnalysis?.selectedLigand, ...(scene.customColors || []),
+      ...(scene.measurements || []).flatMap(record => record?.atoms || []),
+      ...(scene.savedSelections || []), ...(scene.savedViews || []).flatMap(view =>
+        [view?.snapshot?.selection, ...(view?.snapshot?.customColors || [])])];
+    for (const value of pending) {
       if (!value || typeof value !== 'object') continue;
-      if (value.sourceIdentity || value.instanceId != null || value.entityId != null || value.role != null
-        || value.connectedComponentId != null
+      if (value.sourceIdentity || value.instanceId || value.entityId || value.role || value.connectedComponentId
         || ['instance', 'entity', 'role', 'connected-component'].includes(value.kind || value.scope)) return true;
-      values.push(...Object.values(value));
+      pending.push(value.selector, value.target);
     }
     return false;
   }

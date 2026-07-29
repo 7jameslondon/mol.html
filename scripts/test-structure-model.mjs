@@ -362,6 +362,28 @@ _atom_site.group_PDB`
 assert.equal(ambiguousSymmetryStructConn.bonds.length, 0,
   'all candidate pairs from an ambiguous symmetry-qualified connection are denied to inference');
 assert.equal(ambiguousSymmetryStructConn.topology.connectedComponents.length, 4);
+const symmetryRows = Array.from({ length: 5001 }, (_, index) =>
+  `symmetry-${index} covale A LIG C1 A LIG N1 1_555 2_555`).join('\n');
+const repeatedAtom = alternateConformerCif.match(/^HETATM.*$/m)[0];
+const connectionScaleFixture = alternateConformerCif
+  .replace(/^HETATM.*(?:\nHETATM.*){3}/m, Array.from({ length: 5000 }, (_, index) =>
+    repeatedAtom.replace(/^HETATM\s+\d+/, `HETATM ${index + 1}`)).join('\n'))
+  .replace('loop_\n_atom_site.group_PDB', `loop_
+_struct_conn.id
+_struct_conn.conn_type_id
+_struct_conn.ptnr1_label_asym_id
+_struct_conn.ptnr1_label_comp_id
+_struct_conn.ptnr1_label_atom_id
+_struct_conn.ptnr2_label_asym_id
+_struct_conn.ptnr2_label_comp_id
+_struct_conn.ptnr2_label_atom_id
+_struct_conn.ptnr1_symmetry
+_struct_conn.ptnr2_symmetry
+${symmetryRows}
+loop_
+_atom_site.group_PDB`);
+assert.throws(() => Core.parseStructure(connectionScaleFixture, 'mmcif'), /connection limit/i,
+  'struct_conn resolution work is bounded before scanning atom endpoints');
 const crossConformerStructConn = Core.parseStructure(
   authorStructConnCif.replace('N1 A 1_555', 'N1 B 1_555'),
   'mmcif'
@@ -510,9 +532,15 @@ const translated = conformance.assemblyInstances.find(instance =>
 assert.deepEqual(JSON.parse(JSON.stringify(translated.transform)).map(row => row[3]), [0, 10, 0, 1],
   'operator products compose right-to-left into an explicit assembly-instance transform');
 assert.throws(() => Core.parseStructure(conformanceCif.replace('(1-2)(3)', '(1-10001)(3)'), 'mmcif'),
-  /operator limit exceeded/i, 'assembly operator ranges have a materialization safety limit');
+  /assembly limit/i, 'assembly operator ranges have a materialization safety limit');
 assert.throws(() => Core.parseStructure(conformanceCif.replace('(1-2)(3)', '(1-101)(1-101)'), 'mmcif'),
-  /operator limit exceeded/i, 'assembly operator Cartesian products have a safety limit');
+  /assembly limit/i, 'assembly operator Cartesian products have a safety limit');
+assert.throws(() => Core.parseStructure(conformanceCif.replace(
+  "1 '(1-2)(3)' A,B", "1 '(1-10000)' A\n1 '(1-10000)' B"
+), 'mmcif'), /assembly limit/i, 'assembly transforms are capped across generator rows');
+const repeatedAssemblyAsymIds = Core.parseStructure(conformanceCif.replace("'(1-2)(3)' A,B", "'(1-2)(3)' A,A,B,B"), 'mmcif');
+assert.equal(repeatedAssemblyAsymIds.assemblyInstances.length, 9,
+  'duplicate assembly asym IDs do not duplicate expanded instances');
 const sharedAuthorPocket = Core.parseStructure(conformanceCif
   .replaceAll('10 GLY B ', '10 GLY A ')
   .replace('20.0  5.0 0.0', '2.0  2.5 0.0')
@@ -545,6 +573,11 @@ assert.equal(v1.version, 1, 'an untouched PDB v1 document remains v1');
 assert.equal(v1.futureDocumentField.preserved, true);
 assert.equal(v1.structure.futureStructureField, 42);
 assert.equal(v1.scene.futureSceneField, true);
+const extensionV1 = Core.normalizeDocument({
+  ...v1, version: 1,
+  scene: { ...v1.scene, extension: { accessibility: { role: 'presentation', entityId: 'visual-only' } } }
+});
+assert.equal(extensionV1.version, 1, 'unknown nested scene fields do not trigger identity-aware version gating');
 const semanticColorV1 = Core.normalizeDocument({
   ...v1, version: 1,
   scene: { ...v1.scene, colorMode: 'chain', customColors: [{

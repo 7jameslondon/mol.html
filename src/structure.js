@@ -903,8 +903,9 @@
     const deniedInferencePairs = [];
     const existing = new Set();
     const modelNumbers = [...new Set(atoms.map(atom => atom.model))];
-    for (const row of categories.struct_conn || []) {
-      if (!isTopologyConnectionType(row.conn_type_id)) continue;
+    const connections = (categories.struct_conn || []).filter(row => isTopologyConnectionType(row.conn_type_id));
+    if (connections.length * atoms.length > 25e6) throw new Error('Connection limit.');
+    for (const row of connections) {
       const baseCoordinates = isBaseStructConnSymmetry(row.ptnr1_symmetry) && isBaseStructConnSymmetry(row.ptnr2_symmetry);
       const leftAtoms = findStructConnAtoms(atoms, row, 'ptnr1');
       const rightAtoms = findStructConnAtoms(atoms, row, 'ptnr2');
@@ -959,34 +960,25 @@
   }
 
   function findStructConnAtoms(atoms, row, prefix) {
-    const labelAsymId = cifValue(row[`${prefix}_label_asym_id`]);
-    const labelSeqId = cifValue(row[`${prefix}_label_seq_id`]);
-    const labelCompId = cifValue(row[`${prefix}_label_comp_id`]);
-    const labelAtomId = cifValue(row[`${prefix}_label_atom_id`]);
-    const authAsymId = cifValue(row[`${prefix}_auth_asym_id`]);
-    const authSeqId = cifValue(row[`${prefix}_auth_seq_id`]);
-    const authCompId = cifValue(row[`${prefix}_auth_comp_id`]);
-    const authAtomId = cifValue(row[`${prefix}_auth_atom_id`]);
-    const labelAltId = cifValue(row[`pdbx_${prefix}_label_alt_id`]) || cifValue(row[`${prefix}_label_alt_id`]);
-    const authAltId = cifValue(row[`pdbx_${prefix}_auth_alt_id`]);
-    const insertionCode = cifValue(row[`pdbx_${prefix}_pdb_ins_code`]);
-    return atoms.filter(atom =>
-      (labelAsymId == null || atom.labelAsymId === labelAsymId)
-      && (labelSeqId == null || atom.labelSeqId === labelSeqId)
-      && (labelCompId == null || atom.labelCompId === labelCompId)
-      && (labelAtomId == null || atom.labelAtomId === labelAtomId)
-      && (authAsymId == null || atom.authAsymId === authAsymId)
-      && (authSeqId == null || atom.authSeqId === authSeqId)
-      && (authCompId == null || atom.authCompId === authCompId)
-      && (authAtomId == null || atom.authAtomId === authAtomId)
-      && (labelAltId == null || atom.labelAltId === labelAltId)
-      && (authAltId == null || atom.authAltId === authAltId)
-      && (insertionCode == null || atom.icode === insertionCode)
-    );
+    const criteria = [
+      ['labelAsymId', cifValue(row[`${prefix}_label_asym_id`])],
+      ['labelSeqId', cifValue(row[`${prefix}_label_seq_id`])],
+      ['labelCompId', cifValue(row[`${prefix}_label_comp_id`])],
+      ['labelAtomId', cifValue(row[`${prefix}_label_atom_id`])],
+      ['authAsymId', cifValue(row[`${prefix}_auth_asym_id`])],
+      ['authSeqId', cifValue(row[`${prefix}_auth_seq_id`])],
+      ['authCompId', cifValue(row[`${prefix}_auth_comp_id`])],
+      ['authAtomId', cifValue(row[`${prefix}_auth_atom_id`])],
+      ['labelAltId', cifValue(row[`pdbx_${prefix}_label_alt_id`]) || cifValue(row[`${prefix}_label_alt_id`])],
+      ['authAltId', cifValue(row[`pdbx_${prefix}_auth_alt_id`])],
+      ['icode', cifValue(row[`pdbx_${prefix}_pdb_ins_code`])]
+    ];
+    return atoms.filter(atom => criteria.every(([key, value]) => value == null || atom[key] === value));
   }
 
   function mmcifAssemblies(categories) {
     const operatorMap = new Map();
+    let transformCount = 0;
     for (const row of categories.pdbx_struct_oper_list || []) {
       const id = cifValue(row.id);
       if (!id) continue;
@@ -1020,6 +1012,7 @@
       }
       const operatorExpression = cifValue(row.oper_expression) || '';
       const operatorSequences = expandOperatorExpression(operatorExpression);
+      if ((transformCount += operatorSequences.length) > 1e4) throw new Error('Assembly limit exceeded.');
       const operatorIds = [...new Set(operatorSequences.flat())];
       assemblyMap.get(id).generators.push({
         asymIds: (cifValue(row.asym_id_list) || '').split(',').map(item => item.trim()).filter(Boolean),
@@ -1045,7 +1038,7 @@
     if (!groups.length) groups.push(expandOperatorGroup(expression));
     if (groups.some(group => !group.length)) return [];
     return groups.reduce((combinations, group) => {
-      if (combinations.length * group.length > 10_000) throw new Error('Assembly operator limit exceeded.');
+      if (combinations.length * group.length > 1e4) throw new Error('Assembly limit exceeded.');
       return combinations.flatMap(sequence => group.map(operatorId => [...sequence, operatorId]));
     }, [[]]);
   }
@@ -1059,7 +1052,7 @@
         const start = Number(range[1]);
         const end = Number(range[2]);
         if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end)
-          || Math.abs(end - start) >= 10_000) throw new Error('Assembly operator limit exceeded.');
+          || Math.abs(end - start) >= 1e4) throw new Error('Assembly limit exceeded.');
         const step = start <= end ? 1 : -1;
         for (let number = start; number !== end + step; number += step) ids.push(String(number));
       } else if (part) ids.push(part);
@@ -1101,13 +1094,15 @@
       if (!instancesByAuthorChain.has(authorChain)) instancesByAuthorChain.set(authorChain, []);
       instancesByAuthorChain.get(authorChain).push(instance);
     }
+    let expandedCount = 0;
     return assemblies.map(assembly => {
       const expanded = [];
       for (const [generatorIndex, generator] of assembly.generators.entries()) {
-        for (const asymId of generator.asymIds.length ? generator.asymIds : [null]) {
+        for (const asymId of new Set(generator.asymIds.length ? generator.asymIds : [null])) {
           const labeled = instanceByLabelAsymId.get(asymId);
           const bases = asymId == null ? instances : labeled ? [labeled] : (instancesByAuthorChain.get(asymId) || []);
           for (const base of bases) for (const transform of generator.transforms || []) {
+              if (expandedCount++ >= 1e5) throw new Error('Assembly limit exceeded.');
               expanded.push({
                 index: expanded.length,
                 id: `${assembly.id}:${generatorIndex}:${base.id}:${transform.id}`,

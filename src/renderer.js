@@ -200,7 +200,7 @@
       }
       if (state.showPocket) {
         for (const residue of result.residues) {
-          this.viewer.addStyle(this.selectionForAtoms(residue.atoms), {
+          this.viewer.addStyle(this.to3DSelection(residue.selector), {
             stick: { radius: .22, color: residue.hasPolar ? '#71ddf8' : '#7ee2a8' },
             sphere: { scale: .25, color: residue.hasPolar ? '#71ddf8' : '#7ee2a8' }
           });

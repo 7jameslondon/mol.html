@@ -2,13 +2,14 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
-const [structureSource, modelSource, rendererSource, multiModelCif, multiModelPdb, authorStructConnCif] = await Promise.all([
+const [structureSource, modelSource, rendererSource, multiModelCif, multiModelPdb, authorStructConnCif, ligandPocketPdb] = await Promise.all([
   readFile(new URL('../src/structure.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/model.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/renderer.js', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/multi-model.cif', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/multi-model.pdb', import.meta.url), 'utf8'),
-  readFile(new URL('../fixtures/author-struct-conn.cif', import.meta.url), 'utf8')
+  readFile(new URL('../fixtures/author-struct-conn.cif', import.meta.url), 'utf8'),
+  readFile(new URL('../fixtures/ligand-pocket.pdb', import.meta.url), 'utf8')
 ]);
 
 let Core;
@@ -160,5 +161,23 @@ assert.equal(addedStyles.length, 1, 'a uniquely resolved current atom creates on
 assert.deepEqual(JSON.parse(JSON.stringify(addedStyles[0].selection)), { model: 0, index: [0] },
   'current atom highlighting targets the exact normalized-to-renderer mapping');
 assert.equal(addedLabels.length, 1, 'a uniquely resolved current atom creates one renderer label');
+
+addedStyles.length = 0;
+const pocketData = ligandPocketPdb.replace('END',
+  'ATOM      9  CB  ALA A   1     -10.000   0.000   0.000  1.00 20.00           C\nEND');
+const pocketStructure = Core.parseStructure(pocketData, 'pdb');
+const pocketDoc = Core.normalizeDocument({
+  format: 'molhtml/document', version: 1, documentId: 'renderer-pocket', revision: 1,
+  structure: { id: 'pocket', name: 'pocket.pdb', format: 'pdb', data: pocketData },
+  scene: { ligandAnalysis: {
+    selectedLigand: Core.groupLigands(pocketStructure, 'pocket')[0].selector,
+    cutoff: 4, showLigand: false, showPocket: true, showContacts: false
+  } }
+});
+const pocketRenderer = new context.window.MoleculeRenderer({}, {});
+pocketRenderer.setDocument(pocketDoc, { fit: true });
+const completeResidueStyle = addedStyles.find(entry => entry.selection.index?.includes(8));
+assert.deepEqual(JSON.parse(JSON.stringify(completeResidueStyle.selection)), { model: 0, index: [0, 1, 8] },
+  'pocket styling includes non-contacting atoms from each normalized residue');
 
 console.log('Normalized PDB/mmCIF renderer bond, mapping, and strict selection tests passed.');
