@@ -4,3 +4,4 @@ coverage/
 dist/*.tmp
 playwright-report/
 test-results/
+/PLAN.md
