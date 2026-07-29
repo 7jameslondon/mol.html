@@ -1101,9 +1101,9 @@
     return assemblies.map(assembly => {
       const expanded = [];
       for (const [generatorIndex, generator] of assembly.generators.entries()) {
-        for (const asymId of generator.asymIds) {
+        for (const asymId of generator.asymIds.length ? generator.asymIds : [null]) {
           const labeled = instanceByLabelAsymId.get(asymId);
-          const bases = labeled ? [labeled] : (instancesByAuthorChain.get(asymId) || []);
+          const bases = asymId == null ? instances : labeled ? [labeled] : (instancesByAuthorChain.get(asymId) || []);
           for (const base of bases) for (const transform of generator.transforms || []) {
               expanded.push({
                 index: expanded.length,

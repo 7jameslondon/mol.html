@@ -70,7 +70,7 @@
         "role": { "enum": ["polymer", "ligand", "ion", "solvent", "unknown"] },
         "connectedComponentId": { "type": "string", "minLength": 1 },
         "sourceIdentity": { "$ref": "#/$defs/sourceIdentity" },
-        "cutoff": { "type": "number", "minimum": 0 },
+        "cutoff": { "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
         "start": { "type": "object" },
         "end": { "type": "object" },
         "target": { "$ref": "#/$defs/selector" }
@@ -80,6 +80,7 @@
     "atomReference": {
       "allOf": [
         { "$ref": "#/$defs/selectorReference" },
+        { "properties": { "kind": { "const": "atom" } } },
         {
           "anyOf": [
             { "required": ["serial"] },
@@ -110,6 +111,7 @@
     "residueReference": {
       "allOf": [
         { "$ref": "#/$defs/selectorReference" },
+        { "properties": { "kind": { "const": "residue" } } },
         {
           "anyOf": [
             { "required": ["model", "chain", "resi"] },
@@ -137,12 +139,14 @@
     "chainReference": {
       "allOf": [
         { "$ref": "#/$defs/selectorReference" },
+        { "properties": { "kind": { "const": "chain" } } },
         { "required": ["model", "chain"] }
       ]
     },
     "instanceReference": {
       "allOf": [
         { "$ref": "#/$defs/selectorReference" },
+        { "properties": { "kind": { "const": "instance" } } },
         {
           "anyOf": [
             { "required": ["instanceId"] },
@@ -157,6 +161,7 @@
     "entityReference": {
       "allOf": [
         { "$ref": "#/$defs/selectorReference" },
+        { "properties": { "kind": { "const": "entity" } } },
         {
           "anyOf": [
             { "required": ["entityId"] },
@@ -171,13 +176,37 @@
     "roleReference": {
       "allOf": [
         { "$ref": "#/$defs/selectorReference" },
+        { "properties": { "kind": { "const": "role" } } },
         { "required": ["role"] }
       ]
     },
     "connectedComponentReference": {
       "allOf": [
         { "$ref": "#/$defs/selectorReference" },
+        { "properties": { "kind": { "const": "connected-component" } } },
         { "required": ["connectedComponentId"] }
+      ]
+    },
+    "withinTarget": {
+      "oneOf": [
+        {
+          "allOf": [
+            { "$ref": "#/$defs/atomReference" },
+            { "properties": { "kind": { "const": "atom" } }, "required": ["kind"] }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/residueReference" },
+            { "properties": { "kind": { "const": "residue" } }, "required": ["kind"] }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/selectorReference" },
+            { "properties": { "kind": { "const": "ligands" } }, "required": ["kind"] }
+          ]
+        }
       ]
     },
     "selector": {
@@ -246,7 +275,13 @@
         {
           "allOf": [
             { "$ref": "#/$defs/selectorReference" },
-            { "properties": { "kind": { "const": "within" } }, "required": ["kind", "cutoff", "target"] }
+            {
+              "properties": {
+                "kind": { "const": "within" },
+                "target": { "$ref": "#/$defs/withinTarget" }
+              },
+              "required": ["kind", "cutoff", "target"]
+            }
           ]
         }
       ]

@@ -452,6 +452,15 @@ assert.deepEqual(JSON.parse(JSON.stringify(blankChainAssembly.assemblies[0].gene
   'REMARK 350 NULL chain identifiers map to the normalized blank PDB chain');
 assert.equal(blankChainAssembly.assemblyInstances.length, 2,
   'blank-chain biological assemblies retain every BIOMT instance');
+const chainlessAssemblyText = pdbAssemblyText
+  .replace('REMARK 350 APPLY THE FOLLOWING TO CHAINS: A\n', '')
+  .replace('END', pdbAssemblyText.match(/^ATOM.*$/gm).map((line, index) =>
+    line.replace(/^ATOM\s+\d+/, `ATOM      ${index + 3}`).replace('GLY A', 'GLY B')).join('\n') + '\nEND');
+const chainlessAssembly = Core.parseStructure(chainlessAssemblyText, 'pdb');
+assert.equal(chainlessAssembly.topology.instances.length, 2);
+assert.deepEqual(JSON.parse(JSON.stringify(chainlessAssembly.assemblies[0].generators[0].asymIds)), []);
+assert.equal(chainlessAssembly.assemblies[0].instances.length, 4,
+  'REMARK 350 BIOMT generators without a repeated chain list apply to all deposited instances');
 
 const conformance = Core.parseStructure(conformanceCif, 'mmcif');
 assertNormalizedInvariants(conformance);

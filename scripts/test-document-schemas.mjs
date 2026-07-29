@@ -46,7 +46,11 @@ function schemaErrors(root, schema, value, path = '$') {
     if (schema.minLength != null && value.length < schema.minLength) errors.push(`${path}: string is too short`);
     if (schema.pattern && !new RegExp(schema.pattern).test(value)) errors.push(`${path}: string does not match ${schema.pattern}`);
   }
-  if (typeof value === 'number' && schema.minimum != null && value < schema.minimum) errors.push(`${path}: number is below minimum`);
+  if (typeof value === 'number') {
+    if (schema.minimum != null && value < schema.minimum) errors.push(`${path}: number is below minimum`);
+    if (schema.exclusiveMinimum != null && value <= schema.exclusiveMinimum) errors.push(`${path}: number is not above exclusive minimum`);
+    if (schema.maximum != null && value > schema.maximum) errors.push(`${path}: number is above maximum`);
+  }
   if (Array.isArray(value)) {
     if (schema.minItems != null && value.length < schema.minItems) errors.push(`${path}: array has too few items`);
     if (schema.maxItems != null && value.length > schema.maxItems) errors.push(`${path}: array has too many items`);
@@ -198,6 +202,21 @@ withinWithoutTarget.scene.savedSelections[0].selector = {
   kind: 'within', structureId: 'structure-2', cutoff: 4
 };
 assert.ok(schemaErrors(v2, v2, withinWithoutTarget).length, 'within selectors require a target');
+for (const [cutoff, reason] of [[0, 'positive'], [101, 'at most 100']]) {
+  const invalidCutoff = structuredClone(validV2);
+  invalidCutoff.scene.savedSelections[0].selector = {
+    kind: 'within', structureId: 'structure-2', cutoff,
+    target: { kind: 'ligands', structureId: 'structure-2' }
+  };
+  assert.ok(schemaErrors(v2, v2, invalidCutoff).length, `within cutoffs must be ${reason}`);
+}
+const invalidWithinTarget = structuredClone(validV2);
+invalidWithinTarget.scene.savedSelections[0].selector = {
+  kind: 'within', structureId: 'structure-2', cutoff: 4,
+  target: { kind: 'chain', structureId: 'structure-2', model: 1, chain: 'A' }
+};
+assert.ok(schemaErrors(v2, v2, invalidWithinTarget).length,
+  'within targets are limited to atom, residue, and ligand selectors');
 for (const selector of [
   { kind: 'atom', structureId: 'structure-2' },
   { kind: 'residue', structureId: 'structure-2', model: 1, chain: 'A' },
@@ -213,6 +232,14 @@ for (const selector of [
     `${selector.kind} selectors reject missing kind-specific identity fields`);
 }
 const atomReference = validV2.scene.measurements[0].atoms[0];
+const contradictoryAtomKind = structuredClone(validV2);
+contradictoryAtomKind.scene.measurements[0].atoms[0].kind = 'chain';
+assert.ok(schemaErrors(v2, v2, contradictoryAtomKind).length,
+  'typed atom references reject a contradictory optional kind');
+const contradictoryResidueKind = structuredClone(validV2);
+contradictoryResidueKind.scene.ligandAnalysis.selectedLigand.kind = 'atom';
+assert.ok(schemaErrors(v2, v2, contradictoryResidueKind).length,
+  'typed residue references reject a contradictory optional kind');
 for (const [type, count] of [['distance', 2], ['angle', 3], ['dihedral', 4]]) {
   const exactMeasurement = structuredClone(validV2);
   exactMeasurement.scene.measurements[0] = {
