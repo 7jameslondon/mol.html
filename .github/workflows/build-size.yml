@@ -5,15 +5,15 @@ on:
     types: [opened, reopened, synchronize, edited]
   push:
     branches: [main]
-  workflow_dispatch:
 
 permissions:
   contents: read
   pull-requests: write
 
 concurrency:
-  group: ${{ github.event_name == 'pull_request_target' && format('build-size-pr-{0}', github.event.pull_request.number) || format('build-size-{0}-{1}', github.ref, github.sha) }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
+  group: build-size-report-comments
+  cancel-in-progress: false
+  queue: max
 
 jobs:
   report:

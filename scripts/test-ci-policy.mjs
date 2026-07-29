@@ -83,6 +83,20 @@ assert.deepEqual(
   ['main'],
   'Build-size reporting refreshes open PRs after merge-branch changes'
 );
+assert.equal(
+  buildSizePolicy.on.workflow_dispatch,
+  undefined,
+  'Privileged build-size reporting cannot be dispatched against an untrusted branch'
+);
+assert.deepEqual(
+  buildSizePolicy.concurrency,
+  {
+    group: 'build-size-report-comments',
+    'cancel-in-progress': false,
+    queue: 'max'
+  },
+  'Build-size comment writers are serialized without dropping pending refreshes'
+);
 assert.match(
   buildSizeWorkflow,
   /pull_request_target deliberately checks out only the trusted merge branch/,
