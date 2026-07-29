@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
+const structureSource = await readFile(new URL('../src/structure.js', import.meta.url), 'utf8');
 const source = await readFile(new URL('../src/model.js', import.meta.url), 'utf8');
 const fixture = await readFile(new URL('../fixtures/metadata-quality.pdb', import.meta.url), 'utf8');
 const context = vm.createContext({ window: {}, structuredClone, console });
 context.globalThis = context;
+vm.runInContext(structureSource, context, { filename: 'src/structure.js' });
 vm.runInContext(source, context, { filename: 'src/model.js' });
 const Core = context.window.MolhtmlCore;
 

@@ -12,7 +12,7 @@ const projects = [
     name: 'chromium',
     use: {
       ...devices['Desktop Chrome'],
-      launchOptions: { args: linuxWebGLArgs }
+      launchOptions: { args: [...linuxWebGLArgs, ...(scheduled ? ['--enable-precise-memory-info'] : [])] }
     }
   }
 ];

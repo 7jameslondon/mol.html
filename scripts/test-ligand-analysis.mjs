@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
+const structureSource = await readFile(new URL('../src/structure.js', import.meta.url), 'utf8');
 const source = await readFile(new URL('../src/model.js', import.meta.url), 'utf8');
 const fixture = await readFile(new URL('../fixtures/ligand-pocket.pdb', import.meta.url), 'utf8');
 const context = { window: {}, console, structuredClone };
 context.globalThis = context;
+vm.runInNewContext(structureSource, context, { filename: 'src/structure.js' });
 vm.runInNewContext(source, context, { filename: 'src/model.js' });
 const Core = context.window.MolhtmlCore;
 const parsed = Core.parsePDB(fixture);
@@ -57,6 +59,14 @@ assert.equal(normalized.scene.ligandAnalysis.showPocket, true, 'supplies additiv
 assert.equal(normalized.scene.ligandAnalysis.futureAnalysisField, 'preserved');
 assert.equal(normalized.scene.futureSceneField, true);
 const incompatible = Core.normalizeLigandAnalysis({ selectedLigand: ligands[0].selector }, 'different-structure');
-assert.equal(incompatible.selectedLigand, null, 'clears selectors tied to another structure');
+assert.equal(incompatible.selectedLigand.structureId, 'structure-pocket-test',
+  'normalization preserves a differently bound selector so it remains visibly invalid');
+assert.equal(Core.findLigand(ligands, { ...ligands[0].selector, structureId: undefined }, 'structure-pocket-test'), null,
+  'persisted ligand selectors without structureId cannot attach to the active structure');
+const apiBound = Core.normalizeLigandAnalysis({
+  selectedLigand: Object.fromEntries(Object.entries(ligands[0].selector).filter(([key]) => key !== 'structureId'))
+}, 'structure-pocket-test', true);
+assert.equal(apiBound.selectedLigand.structureId, 'structure-pocket-test',
+  'the explicit API normalization path may bind an input selector to the active structure');
 
 console.log('Ligand grouping, spatial cutoff search, classification, and normalization tests passed.');

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://molhtml.local/schema/molhtml-document-v1.schema.json",
+  "title": "mol.html document version 1",
+  "type": "object",
+  "required": ["format", "version", "structure", "scene"],
+  "properties": {
+    "format": { "const": "molhtml/document" },
+    "version": { "const": 1 },
+    "documentId": { "type": "string", "minLength": 1 },
+    "title": { "type": "string" },
+    "revision": { "type": "integer", "minimum": 0 },
+    "modified": { "type": "string" },
+    "modifiedBy": { "type": "string" },
+    "structure": {
+      "type": "object",
+      "required": ["id", "format", "data"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "format": { "const": "pdb" },
+        "data": { "type": "string", "minLength": 1 },
+        "metadata": { "type": "object" },
+        "source": { "type": "object" }
+      },
+      "additionalProperties": true
+    },
+    "scene": { "$ref": "#/$defs/scene" }
+  },
+  "$defs": {
+    "scene": {
+      "type": "object",
+      "properties": {
+        "representation": { "enum": ["cartoon", "ball-and-stick", "sticks", "spacefill", "lines", "surface"] },
+        "colorMode": { "enum": ["element", "chain", "residue", "uniform"] },
+        "background": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "showHydrogens": { "type": "boolean" },
+        "showWater": { "type": "boolean" },
+        "selection": { "type": ["object", "null"] },
+        "customColors": { "type": "array" },
+        "measurements": { "type": "array" },
+        "savedSelections": { "type": "array" },
+        "savedViews": { "type": "array" },
+        "ligandAnalysis": { "type": "object" },
+        "camera": { "type": "object" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

@@ -2,14 +2,18 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
+const structureSource = await readFile(new URL('../src/structure.js', import.meta.url), 'utf8');
 const source = await readFile(new URL('../src/model.js', import.meta.url), 'utf8');
 const context = vm.createContext({ window: {}, structuredClone, console });
+vm.runInContext(structureSource, context, { filename: 'structure.js' });
 vm.runInContext(source, context, { filename: 'model.js' });
 const Core = context.window.MolhtmlCore;
 
 const atom = (serial, model, chain, resi, resn, name, x, y, z, options = {}) => ({
   index: serial - 1, serial, model, chain, resi, resn, name,
   icode: '', altLoc: '', element: options.element || 'C', het: Boolean(options.het),
+  labelAsymId: chain, labelSeqId: String(resi), labelCompId: resn, labelAtomId: name, labelAltId: '',
+  authAsymId: chain, authSeqId: String(resi), authCompId: resn, authAtomId: name,
   x, y, z
 });
 const atoms = [
@@ -36,6 +40,24 @@ const expectMatch = (query, atomCount, residueCount) => {
 
 expectMatch(selector('atom', { model: 1, chain: 'A', resi: 1, atom: 'CA', serial: 2 }), 1, 1);
 expectMatch(selector('residue', { model: 1, chain: 'A', resi: 1, resn: 'ALA' }), 2, 1);
+const ambiguousAtom = Core.matchSavedSelection(selector('atom', {
+  sourceIdentity: { modelNumber: 1, labelAsymId: 'A' }
+}), atoms, structureId);
+assert.equal(ambiguousAtom.valid, false);
+assert.match(ambiguousAtom.error, /ambiguous/i);
+expectMatch(selector('atom', {
+  sourceIdentity: {
+    modelNumber: 1, labelAsymId: 'A', labelSeqId: '1', labelCompId: 'ALA', labelAtomId: 'CA'
+  }
+}), 1, 1);
+const ambiguousResidue = Core.matchSavedSelection(selector('residue', {
+  sourceIdentity: { modelNumber: 1, labelAsymId: 'A' }
+}), atoms, structureId);
+assert.equal(ambiguousResidue.valid, false);
+assert.match(ambiguousResidue.error, /ambiguous/i);
+expectMatch(selector('residue', {
+  sourceIdentity: { modelNumber: 1, labelAsymId: 'A', labelSeqId: '1', labelCompId: 'ALA' }
+}), 2, 1);
 expectMatch(selector('chain', { model: 1, chain: 'A' }), 7, 5);
 expectMatch(selector('residue-range', { model: 1, chain: 'A', start: { resi: 1 }, end: { resi: 2 } }), 3, 2);
 const ligandMatch = expectMatch(selector('ligands'), 2, 1);
@@ -54,7 +76,8 @@ expectMatch(selector('within', {
 }), 2, 1);
 
 const empty = Core.matchSavedSelection(selector('ligands', { model: 2 }), atoms, structureId);
-assert.equal(empty.valid, true);
+assert.equal(empty.valid, false);
+assert.match(empty.error, /did not resolve/i);
 assert.equal(empty.atomCount, 0);
 
 assert.equal(Core.matchSavedSelection(selector('residue-range', {

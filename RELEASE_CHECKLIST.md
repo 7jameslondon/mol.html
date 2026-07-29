@@ -24,6 +24,14 @@ real-GPU behavior.
 - Confirm surface generation completes without a blank or lost WebGL context.
 - Load `fixtures/ligand-pocket.pdb` and confirm ligand and pocket emphasis plus
   contact lines behave as described.
+- Load `fixtures/7ril-identity.cif`; confirm it renders, identifies the 5N0
+  ligand as label instance C/entity 3 with author chain B, and distinguishes it
+  from DNA with instance/entity/role coloring while author-chain coloring stays
+  shared.
+- Save and reopen that mmCIF document; confirm the original coordinate text and
+  identity-aware selection survive without serialized runtime topology.
+- Load `fixtures/multi-model.pdb`; confirm both coordinate models render and a
+  saved selector for model 2 resolves despite duplicate atom serials.
 
 ## Release record
 

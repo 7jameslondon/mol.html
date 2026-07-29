@@ -1,0 +1,499 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://molhtml.local/schema/molhtml-document-v2.schema.json",
+  "title": "mol.html document version 2",
+  "type": "object",
+  "required": ["format", "version", "structure", "scene"],
+  "properties": {
+    "format": { "const": "molhtml/document" },
+    "version": { "const": 2 },
+    "documentId": { "type": "string", "minLength": 1 },
+    "title": { "type": "string" },
+    "revision": { "type": "integer", "minimum": 0 },
+    "modified": { "type": "string" },
+    "modifiedBy": { "type": "string" },
+    "structure": {
+      "type": "object",
+      "required": ["id", "format", "data"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "format": { "enum": ["pdb", "mmcif"] },
+        "data": { "type": "string", "minLength": 1 },
+        "metadata": { "type": "object" },
+        "source": { "type": "object" }
+      },
+      "additionalProperties": true
+    },
+    "scene": { "$ref": "#/$defs/scene" }
+  },
+  "$defs": {
+    "sourceIdentity": {
+      "type": "object",
+      "properties": {
+        "modelNumber": { "type": "number" },
+        "atomSiteId": { "type": "string", "minLength": 1 },
+        "labelEntityId": { "type": "string", "minLength": 1 },
+        "labelAsymId": { "type": "string", "minLength": 1 },
+        "labelSeqId": { "type": "string", "minLength": 1 },
+        "labelCompId": { "type": "string", "minLength": 1 },
+        "labelAtomId": { "type": "string", "minLength": 1 },
+        "labelAltId": { "type": "string", "minLength": 1 },
+        "authAsymId": { "type": "string", "minLength": 1 },
+        "authSeqId": { "type": "string", "minLength": 1 },
+        "authCompId": { "type": "string", "minLength": 1 },
+        "authAtomId": { "type": "string", "minLength": 1 },
+        "authAltId": { "type": "string", "minLength": 1 },
+        "insertionCode": { "type": "string", "minLength": 1 },
+        "pdbSerial": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "selectorReference": {
+      "type": "object",
+      "required": ["structureId"],
+      "properties": {
+        "kind": {
+          "enum": ["atom", "residue", "chain", "instance", "entity", "role", "connected-component", "residue-range", "ligands", "within"]
+        },
+        "structureId": { "type": "string", "minLength": 1 },
+        "model": { "type": "number" },
+        "chain": { "type": "string", "minLength": 1 },
+        "resi": { "type": "number" },
+        "icode": { "type": "string" },
+        "resn": { "type": "string", "minLength": 1 },
+        "atom": { "type": "string", "minLength": 1 },
+        "altLoc": { "type": "string" },
+        "serial": { "type": "number" },
+        "instanceId": { "type": "string", "minLength": 1 },
+        "entityId": { "type": "string", "minLength": 1 },
+        "role": { "enum": ["polymer", "ligand", "ion", "solvent", "unknown"] },
+        "connectedComponentId": { "type": "string", "minLength": 1 },
+        "sourceIdentity": { "$ref": "#/$defs/sourceIdentity" },
+        "cutoff": { "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
+        "start": { "$ref": "#/$defs/residueRangeEndpoint" },
+        "end": { "$ref": "#/$defs/residueRangeEndpoint" },
+        "target": { "$ref": "#/$defs/selector" }
+      },
+      "additionalProperties": true
+    },
+    "residueRangeEndpoint": {
+      "type": "object",
+      "required": ["resi"],
+      "properties": {
+        "resi": { "type": "number" },
+        "icode": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "atomReference": {
+      "allOf": [
+        { "$ref": "#/$defs/selectorReference" },
+        { "properties": { "kind": { "const": "atom" } } },
+        {
+          "anyOf": [
+            { "required": ["serial"] },
+            { "required": ["model", "chain", "resi", "atom"] },
+            {
+              "type": "object",
+              "required": ["sourceIdentity"],
+              "properties": {
+                "sourceIdentity": {
+                  "allOf": [
+                    { "$ref": "#/$defs/sourceIdentity" },
+                    {
+                      "anyOf": [
+                        { "required": ["atomSiteId"] },
+                        { "required": ["labelAsymId", "labelCompId", "labelAtomId"] },
+                        { "required": ["authAsymId", "authSeqId", "authCompId", "authAtomId"] },
+                        { "required": ["pdbSerial"] }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "residueReference": {
+      "allOf": [
+        { "$ref": "#/$defs/selectorReference" },
+        { "properties": { "kind": { "const": "residue" } } },
+        {
+          "anyOf": [
+            { "required": ["model", "chain", "resi"] },
+            {
+              "type": "object",
+              "required": ["sourceIdentity"],
+              "properties": {
+                "sourceIdentity": {
+                  "allOf": [
+                    { "$ref": "#/$defs/sourceIdentity" },
+                    {
+                      "anyOf": [
+                        { "required": ["labelAsymId", "labelCompId"] },
+                        { "required": ["authAsymId", "authSeqId", "authCompId"] }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "chainReference": {
+      "allOf": [
+        { "$ref": "#/$defs/selectorReference" },
+        { "properties": { "kind": { "const": "chain" } } },
+        { "required": ["model", "chain"] }
+      ]
+    },
+    "instanceReference": {
+      "allOf": [
+        { "$ref": "#/$defs/selectorReference" },
+        { "properties": { "kind": { "const": "instance" } } },
+        {
+          "anyOf": [
+            { "required": ["instanceId"] },
+            {
+              "required": ["sourceIdentity"],
+              "properties": { "sourceIdentity": { "required": ["labelAsymId"] } }
+            }
+          ]
+        }
+      ]
+    },
+    "entityReference": {
+      "allOf": [
+        { "$ref": "#/$defs/selectorReference" },
+        { "properties": { "kind": { "const": "entity" } } },
+        {
+          "anyOf": [
+            { "required": ["entityId"] },
+            {
+              "required": ["sourceIdentity"],
+              "properties": { "sourceIdentity": { "required": ["labelEntityId"] } }
+            }
+          ]
+        }
+      ]
+    },
+    "roleReference": {
+      "allOf": [
+        { "$ref": "#/$defs/selectorReference" },
+        { "properties": { "kind": { "const": "role" } } },
+        { "required": ["role"] }
+      ]
+    },
+    "connectedComponentReference": {
+      "allOf": [
+        { "$ref": "#/$defs/selectorReference" },
+        { "properties": { "kind": { "const": "connected-component" } } },
+        { "required": ["connectedComponentId"] }
+      ]
+    },
+    "withinTarget": {
+      "oneOf": [
+        {
+          "allOf": [
+            { "$ref": "#/$defs/atomReference" },
+            { "properties": { "kind": { "const": "atom" } }, "required": ["kind"] }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/residueReference" },
+            { "properties": { "kind": { "const": "residue" } }, "required": ["kind"] }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/selectorReference" },
+            { "properties": { "kind": { "const": "ligands" } }, "required": ["kind"] }
+          ]
+        }
+      ]
+    },
+    "selector": {
+      "oneOf": [
+        {
+          "allOf": [
+            { "$ref": "#/$defs/atomReference" },
+            { "properties": { "kind": { "const": "atom" } }, "required": ["kind"] }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/residueReference" },
+            { "properties": { "kind": { "const": "residue" } }, "required": ["kind"] }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/chainReference" },
+            { "properties": { "kind": { "const": "chain" } }, "required": ["kind"] }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/instanceReference" },
+            { "properties": { "kind": { "const": "instance" } }, "required": ["kind"] }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/entityReference" },
+            { "properties": { "kind": { "const": "entity" } }, "required": ["kind"] }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/roleReference" },
+            { "properties": { "kind": { "const": "role" } }, "required": ["kind"] }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/connectedComponentReference" },
+            { "properties": { "kind": { "const": "connected-component" } }, "required": ["kind"] }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/selectorReference" },
+            {
+              "properties": {
+                "kind": { "const": "residue-range" }
+              },
+              "required": ["kind", "model", "chain", "start", "end"]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/selectorReference" },
+            { "properties": { "kind": { "const": "ligands" } }, "required": ["kind"] }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/selectorReference" },
+            {
+              "properties": {
+                "kind": { "const": "within" },
+                "target": { "$ref": "#/$defs/withinTarget" }
+              },
+              "required": ["kind", "cutoff", "target"]
+            }
+          ]
+        }
+      ]
+    },
+    "currentSelection": {
+      "type": "object",
+      "required": ["kind", "selector"],
+      "properties": {
+        "kind": { "const": "atom" },
+        "selector": { "$ref": "#/$defs/atomReference" },
+        "identity": { "type": "object" }
+      },
+      "additionalProperties": true
+    },
+    "customColorRule": {
+      "type": "object",
+      "required": ["scope", "color", "selector"],
+      "properties": {
+        "id": { "type": "string" },
+        "scope": { "enum": ["atom", "residue", "chain", "instance", "entity", "role", "connected-component"] },
+        "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "selector": { "$ref": "#/$defs/selectorReference" },
+        "label": { "type": "string" }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "scope": { "const": "atom" },
+            "selector": { "$ref": "#/$defs/atomReference" }
+          }
+        },
+        {
+          "properties": {
+            "scope": { "const": "residue" },
+            "selector": { "$ref": "#/$defs/residueReference" }
+          }
+        },
+        {
+          "properties": {
+            "scope": { "const": "chain" },
+            "selector": { "$ref": "#/$defs/chainReference" }
+          }
+        },
+        {
+          "properties": {
+            "scope": { "const": "instance" },
+            "selector": { "$ref": "#/$defs/instanceReference" }
+          }
+        },
+        {
+          "properties": {
+            "scope": { "const": "entity" },
+            "selector": { "$ref": "#/$defs/entityReference" }
+          }
+        },
+        {
+          "properties": {
+            "scope": { "const": "role" },
+            "selector": { "$ref": "#/$defs/roleReference" }
+          }
+        },
+        {
+          "properties": {
+            "scope": { "const": "connected-component" },
+            "selector": { "$ref": "#/$defs/connectedComponentReference" }
+          }
+        }
+      ],
+      "additionalProperties": true
+    },
+    "measurement": {
+      "type": "object",
+      "required": ["id", "type", "atoms"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "enum": ["distance", "angle", "dihedral"] },
+        "atoms": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 4,
+          "items": { "$ref": "#/$defs/atomReference" }
+        },
+        "label": { "type": "string" },
+        "note": { "type": "string" }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "type": { "const": "distance" },
+            "atoms": { "minItems": 2, "maxItems": 2 }
+          }
+        },
+        {
+          "properties": {
+            "type": { "const": "angle" },
+            "atoms": { "minItems": 3, "maxItems": 3 }
+          }
+        },
+        {
+          "properties": {
+            "type": { "const": "dihedral" },
+            "atoms": { "minItems": 4, "maxItems": 4 }
+          }
+        }
+      ],
+      "additionalProperties": true
+    },
+    "camera": {
+      "type": "object",
+      "properties": {
+        "view": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "array", "minItems": 8, "maxItems": 8, "items": { "type": "number" } }
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "savedViewSnapshot": {
+      "type": "object",
+      "properties": {
+        "representation": { "enum": ["cartoon", "ball-and-stick", "sticks", "spacefill", "lines", "surface"] },
+        "colorMode": { "enum": ["element", "chain", "author-chain", "instance", "entity", "role", "residue", "uniform"] },
+        "background": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "showHydrogens": { "type": "boolean" },
+        "showWater": { "type": "boolean" },
+        "selection": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/currentSelection" }
+          ]
+        },
+        "customColors": { "type": "array", "items": { "$ref": "#/$defs/customColorRule" } },
+        "camera": { "$ref": "#/$defs/camera" },
+        "activeAnalysis": { "type": ["object", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "savedView": {
+      "type": "object",
+      "required": ["id", "title", "order", "structureId", "snapshot"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string" },
+        "narrative": { "type": "string" },
+        "order": { "type": "number" },
+        "structureId": { "type": "string", "minLength": 1 },
+        "snapshot": { "$ref": "#/$defs/savedViewSnapshot" }
+      },
+      "additionalProperties": true
+    },
+    "savedSelection": {
+      "type": "object",
+      "required": ["id", "name", "selector"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "selector": { "$ref": "#/$defs/selector" }
+      },
+      "additionalProperties": true
+    },
+    "ligandAnalysis": {
+      "type": "object",
+      "properties": {
+        "selectedLigand": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/residueReference" }
+          ]
+        },
+        "cutoff": { "type": "number", "minimum": 2.5, "maximum": 8 },
+        "showLigand": { "type": "boolean" },
+        "showPocket": { "type": "boolean" },
+        "showContacts": { "type": "boolean" },
+        "polarOnly": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "scene": {
+      "type": "object",
+      "properties": {
+        "representation": { "enum": ["cartoon", "ball-and-stick", "sticks", "spacefill", "lines", "surface"] },
+        "colorMode": { "enum": ["element", "chain", "author-chain", "instance", "entity", "role", "residue", "uniform"] },
+        "background": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "showHydrogens": { "type": "boolean" },
+        "showWater": { "type": "boolean" },
+        "selection": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/currentSelection" }
+          ]
+        },
+        "customColors": { "type": "array", "items": { "$ref": "#/$defs/customColorRule" } },
+        "measurements": { "type": "array", "items": { "$ref": "#/$defs/measurement" } },
+        "savedSelections": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/savedSelection" }
+        },
+        "savedViews": { "type": "array", "items": { "$ref": "#/$defs/savedView" } },
+        "ligandAnalysis": { "$ref": "#/$defs/ligandAnalysis" },
+        "camera": { "$ref": "#/$defs/camera" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

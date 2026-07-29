@@ -3,7 +3,7 @@
 [![Validate](https://github.com/7jameslondon/mol.html/actions/workflows/ci.yml/badge.svg)](https://github.com/7jameslondon/mol.html/actions/workflows/ci.yml)
 
 `mol.html` is a molecular viewer whose final document is one self-contained,
-self-editing HTML file. The HTML carries the viewer, editor, PDB coordinates,
+self-editing HTML file. The HTML carries the viewer, editor, PDB or PDBx/mmCIF coordinates,
 selection, colors, camera, and agent-readable JSON state.
 
 ## Website
@@ -75,10 +75,12 @@ Native file permissions and real-GPU behavior remain release checks; see
   control to return to a full-width viewer.
 - Drag to rotate, Shift-drag or right-drag to pan, and scroll to zoom.
 - Click an atom to write its exact identity into the document state.
-- Apply colors to the selected atom, its residue, or its chain.
+- Apply colors to the selected atom, residue, author chain, molecular instance,
+  entity, or functional role.
 - Switch between cartoon, ball-and-stick, sticks, spacefill, lines, and a
   molecular surface.
-- Open any PDB file; its coordinates become embedded in the next saved HTML.
+- Open a PDB or text PDBx/mmCIF file; its original coordinates become embedded
+  in the next saved HTML.
 - Fetch a classic four-character PDB ID directly from RCSB, or use the Fetch
   sidebar's full-text search to find entries by molecule, organism, author,
   ligand, or other terms. Search results are temporary; the selected structure,
@@ -99,12 +101,18 @@ and surfaces are provided by the bundled [3Dmol.js](https://3dmol.csb.pitt.edu/)
 2.5.5 library. The surrounding document model, editing UI, self-save behavior,
 and agent round trip are implemented by this project.
 
-Fetching uses the official [RCSB file download service](https://www.rcsb.org/docs/programmatic-access/file-download-services)
-and its uncompressed legacy-PDB URL. General discovery uses the official RCSB
+Fetching uses the official [RCSB file download service](https://www.rcsb.org/docs/programmatic-access/file-download-services),
+trying the uncompressed legacy-PDB file first and text PDBx/mmCIF when legacy
+coordinates are unavailable. General discovery uses the official RCSB
 Search API and Data API. An internet connection is needed for searching and
 fetching, but not after the HTML is saved.
-Entries offered only as PDBx/mmCIF are reported clearly and are not yet
-supported by this PDB-format-only document version.
+
+PDB and mmCIF are normalized into a custom runtime model that keeps atom,
+residue, molecular-instance, entity, connected-component, assembly, and source
+identity concepts separate. The original coordinate text remains canonical and
+the derived model is not serialized. Biological assembly records reference base
+instances and composed operator transforms without copying atom topology. See
+[`docs/adr/0001-normalized-molecular-model.md`](docs/adr/0001-normalized-molecular-model.md).
 
 ## Agent editing
 

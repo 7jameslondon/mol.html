@@ -13,6 +13,14 @@ Edit only the JSON inside this block. Leave the application shell untouched.
 Escape every `<` in JSON strings as `\u003c` so data can never terminate the
 script block. Preserve fields you do not understand.
 
+Document versions 1 and 2 are supported. Version 1 is retained for existing
+PDB-only documents that use legacy selectors. Version 2 is required when
+`structure.format` is `mmcif` or the scene uses source-identity, molecular
+instance, entity, role, or connected-component selectors. Do not downgrade a
+version 2 document. Do not add derived `topology`, `coordinateSets`, runtime
+indexes, or renderer atoms to the document; the application rebuilds them from
+`structure.data` whenever the file opens.
+
 The `#molhtml-license-notices` block and the surrounding application shell are
 immutable. Never edit, remove, replace, or duplicate that block. Official
 browser saves reconstruct it from the canonical build-time copy and refuse to
@@ -24,7 +32,7 @@ changed and that the complete project and third-party notices remain intact.
 
 For every edit:
 
-1. Verify `format` is `molhtml/document` and `version` is `1`.
+1. Verify `format` is `molhtml/document` and `version` is `1` or `2`.
 2. Read `scene.selection` when the user says “this atom”, “this residue”, or
    “this chain”.
 3. Apply the smallest targeted state change.
@@ -36,7 +44,9 @@ handle, it also detects an external revision and asks for a reload.
 
 For structures fetched from RCSB, `structure.source` records `kind`, `pdbId`,
 the official download `url`, and `fetchedAt`. Preserve this provenance when
-editing other scene fields.
+editing other scene fields. Coordinate source kinds include `rcsb-pdb` and
+`rcsb-mmcif`; embedded format metadata uses `embedded-pdb-header` or
+`embedded-mmcif`.
 
 ## Structure metadata and coordinate quality
 
@@ -112,6 +122,38 @@ An atom click writes both a machine selector and a readable identity:
 }
 ```
 
+For a version 2 mmCIF document, the selector also carries a stable
+`sourceIdentity`. `_atom_site.id` is preferred when available; `label_*` fields
+are used for machine identity and `auth_*` fields remain available for familiar
+display and scientific communication:
+
+```json
+{
+  "kind": "atom",
+  "structureId": "structure-id",
+  "model": 1,
+  "chain": "B",
+  "resi": 201,
+  "atom": "C1",
+  "serial": 9,
+  "sourceIdentity": {
+    "modelNumber": 1,
+    "atomSiteId": "9",
+    "labelEntityId": "3",
+    "labelAsymId": "C",
+    "labelCompId": "5N0",
+    "labelAtomId": "C1",
+    "authAsymId": "B",
+    "authSeqId": "201",
+    "authCompId": "5N0",
+    "authAtomId": "C1"
+  }
+}
+```
+
+Do not replace label identifiers with author identifiers or vice versa. A
+shared author chain does not imply a shared molecular instance or entity.
+
 ## Coloring selections
 
 Append rules to `scene.customColors`; later rules win.
@@ -176,6 +218,13 @@ Supported selector shapes are:
 - `residue`: `kind`, `structureId`, `model`, `chain`, `resi`, and optionally
   `icode` and `resn`.
 - `chain`: `kind`, `structureId`, `model`, and `chain`.
+- `instance`: `kind`, `structureId`, and `instanceId`; include
+  `sourceIdentity.labelAsymId` for mmCIF.
+- `entity`: `kind`, `structureId`, and `entityId`; include
+  `sourceIdentity.labelEntityId` for mmCIF.
+- `role`: `kind`, `structureId`, and one of `polymer`, `ligand`, `ion`,
+  `solvent`, or `unknown` in `role`.
+- `connected-component`: `kind`, `structureId`, and `connectedComponentId`.
 - `residue-range`: `kind`, `structureId`, `model`, `chain`, plus inclusive
   `start` and `end` objects such as `{ "resi": 10 }`. An optional `icode` on
   an endpoint narrows that boundary.
@@ -186,10 +235,10 @@ Supported selector shapes are:
   a `target` whose kind is `atom`, `residue`, or `ligands`. Matching is based
   on coordinates in the same model and includes target atoms themselves.
 
-Queries can be valid but empty. A selector with a missing/unsupported field or
-a stale `structureId` is retained in the document and shown as invalid so an
-agent can repair it. The browser clears `scene.savedSelections` when its own
-PDB import/fetch workflow replaces the structure. If an agent replaces
+Selectors that resolve to no atoms report an explicit invalid/unresolved result.
+A selector with a missing/unsupported field or a stale `structureId` is retained
+in the document and shown as invalid so an agent can repair it. The browser clears
+`scene.savedSelections` when its own structure import/fetch workflow replaces the structure. If an agent replaces
 `structure`, it should likewise remove or rewrite selectors tied to the old
 structure. Preserve unknown fields on selection records and selectors.
 
@@ -309,7 +358,9 @@ their selectors and cameras are not guaranteed to be compatible with replacement
 
 Valid `scene.representation` values are `cartoon`, `ball-and-stick`, `sticks`,
 `spacefill`, `lines`, and `surface`. Valid `scene.colorMode` values are `element`,
-`chain`, `residue`, and `uniform`. CSS hex colors are recommended.
+`chain`, `author-chain`, `instance`, `entity`, `role`, `residue`, and `uniform`.
+`chain` remains the version-1 spelling for author-chain coloring. CSS hex colors are
+recommended.
 
 The WebGL camera is stored as `scene.camera.view`, an eight-number 3Dmol.js view
 array. Preserve that array unless the user asks to change or reset the view. Set
@@ -326,9 +377,12 @@ window.molhtml.getMeasurements()
 window.molhtml.getSavedSelections()
 window.molhtml.listLigands()
 window.molhtml.getLigandAnalysis()
+window.molhtml.getStructureSummary()
 window.molhtml.getMetadata()
 window.molhtml.getDataQuality()
 window.molhtml.getSavedViews()
+window.molhtml.importStructure('entry.cif', cifText, 'mmcif')
+window.molhtml.fetchStructure('4HHB')
 window.molhtml.fetchPDB('4HHB')
 window.molhtml.searchPDB('human hemoglobin')
 window.molhtml.selectAtom(317)
@@ -340,6 +394,9 @@ window.molhtml.updateMeasurement('measurement-id', { note: 'Reviewed' })
 window.molhtml.removeMeasurement('measurement-id')
 window.molhtml.clearMeasurements()
 window.molhtml.saveCurrentSelection('Catalytic residue', 'residue')
+window.molhtml.saveCurrentSelection('Ligand instance', 'instance')
+window.molhtml.saveCurrentSelection('Polymer entity', 'entity')
+window.molhtml.saveCurrentSelection('All solvent', 'role')
 window.molhtml.addSavedSelection('Chain A range', {
   kind: 'residue-range', structureId: window.molhtml.document.structure.id,
   model: 1, chain: 'A', start: { resi: 20 }, end: { resi: 40 }
