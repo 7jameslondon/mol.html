@@ -13,7 +13,12 @@ test.describe('minimum browser release gate', () => {
     expect(page.url()).toMatch(/^file:/);
     expect(document.format).toBe('molhtml/document');
     expect(document.version).toBe(1);
-    expect(document.structure.metadata.flags.syntheticDemo).toBe(true);
+    expect(document.structure.source).toMatchObject({ kind: 'rcsb-pdb', pdbId: '1BNA' });
+    expect(document.structure.metadata).toMatchObject({
+      pdbId: '1BNA',
+      provenance: { kind: 'rcsb-data-api', coordinateSource: 'rcsb-pdb' }
+    });
+    expect(document.structure.metadata.flags?.syntheticDemo).not.toBe(true);
     await expect(page.locator('#structure-stats')).toContainText('atoms');
     await expectHealthyRender(page);
     assertNoRuntimeErrors();

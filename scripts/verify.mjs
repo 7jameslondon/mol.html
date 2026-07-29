@@ -54,9 +54,23 @@ const match = html.match(/<script type="application\/molhtml\+json" id="molhtml-
 assert(Boolean(match), 'document JSON can be extracted with a simple splice contract');
 const doc = JSON.parse(match[1]);
 assert(doc.format === 'molhtml/document' && doc.version === 1, 'document format is molhtml/document version 1');
-assert(doc.modified === '2026-07-27T00:00:00.000Z' && doc.modifiedBy === 'build', 'starter template metadata is deterministic');
+assert(doc.modified === '2026-07-28T00:00:00.000Z' && doc.modifiedBy === 'build', 'starter template metadata is deterministic');
 assert(doc.structure?.format === 'pdb' && doc.structure.data.includes('\nATOM'), 'PDB coordinates are embedded in the file');
-assert(doc.structure?.metadata?.provenance?.kind === 'generated-demo' && doc.structure.metadata.flags?.syntheticDemo, 'source metadata and the starter-data caveat are embedded');
+const coordinateLines = doc.structure.data.trimEnd().split('\n');
+assert(coordinateLines.filter(line => line.startsWith('ATOM  ')).length === 486, 'starter includes all 486 DNA atoms from 1BNA');
+assert(coordinateLines.filter(line => line.startsWith('ATOM  '))
+  .every(line => ['DA', 'DC', 'DG', 'DT'].includes(line.slice(17, 20).trim())),
+  'starter ATOM records contain DNA residues only');
+assert(coordinateLines.filter(line => line.startsWith('TER')).length === 2
+  && coordinateLines.at(-1) === 'END'
+  && coordinateLines.every(line => /^(?:ATOM  |TER|END)/.test(line)),
+  'starter payload omits waters and excess PDB headers');
+assert(doc.structure.source?.kind === 'rcsb-pdb'
+  && doc.structure.source.pdbId === '1BNA'
+  && doc.structure.metadata?.pdbId === '1BNA'
+  && doc.structure.metadata?.provenance?.kind === 'rcsb-data-api'
+  && doc.structure.metadata.provenance.coordinateSource === 'rcsb-pdb',
+  'starter embeds clear RCSB metadata and coordinate provenance');
 assert(doc.scene?.camera && 'view' in doc.scene.camera && Array.isArray(doc.scene.customColors)
   && Array.isArray(doc.scene.measurements) && Array.isArray(doc.scene.savedSelections)
   && Array.isArray(doc.scene.savedViews) && doc.scene.ligandAnalysis?.cutoff === 4,
