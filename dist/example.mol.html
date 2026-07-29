@@ -228,6 +228,22 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
 .toggle input:checked + i { background: #266eaa; }
 .toggle input:checked + i::after { left: 16px; background: #eaf5ff; }
 
+.export-custom-fields { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; gap: 7px; margin-top: 11px; }
+.export-custom-fields > span { padding-bottom: 9px; color: var(--muted-2); font-size: 10px; }
+.export-custom-fields label { display: grid; gap: 5px; color: var(--muted); font-size: 9px; }
+.export-custom-fields input {
+  width: 100%; min-width: 0; height: 36px; padding: 0 9px; border: 1px solid var(--line); border-radius: 8px;
+  background: rgba(10, 24, 40, .9); color: var(--ink); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10px;
+}
+.export-aspect-row { margin-top: 9px; padding: 10px 11px; }
+.export-summary { display: block; min-height: 35px; margin-top: 13px; padding: 9px 10px; border: 1px solid rgba(88, 168, 255, .2); border-radius: 8px; background: rgba(88, 168, 255, .06); color: #b9d7f5; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10px; line-height: 1.5; text-align: center; }
+.export-actions { display: grid; gap: 8px; margin-top: 12px; }
+.export-status { min-height: 34px; margin: 10px 0 0; color: var(--muted-2); font-size: 9px; line-height: 1.45; }
+.export-status[data-tone="success"] { color: var(--success); }
+.export-status[data-tone="warning"] { color: var(--warning); }
+.export-status[data-tone="error"] { color: var(--danger); }
+#export-controls[aria-busy="true"] .export-summary::before { content: "Rendering\2026  "; color: var(--warning); }
+
 .metadata-source { display: inline-flex; max-width: 100%; padding: 5px 7px; border: 1px solid rgba(88, 168, 255, .24); border-radius: 6px; background: rgba(88, 168, 255, .08); color: #9dccff; font-size: 8px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .metadata-section-heading { margin: 17px 0 8px; color: var(--muted-2); font-size: 9px; font-weight: 800; letter-spacing: .13em; }
 .metadata-details { display: grid; gap: 1px; margin: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 9px; background: var(--line); }
@@ -649,6 +665,16 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
         </div>
         <div class="ribbon-group-label">Selection</div>
       </div>
+
+      <div class="ribbon-group" role="group" aria-label="Share and export commands">
+        <div class="ribbon-buttons">
+          <button id="export-button" class="ribbon-button" type="button" data-inspector-target="export" aria-controls="inspector" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-4-4 4 4 4-4M5 14v5h14v-5"/></svg>
+            <span>Export</span><small>PNG image</small>
+          </button>
+        </div>
+        <div class="ribbon-group-label">Share / Export</div>
+      </div>
     </section>
 
     <main id="workspace" class="workspace">
@@ -922,6 +948,40 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
             </div>
             <p id="interaction-truncation" class="interaction-warning" role="status" hidden></p>
             <p class="panel-note">Explicit mmCIF annotations are identified as source records. Inferred interactions use local geometry and conservative atom-name or formal-charge typing; they are not energy calculations. Legacy PDB HYDBND/SLTBRG records, symmetry mates, protonation prediction, and solvent energetics are not included.</p>
+          </section>
+
+          <section id="panel-export" class="inspector-panel" data-inspector-panel="export" hidden>
+            <p class="panel-intro">Render the current molecular composition without including editor controls or changing the document.</p>
+            <div id="export-controls" aria-busy="false">
+              <label class="field-label" for="export-size">Image size</label>
+              <select id="export-size">
+                <option value="current">Current</option>
+                <option value="2">2x</option>
+                <option value="4">4x</option>
+                <option value="custom">Custom</option>
+              </select>
+              <div id="export-custom-fields" class="export-custom-fields" hidden>
+                <label for="export-width"><span>Width</span><input id="export-width" type="number" inputmode="numeric" min="64" max="8192" step="1" aria-describedby="export-summary export-status" aria-errormessage="export-status"></label>
+                <span aria-hidden="true">x</span>
+                <label for="export-height"><span>Height</span><input id="export-height" type="number" inputmode="numeric" min="64" max="8192" step="1" aria-describedby="export-summary export-status" aria-errormessage="export-status"></label>
+              </div>
+              <label id="export-aspect-row" class="visibility-option export-aspect-row" hidden>
+                <span><strong>Lock aspect ratio</strong><small>Match the visible composition</small></span>
+                <span class="toggle"><input id="export-lock-aspect" type="checkbox" checked><i></i></span>
+              </label>
+              <label class="field-label" for="export-background">Background</label>
+              <select id="export-background">
+                <option value="scene">Scene color</option>
+                <option value="transparent">Transparent</option>
+              </select>
+              <output id="export-summary" class="export-summary" aria-live="polite"></output>
+              <div class="export-actions">
+                <button id="export-download" class="button accent full-width" type="button">Download PNG</button>
+                <button id="export-copy" class="button secondary full-width" type="button">Copy image</button>
+              </div>
+              <p id="export-status" class="export-status" role="status" aria-live="polite" aria-atomic="true">Ready to render.</p>
+              <p class="panel-note">Exports contain only renderer-owned molecular content. Large surfaces can take longer to finish.</p>
+            </div>
           </section>
 
           <section id="panel-inspect" class="inspector-panel" data-inspector-panel="inspect" hidden>
@@ -4911,10 +4971,17 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   const ThreeDmol = window.$3Dmol || window['3Dmol'];
 
   class MoleculeRenderer {
-    constructor(container, callbacks = {}) {
+    constructor(container, callbacks = {}, options = {}) {
       if (!ThreeDmol?.createViewer) throw new Error('The bundled 3Dmol.js renderer did not load.');
       this.container = container;
       this.callbacks = callbacks;
+      this.options = {
+        backgroundAlpha: options.backgroundAlpha === 0 ? 0 : 1,
+        interactive: options.interactive !== false,
+        screenScale: positiveNumber(options.screenScale, 1),
+        labelScale: positiveNumber(options.labelScale, positiveNumber(options.screenScale, 1)),
+        upscale: options.upscale !== false
+      };
       this.doc = null;
       this.parsed = null;
       this.model = null;
@@ -4926,6 +4993,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       this.foregroundShapes = [];
       this.foregroundLabels = [];
       this.surfaceGeneration = 0;
+      this.surfaceTasks = new Map();
       this.applyingDocument = false;
       this.lastReportedView = '';
       this.measurementDraft = [];
@@ -4935,18 +5003,35 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       this.rendererLocationByDomainIndex = new Map();
       this.viewer = ThreeDmol.createViewer(container, {
         backgroundColor: '#07111f',
-        antialias: true
+        backgroundAlpha: this.options.backgroundAlpha,
+        antialias: true,
+        upscale: this.options.upscale,
+        nomouse: !this.options.interactive
       });
-      this.viewer.setViewChangeCallback(() => this.queueViewChange());
-      this.resizeObserver = new ResizeObserver(() => {
-        this.viewer.resize();
-        this.viewer.render();
-      });
-      this.resizeObserver.observe(container);
+      if (!this.options.interactive) this.stabilizeFramebufferResources();
+      if (this.options.interactive) {
+        this.viewer.setViewChangeCallback(() => this.queueViewChange());
+        this.resizeObserver = new ResizeObserver(() => {
+          this.viewer.resize();
+          this.viewer.render();
+          this.callbacks.onResize?.(this.getSizingInfo());
+        });
+        this.resizeObserver.observe(container);
+      } else {
+        this.viewer.divwatcher?.disconnect?.();
+        this.viewer.intwatcher?.disconnect?.();
+      }
     }
 
-    setDocument(doc, { fit = false } = {}) {
+    setDocument(doc, {
+      fit = false, cameraMode = 'document', writeCamera = true, presentationState = null
+    } = {}) {
       this.doc = doc;
+      this.writeCamera = writeCamera !== false;
+      if (presentationState) {
+        this.activeMeasurementId = presentationState.activeMeasurementId || null;
+        this.activeSavedSelectionId = presentationState.activeSavedSelectionId || null;
+      }
       const structureChanged = !this.structureSnapshot
         || this.structureSnapshot.id !== doc.structure.id
         || this.structureSnapshot.format !== doc.structure.format
@@ -4964,9 +5049,12 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
           this.interactionAnalysis = null;
           this.interactionDisplay = null;
           this.surfaceGeneration += 1;
+          this.disposeSurfaceRenderResources();
           this.viewer.removeAllSurfaces();
           this.viewer.removeAllLabels();
+          this.disposeShapeRenderResources();
           this.viewer.removeAllShapes();
+          this.disposeModelRenderResources();
           this.viewer.removeAllModels();
           const rendererFormat = doc.structure.format === 'mmcif' ? 'cif' : doc.structure.format;
           const multiplePdbModels = doc.structure.format === 'pdb' && this.parsed.coordinateSets.length > 1;
@@ -4985,10 +5073,10 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
           if (multipleMmcifModels) this.buildCoordinateSetAtomMapping();
           else this.buildAtomMapping();
           this.applyNormalizedBonds();
-          fit = true;
+          if (cameraMode !== 'snapshot') fit = true;
         }
 
-        this.applyAppearance();
+        const generation = this.applyAppearance();
         const savedView = doc.scene.camera?.view;
         if (fit || !validView(savedView)) {
           this.viewer.zoomTo(this.visibleSelection());
@@ -4996,8 +5084,17 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
           this.viewer.setView(savedView);
         }
         this.viewer.render();
-        doc.scene.camera = { view: this.viewer.getView() };
-        this.lastReportedView = JSON.stringify(doc.scene.camera.view);
+        const appliedView = this.viewer.getView();
+        if (this.writeCamera) doc.scene.camera = { view: appliedView };
+        this.lastReportedView = JSON.stringify(appliedView);
+        return generation;
+      } catch (error) {
+        if (error && (typeof error === 'object' || typeof error === 'function') && Object.isExtensible(error)) {
+          Object.defineProperty(error, 'molhtmlRenderGeneration', {
+            configurable: true, value: this.surfaceGeneration
+          });
+        }
+        throw error;
       } finally {
         requestAnimationFrame(() => { this.applyingDocument = false; });
       }
@@ -5006,16 +5103,22 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     applyAppearance() {
       this.surfaceGeneration += 1;
       const generation = this.surfaceGeneration;
+      const surfaceTasks = [];
+      this.surfaceTasks.clear();
+      this.surfaceTasks.set(generation, surfaceTasks);
       const visible = this.visibleSelection();
       const colorfunc = atom => this.colorFor3DAtom(atom);
 
-      this.viewer.setBackgroundColor(this.doc.scene.background, 1);
-      this.viewer.removeAllLabels();
+      this.applyBackground();
+      this.removeLabels();
+      this.disposeShapeRenderResources();
       this.viewer.removeAllShapes();
       this.interactionShapes = [];
       this.foregroundShapes = [];
       this.foregroundLabels = [];
+      this.disposeSurfaceRenderResources();
       this.viewer.removeAllSurfaces();
+      this.disposeModelRenderResources();
       this.viewer.setStyle({}, {});
       for (const model of this.models) model?.setColorByFunction({}, colorfunc);
 
@@ -5033,14 +5136,19 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
           this.viewer.setStyle(visible, { sphere: { scale: 1, colorfunc } });
           break;
         case 'lines':
-          this.viewer.setStyle(visible, { line: { linewidth: 1.5, colorfunc } });
+          this.viewer.setStyle(visible, { line: { linewidth: this.scaledLineWidth(1.5), colorfunc } });
           break;
         case 'surface': {
           this.viewer.setStyle(visible, { cartoon: { colorfunc, opacity: .62 } });
           const surface = this.viewer.addSurface(ThreeDmol.SurfaceType.VDW, { opacity: .78 }, visible);
-          Promise.resolve(surface).then(() => {
+          const task = Promise.resolve(surface).then(() => {
             if (generation === this.surfaceGeneration) this.viewer.render();
-          }).catch(error => console.error('3Dmol surface rendering failed:', error));
+            return { ok: true };
+          }, error => {
+            if (this.options.interactive) console.error('3Dmol surface rendering failed:', error);
+            return { ok: false, error };
+          });
+          surfaceTasks.push(task);
           break;
         }
         case 'ball-and-stick':
@@ -5058,11 +5166,14 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       this.applySelectionHighlight();
       this.applyMeasurements();
       this.applyMeasurementDraft();
-      this.viewer.setClickable({}, false);
-      this.viewer.setClickable(visible, true, atom => {
-        const selected = this.domainAtomForRenderer(atom) || this.normalizeAtom(atom);
-        this.callbacks.onPick?.(selected);
-      });
+      if (this.options.interactive) {
+        this.viewer.setClickable({}, false);
+        this.viewer.setClickable(visible, true, atom => {
+          const selected = this.domainAtomForRenderer(atom) || this.normalizeAtom(atom);
+          this.callbacks.onPick?.(selected);
+        });
+      }
+      return generation;
     }
 
     applySelectionHighlight(includeAtomStyle = true) {
@@ -5079,17 +5190,17 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
           sphere: { scale: .5, color: '#ffe66d' }
         });
       }
-      const label = this.viewer.addLabel(Core.atomLabel(atom), {
+      const label = this.viewer.addLabel(Core.atomLabel(atom), this.labelOptions({
         position: { x: atom.x, y: atom.y, z: atom.z },
         fontColor: '#07111f',
-        backgroundColor: '#ffe66d',
+        backgroundColor: '#f4c95d',
         backgroundOpacity: .9,
         borderColor: '#ffffff',
         borderThickness: 1,
         fontSize: 12,
         padding: 4,
         inFront: true
-      });
+      }));
       if (label) this.foregroundLabels.push(label);
     }
 
@@ -5138,7 +5249,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
           const color = contact.polar ? '#ffcf5a' : contact.close ? '#71ddf8' : '#7c91a7';
           this.viewer.addLine({
             start: point(contact.ligandAtom), end: point(contact.targetAtom),
-            color, dashed: true, linewidth: contact.polar ? 2.5 : 1.5, opacity: .82
+            color, dashed: true, linewidth: this.scaledLineWidth(contact.polar ? 2.5 : 1.5), opacity: .82
           });
         }
       }
@@ -5156,7 +5267,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
           end: point(right),
           color: interaction.type === 'hydrogen-bond' ? '#49d7ff' : '#ffb84d',
           dashed: true,
-          linewidth: interaction.type === 'hydrogen-bond' ? 1.8 : 2.1,
+          linewidth: this.scaledLineWidth(interaction.type === 'hydrogen-bond' ? 1.8 : 2.1),
           opacity: .88
         });
         if (shape) this.interactionShapes.push(shape);
@@ -5191,7 +5302,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         for (let index = 1; index < atoms.length; index++) {
           const line = this.viewer.addLine({
             start: point(atoms[index - 1]), end: point(atoms[index]),
-            color, dashed: true, linewidth: active ? 3 : 2
+            color, dashed: true, linewidth: this.scaledLineWidth(active ? 3 : 2)
           });
           if (line) this.foregroundShapes.push(line);
         }
@@ -5201,12 +5312,12 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         }
         const value = Core.formatMeasurementValue(measurement.type, Core.measurementValue(measurement.type, atoms));
         const label = String(measurement.label || '').trim();
-        const renderedLabel = this.viewer.addLabel(label ? `${label}: ${value}` : value, {
+        const renderedLabel = this.viewer.addLabel(label ? `${label}: ${value}` : value, this.labelOptions({
           position: measurementLabelPosition(measurement.type, atoms),
           fontColor: '#07111f', backgroundColor: color, backgroundOpacity: .92,
           borderColor: '#ffffff', borderThickness: active ? 2 : 1,
           fontSize: active ? 13 : 11, padding: 4, inFront: true
-        });
+        }));
         if (renderedLabel) this.foregroundLabels.push(renderedLabel);
       }
     }
@@ -5220,16 +5331,16 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
             stick: { radius: .3, color: '#ff5e83' }, sphere: { scale: .54, color: '#ff5e83' }
           });
         }
-        const label = this.viewer.addLabel(String(index + 1), {
+        const label = this.viewer.addLabel(String(index + 1), this.labelOptions({
           position: point(atom), fontColor: '#ffffff', backgroundColor: '#d92d57',
           backgroundOpacity: .96, borderColor: '#ffffff', borderThickness: 1,
           fontSize: 12, padding: 4, inFront: true
-        });
+        }));
         if (label) this.foregroundLabels.push(label);
         if (index > 0) {
           const line = this.viewer.addLine({
             start: point(this.measurementDraft[index - 1]), end: point(atom),
-            color: '#ff5e83', dashed: true, linewidth: 3
+            color: '#ff5e83', dashed: true, linewidth: this.scaledLineWidth(3)
           });
           if (line) this.foregroundShapes.push(line);
         }
@@ -5481,8 +5592,280 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
 
     render() {
       if (!this.doc) return;
-      this.viewer.setBackgroundColor(this.doc.scene.background, 1);
+      this.applyBackground();
       this.viewer.render();
+    }
+
+    setExportOptions({ backgroundAlpha, screenScale, labelScale } = {}) {
+      if (backgroundAlpha === 0 || backgroundAlpha === 1) this.options.backgroundAlpha = backgroundAlpha;
+      if (screenScale != null) this.options.screenScale = positiveNumber(screenScale, 1);
+      if (labelScale != null) this.options.labelScale = positiveNumber(labelScale, 1);
+      if (this.doc) this.applyBackground();
+    }
+
+    applyBackground() {
+      if (!this.doc) return;
+      if (this.viewer.config) this.viewer.config.backgroundAlpha = this.options.backgroundAlpha;
+      this.viewer.setBackgroundColor(this.doc.scene.background, this.options.backgroundAlpha);
+    }
+
+    labelOptions(style) {
+      const scale = this.options.labelScale;
+      const scaled = { ...style };
+      for (const key of ['fontSize', 'padding', 'borderThickness']) {
+        if (Number.isFinite(style[key])) scaled[key] = Math.max(1, Math.round(style[key] * scale));
+      }
+      return scaled;
+    }
+
+    scaledLineWidth(width) {
+      const [minimum, maximum] = this.getLineWidthRange();
+      return Math.min(maximum, Math.max(minimum, Number(width) * this.options.screenScale));
+    }
+
+    getLineWidthRange() {
+      const gl = this.viewer.getRenderer?.().getContext?.();
+      if (!gl || gl.isContextLost?.()) return [1, 1];
+      const range = gl.getParameter(gl.ALIASED_LINE_WIDTH_RANGE);
+      return range && range.length === 2 ? [Number(range[0]), Number(range[1])] : [1, 1];
+    }
+
+    getCameraSnapshot() {
+      return { view: structuredClone(this.viewer.getView()) };
+    }
+
+    getSizingInfo() {
+      const canvas = this.viewer.getCanvas?.();
+      const renderer = this.viewer.getRenderer?.();
+      const gl = renderer?.getContext?.();
+      const lost = !gl || Boolean(gl.isContextLost?.());
+      const parameter = key => lost ? 0 : gl.getParameter(key);
+      const viewport = parameter(gl?.MAX_VIEWPORT_DIMS);
+      return {
+        width: Number(canvas?.width) || 0,
+        height: Number(canvas?.height) || 0,
+        drawingBufferWidth: Number(gl?.drawingBufferWidth) || 0,
+        drawingBufferHeight: Number(gl?.drawingBufferHeight) || 0,
+        devicePixelRatio: positiveNumber(renderer?.devicePixelRatio, positiveNumber(window.devicePixelRatio, 1)),
+        contextLost: lost,
+        limits: {
+          maxViewportWidth: Number(viewport?.[0]) || 0,
+          maxViewportHeight: Number(viewport?.[1]) || 0,
+          maxTextureSize: Number(parameter(gl?.MAX_TEXTURE_SIZE)) || 0,
+          maxRenderbufferSize: Number(parameter(gl?.MAX_RENDERBUFFER_SIZE)) || 0
+        }
+      };
+    }
+
+    setOutputSize(width, height) {
+      this.stabilizeFramebufferResources();
+      const configuredRatio = positiveNumber(window.devicePixelRatio, 1);
+      const ratio = this.options.upscale && configuredRatio < 2 ? 2 : configuredRatio;
+      const logicalWidth = (Number(width) + .01) / ratio;
+      const logicalHeight = (Number(height) + .01) / ratio;
+      this.viewer.setWidth(logicalWidth);
+      this.viewer.setHeight(logicalHeight);
+      return this.getSizingInfo();
+    }
+
+    async whenSurfacesReady(generation) {
+      const tasks = this.surfaceTasks.get(generation);
+      if (!tasks) throw new Error('The requested render generation is no longer available.');
+      const results = await Promise.all(tasks);
+      const failure = results.find(result => !result.ok);
+      if (failure) throw failure.error instanceof Error ? failure.error : new Error('3Dmol surface rendering failed.');
+      return generation;
+    }
+
+    capturePNG(generation, { width, height, backgroundAlpha = this.options.backgroundAlpha } = {}) {
+      if (generation !== this.surfaceGeneration) {
+        return Promise.reject(new Error('The requested render generation was superseded.'));
+      }
+      this.setExportOptions({ backgroundAlpha });
+      const requestedWidth = Number(width);
+      const requestedHeight = Number(height);
+      this.setOutputSize(requestedWidth, requestedHeight);
+      this.applyBackground();
+      this.viewer.render();
+      const exact = this.getSizingInfo();
+      if (exact.contextLost) return Promise.reject(new Error('The export WebGL context was lost.'));
+      if (exact.width !== requestedWidth || exact.height !== requestedHeight
+        || exact.drawingBufferWidth !== requestedWidth || exact.drawingBufferHeight !== requestedHeight) {
+        const error = new Error(
+          `The browser created ${exact.width} x ${exact.height} canvas pixels and `
+          + `${exact.drawingBufferWidth} x ${exact.drawingBufferHeight} WebGL pixels instead of `
+          + `${requestedWidth} x ${requestedHeight}.`
+        );
+        error.code = 'renderer-dimension-mismatch';
+        return Promise.reject(error);
+      }
+      const canvas = this.viewer.getCanvas?.();
+      return new Promise((resolve, reject) => {
+        try {
+          canvas.toBlob(blob => resolve(blob), 'image/png');
+        } catch (error) {
+          reject(error);
+        }
+      });
+    }
+
+    resetAfterExport(generation) {
+      if (generation !== this.surfaceGeneration) return false;
+      this.surfaceGeneration += 1;
+      clearTimeout(this.viewTimer);
+      this.removeLabels();
+      this.disposeShapeRenderResources();
+      this.viewer.removeAllShapes();
+      this.disposeSurfaceRenderResources();
+      this.viewer.removeAllSurfaces();
+      this.disposeModelRenderResources();
+      this.viewer.removeAllModels();
+      this.viewer.setClickable?.({}, false);
+      this.doc = null;
+      this.parsed = null;
+      this.model = null;
+      this.models = [];
+      this.structureSnapshot = null;
+      this.interactionAnalysis = null;
+      this.interactionDisplay = null;
+      this.interactionShapes = [];
+      this.foregroundShapes = [];
+      this.foregroundLabels = [];
+      this.measurementDraft = [];
+      this.activeMeasurementId = null;
+      this.activeSavedSelectionId = null;
+      this.domainByRendererKey.clear();
+      this.rendererLocationByDomainIndex.clear();
+      this.surfaceTasks.clear();
+      this.options.backgroundAlpha = 1;
+      this.options.screenScale = 1;
+      this.options.labelScale = 1;
+      if (this.viewer.config) this.viewer.config.backgroundAlpha = 1;
+      this.viewer.setBackgroundColor('#07111f', 1);
+      this.setOutputSize(64, 64);
+      this.viewer.render();
+      return true;
+    }
+
+    removeLabels() {
+      for (const label of this.viewer.labels || []) label?.dispose?.();
+      this.viewer.removeAllLabels();
+    }
+
+    disposeModelRenderResources() {
+      if (this.options.interactive) return;
+      // GLModel.removegl() in pinned 3Dmol 2.5.5 does not recurse through the
+      // cloned scene graph or release instancing buffers, so do both before a
+      // hidden export generation is replaced.
+      const geometries = new Set();
+      const materials = new Set();
+      const visit = object => {
+        if (!object) return;
+        if (object.geometry) geometries.add(object.geometry);
+        const entries = Array.isArray(object.material) ? object.material : [object.material];
+        for (const material of entries) if (material) materials.add(material);
+        for (const child of object.children || []) visit(child);
+      };
+      for (const model of this.models) visit(model?.renderedMolObj);
+      const gl = this.viewer.getRenderer?.()?.getContext?.();
+      for (const geometry of geometries) {
+        this.disposeGeometryBuffers(geometry, gl);
+        geometry.dispose?.();
+      }
+      for (const material of materials) {
+        const shaders = material?.program && gl?.getAttachedShaders?.(material.program);
+        material.dispose?.();
+        for (const shader of shaders || []) gl.deleteShader?.(shader);
+      }
+      for (const model of this.models) {
+        const rendered = model?.renderedMolObj;
+        if (rendered) this.viewer.modelGroup?.remove?.(rendered);
+        if (model) {
+          model.renderedMolObj = null;
+          model.molObj = null;
+        }
+      }
+    }
+
+    disposeSurfaceRenderResources() {
+      if (this.options.interactive) return;
+      const gl = this.viewer.getRenderer?.()?.getContext?.();
+      const geometries = new Set();
+      const materials = new Set();
+      for (const surface of Object.values(this.viewer.surfaces || {})) {
+        for (const entry of surface || []) {
+          if (entry?.geo) geometries.add(entry.geo);
+          if (entry?.mat) materials.add(entry.mat);
+        }
+      }
+      for (const geometry of geometries) this.disposeGeometryBuffers(geometry, gl);
+      for (const material of materials) {
+        const shaders = material?.program && gl?.getAttachedShaders?.(material.program);
+        material.dispose?.();
+        for (const shader of shaders || []) gl.deleteShader?.(shader);
+      }
+    }
+
+    disposeShapeRenderResources() {
+      if (this.options.interactive) return;
+      const gl = this.viewer.getRenderer?.()?.getContext?.();
+      const geometries = new Set();
+      const materials = new Set();
+      const visit = object => {
+        if (!object) return;
+        if (object.geometry) geometries.add(object.geometry);
+        const entries = Array.isArray(object.material) ? object.material : [object.material];
+        for (const material of entries) if (material) materials.add(material);
+        for (const child of object.children || []) visit(child);
+      };
+      for (const shape of this.viewer.shapes || []) visit(shape?.renderedShapeObj);
+      for (const geometry of geometries) {
+        this.disposeGeometryBuffers(geometry, gl);
+        geometry.dispose?.();
+      }
+      for (const material of materials) {
+        const shaders = material?.program && gl?.getAttachedShaders?.(material.program);
+        material.dispose?.();
+        for (const shader of shaders || []) gl.deleteShader?.(shader);
+      }
+      for (const shape of this.viewer.shapes || []) {
+        const rendered = shape?.renderedShapeObj;
+        if (rendered) this.viewer.modelGroup?.remove?.(rendered);
+        if (shape) {
+          shape.renderedShapeObj = null;
+          shape.shapeObj = null;
+        }
+      }
+    }
+
+    disposeGeometryBuffers(geometry, gl) {
+      for (const holder of [geometry, ...(geometry?.geometryGroups || [])]) {
+        for (const key of Object.keys(holder || {})) {
+          if (!/^__webgl.*Buffer$/.test(key) || holder[key] === undefined) continue;
+          gl?.deleteBuffer?.(holder[key]);
+          holder[key] = undefined;
+        }
+      }
+    }
+
+    stabilizeFramebufferResources() {
+      if (this.options.interactive) return;
+      const renderer = this.viewer?.getRenderer?.();
+      if (!renderer || renderer.__molhtmlStableFramebuffer) return;
+      // 3Dmol 2.5.5 recreates framebuffer objects on every resize. The export
+      // viewer reuses its initialized objects because setFrameBuffer resizes
+      // their storage; the visible interactive renderer retains native setup.
+      if (typeof renderer.initFrameBuffer === 'function') renderer.initFrameBuffer = () => {};
+      Object.defineProperty(renderer, '__molhtmlStableFramebuffer', { value: true });
+    }
+
+    resourceCounts() {
+      return {
+        models: this.viewer.models?.filter(Boolean).length || 0,
+        shapes: this.viewer.shapes?.filter(Boolean).length || 0,
+        labels: this.viewer.labels?.filter(Boolean).length || 0,
+        surfaces: this.viewer.surfaces ? Object.keys(this.viewer.surfaces).length : 0
+      };
     }
 
     queueViewChange() {
@@ -5501,6 +5884,11 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
 
   function validView(view) {
     return Array.isArray(view) && view.length === 8 && view.every(Number.isFinite);
+  }
+
+  function positiveNumber(value, fallback) {
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0 ? number : fallback;
   }
 
   function point(atom) {
@@ -5574,6 +5962,483 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
 })();
 
 //# sourceURL=molhtml:///src/renderer.js</script>
+  <script>(function () {
+  'use strict';
+
+  const MIN_SIDE = 64;
+  const MAX_SIDE = 8192;
+  const MAX_PIXELS = 32_000_000;
+  const DEFAULT_TIMEOUT_MS = 30_000;
+
+  class MolhtmlExportError extends Error {
+    constructor(message, code = 'export-failed', options) {
+      super(message, options);
+      this.name = new.target.name;
+      this.code = code;
+    }
+  }
+
+  class ExportBusyError extends MolhtmlExportError {
+    constructor(message = 'Another image export is already in progress.') {
+      super(message, 'export-busy');
+    }
+  }
+
+  class ExportDimensionError extends MolhtmlExportError {
+    constructor(message) { super(message, 'export-dimensions'); }
+  }
+
+  class ExportRenderError extends MolhtmlExportError {
+    constructor(message, options) { super(message, 'export-render', options); }
+  }
+
+  class ExportTimeoutError extends MolhtmlExportError {
+    constructor(message = 'The molecular surface did not finish before the export timeout.') {
+      super(message, 'export-timeout');
+    }
+  }
+
+  class ExportClipboardError extends MolhtmlExportError {
+    constructor(message, options) { super(message, 'export-clipboard', options); }
+  }
+
+  class ExportDownloadError extends MolhtmlExportError {
+    constructor(message, options) { super(message, 'export-download', options); }
+  }
+
+  class ExportService {
+    constructor(getSource, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+      if (typeof getSource !== 'function') throw new TypeError('ExportService requires a source snapshot function.');
+      this.getSource = getSource;
+      this.timeoutMs = positiveInteger(timeoutMs, DEFAULT_TIMEOUT_MS);
+      this.busy = false;
+      this.quarantine = null;
+      this.fatalError = null;
+      this.renderer = null;
+      this.container = null;
+      this.objectUrls = new Set();
+    }
+
+    renderPNG(options = {}) {
+      return this.startJob(options).then(result => result.blob);
+    }
+
+    async downloadPNG(options = {}) {
+      const result = await this.startJob(options);
+      const filename = this.downloadBlob(result.blob, result.metadata, result.options.filename);
+      return { status: 'downloaded', filename, ...result.metadata };
+    }
+
+    copyImage(options = {}) {
+      const unavailable = this.availabilityError();
+      if (unavailable) return Promise.reject(unavailable);
+      const unsupported = clipboardUnsupportedReason();
+      if (unsupported) return Promise.resolve({ status: 'unsupported', reason: unsupported });
+
+      let job;
+      let write;
+      try {
+        job = this.startJob(options);
+        const pngPromise = job.then(result => result.blob);
+        const item = new window.ClipboardItem({ 'image/png': pngPromise });
+        write = Promise.resolve(navigator.clipboard.write([item]));
+      } catch (error) {
+        if (!job) return Promise.reject(error);
+        write = Promise.reject(error);
+      }
+      return settleClipboard(job, write);
+    }
+
+    downloadBlob(blob, metadata, requestedFilename) {
+      validatePNGBlob(blob);
+      const filename = exportFilename(requestedFilename, metadata.title, metadata.width, metadata.height, metadata.transparent);
+      let url = null;
+      let link = null;
+      try {
+        url = URL.createObjectURL(blob);
+        this.objectUrls.add(url);
+        link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        link.hidden = true;
+        document.body.appendChild(link);
+        link.click();
+      } catch (error) {
+        const detail = error instanceof Error && error.message ? `: ${error.message}` : '';
+        throw new ExportDownloadError(`The PNG was rendered, but the download could not start${detail}`, { cause: error });
+      } finally {
+        try { link?.remove(); } catch {}
+        if (url) {
+          const release = () => {
+            try { URL.revokeObjectURL(url); } catch {}
+            this.objectUrls.delete(url);
+          };
+          try { setTimeout(release, 0); } catch { release(); }
+        }
+      }
+      return filename;
+    }
+
+    startJob(options) {
+      const unavailable = this.availabilityError();
+      if (unavailable) return Promise.reject(unavailable);
+
+      let accepted;
+      try {
+        accepted = captureAcceptedJob(this.getSource(), options);
+      } catch (error) {
+        return Promise.reject(stableExportError(error));
+      }
+      this.busy = true;
+      return this.runJob(accepted).finally(() => { this.busy = false; });
+    }
+
+    availabilityError() {
+      if (this.fatalError) return this.fatalError;
+      if (this.busy) return new ExportBusyError();
+      if (this.quarantine) {
+        return new ExportBusyError(
+          'The previous timed-out surface is still finishing. Exporting will resume when it settles or after reload.'
+        );
+      }
+      return null;
+    }
+
+    async runJob(job) {
+      let renderer = null;
+      let generation = null;
+      let settlement = null;
+      let deferredReset = false;
+      let result = null;
+      let failure = null;
+      try {
+        renderer = this.ensureRenderer();
+        validateHardwareLimits(job, renderer.getSizingInfo());
+        renderer.setOutputSize(job.options.width, job.options.height);
+        const outputSizing = renderer.getSizingInfo();
+        const outputPixelRatio = positiveNumber(outputSizing.devicePixelRatio, 1);
+        renderer.setExportOptions({
+          backgroundAlpha: job.options.transparent ? 0 : 1,
+          screenScale: job.screenScale,
+          labelScale: job.screenScale * job.visiblePixelRatio / outputPixelRatio
+        });
+        generation = renderer.setDocument(job.document, {
+          cameraMode: 'snapshot',
+          writeCamera: false,
+          presentationState: job.presentationState
+        });
+        settlement = renderer.whenSurfacesReady(generation);
+        await withTimeout(settlement, this.timeoutMs);
+        await nextAnimationFrame();
+        const blob = await renderer.capturePNG(generation, {
+          width: job.options.width,
+          height: job.options.height,
+          backgroundAlpha: job.options.transparent ? 0 : 1
+        });
+        validatePNGBlob(blob);
+        result = {
+          blob,
+          options: job.options,
+          metadata: {
+            width: job.options.width,
+            height: job.options.height,
+            bytes: blob.size,
+            transparent: job.options.transparent,
+            title: job.title
+          }
+        };
+      } catch (error) {
+        const interruptedGeneration = renderer && generation == null && Number.isInteger(error?.molhtmlRenderGeneration);
+        if (interruptedGeneration) {
+          generation = error.molhtmlRenderGeneration;
+          settlement = renderer.whenSurfacesReady(generation);
+        }
+        if ((error instanceof ExportTimeoutError || interruptedGeneration) && settlement && generation != null) {
+          deferredReset = true;
+          this.beginDeferredReset(renderer, generation, settlement);
+        }
+        failure = stableExportError(error);
+        if (renderer && generation == null && !interruptedGeneration
+          && !(failure instanceof ExportDimensionError)) {
+          this.latchFatalRenderer(error, 'rendering failed before a safe generation could be established');
+        }
+      }
+      if (renderer && generation != null && !deferredReset) {
+        const cleanupFailure = this.resetRenderer(renderer, generation);
+        if (!failure && cleanupFailure) failure = cleanupFailure;
+      }
+      if (failure) throw failure;
+      return result;
+    }
+
+    ensureRenderer() {
+      if (this.renderer) return this.renderer;
+      if (this.fatalError) throw this.fatalError;
+      const container = document.createElement('div');
+      container.dataset.molhtmlExportViewer = '';
+      container.setAttribute('aria-hidden', 'true');
+      container.inert = true;
+      Object.assign(container.style, {
+        position: 'fixed', left: '-100000px', top: '0', width: '64px', height: '64px',
+        overflow: 'hidden', pointerEvents: 'none', contain: 'strict'
+      });
+      document.body.appendChild(container);
+      let renderer;
+      try {
+        renderer = new window.MoleculeRenderer(container, {}, {
+          backgroundAlpha: 1, interactive: false, screenScale: 1, upscale: false
+        });
+      } catch (error) {
+        try { container.remove(); } catch {}
+        throw this.latchFatalRenderer(error, 'the hidden renderer could not be initialized');
+      }
+      this.container = container;
+      this.renderer = renderer;
+      return renderer;
+    }
+
+    beginDeferredReset(renderer, generation, settlement) {
+      const cleanup = Promise.resolve(settlement).catch(() => {}).then(() => {
+        const failure = this.resetRenderer(renderer, generation);
+        if (failure) throw failure;
+      });
+      let tracked;
+      tracked = cleanup.finally(() => {
+        if (this.quarantine === tracked) this.quarantine = null;
+      });
+      this.quarantine = tracked;
+      tracked.catch(() => {});
+    }
+
+    resetRenderer(renderer, generation) {
+      try {
+        if (renderer.resetAfterExport(generation) !== true) {
+          throw new Error('The hidden renderer rejected its export reset.');
+        }
+        return null;
+      } catch (error) {
+        return this.latchFatalRenderer(error, 'the hidden renderer could not be reset safely');
+      }
+    }
+
+    latchFatalRenderer(error, context) {
+      if (!this.fatalError) {
+        this.fatalError = new ExportRenderError(
+          `Image export is unavailable because ${context}. Reload this file before trying again.`,
+          { cause: error }
+        );
+      }
+      return this.fatalError;
+    }
+
+    canCopyImage() {
+      return clipboardUnsupportedReason() === '';
+    }
+
+    debugState() {
+      return {
+        busy: this.busy,
+        quarantined: Boolean(this.quarantine),
+        fatal: Boolean(this.fatalError),
+        viewerCount: this.container?.isConnected ? 1 : 0,
+        objectUrlCount: this.objectUrls.size,
+        resources: this.renderer?.resourceCounts() || { models: 0, shapes: 0, labels: 0, surfaces: 0 }
+      };
+    }
+  }
+
+  function captureAcceptedJob(source, options) {
+    if (!source?.document || !source?.camera) throw new ExportRenderError('The live molecular scene is unavailable.');
+    const visibleWidth = positiveInteger(source.visibleSize?.width, 0);
+    const visibleHeight = positiveInteger(source.visibleSize?.height, 0);
+    if (!visibleWidth || !visibleHeight) throw new ExportDimensionError('The visible viewer has no exportable pixel dimensions.');
+    const normalized = normalizeOptions(options, visibleWidth, visibleHeight);
+    const documentCopy = structuredClone(source.document);
+    documentCopy.scene.camera = structuredClone(source.camera);
+    const measurementIds = new Set((documentCopy.scene.measurements || []).map(record => record.id));
+    const savedSelectionIds = new Set((documentCopy.scene.savedSelections || []).map(record => record.id));
+    return {
+      document: documentCopy,
+      options: normalized,
+      title: String(source.document.title || source.document.structure?.name || 'molecule'),
+      screenScale: Math.min(normalized.width / visibleWidth, normalized.height / visibleHeight),
+      visiblePixelRatio: positiveNumber(source.visibleSize?.devicePixelRatio, 1),
+      presentationState: {
+        activeMeasurementId: measurementIds.has(source.activeMeasurementId) ? source.activeMeasurementId : null,
+        activeSavedSelectionId: savedSelectionIds.has(source.activeSavedSelectionId) ? source.activeSavedSelectionId : null
+      }
+    };
+  }
+
+  function normalizeOptions(options, visibleWidth, visibleHeight) {
+    const candidate = options && typeof options === 'object' ? options : {};
+    let width = optionalDimension(candidate.width, 'width');
+    let height = optionalDimension(candidate.height, 'height');
+    const aspect = visibleWidth / visibleHeight;
+    if (width == null && height == null) {
+      width = visibleWidth;
+      height = visibleHeight;
+    } else if (width == null) width = Math.round(height * aspect);
+    else if (height == null) height = Math.round(width / aspect);
+    validateProjectDimensions(width, height);
+    return {
+      width,
+      height,
+      transparent: candidate.transparent === true,
+      filename: candidate.filename == null ? '' : String(candidate.filename)
+    };
+  }
+
+  function optionalDimension(value, label) {
+    if (value == null || value === '') return null;
+    const number = Number(value);
+    if (!Number.isInteger(number)) throw new ExportDimensionError(`Export ${label} must be a whole number of pixels.`);
+    return number;
+  }
+
+  function validateProjectDimensions(width, height) {
+    if (width < MIN_SIDE || height < MIN_SIDE) {
+      throw new ExportDimensionError(`Export dimensions must be at least ${MIN_SIDE} pixels on each side.`);
+    }
+    if (width > MAX_SIDE || height > MAX_SIDE) {
+      throw new ExportDimensionError(`Export dimensions cannot exceed ${MAX_SIDE.toLocaleString()} pixels on either side.`);
+    }
+    if (width * height > MAX_PIXELS) {
+      throw new ExportDimensionError('Export dimensions cannot exceed 32 megapixels.');
+    }
+  }
+
+  function validateHardwareLimits(job, sizing) {
+    if (sizing.contextLost) throw new ExportRenderError('The export WebGL context is unavailable.');
+    const { width, height } = job.options;
+    const limits = sizing.limits || {};
+    const maxWidth = minimumPositive(MAX_SIDE, limits.maxViewportWidth, limits.maxTextureSize, limits.maxRenderbufferSize);
+    const maxHeight = minimumPositive(MAX_SIDE, limits.maxViewportHeight, limits.maxTextureSize, limits.maxRenderbufferSize);
+    if (width > maxWidth || height > maxHeight) {
+      throw new ExportDimensionError(
+        `This browser and GPU support at most ${maxWidth.toLocaleString()} x ${maxHeight.toLocaleString()} export pixels.`
+      );
+    }
+  }
+
+  function validatePNGBlob(blob) {
+    if (!(blob instanceof Blob) || blob.type !== 'image/png' || blob.size <= 0) {
+      throw new ExportRenderError('The browser did not produce a valid PNG image.');
+    }
+  }
+
+  function stableExportError(error) {
+    if (error instanceof MolhtmlExportError) return error;
+    if (error?.code === 'renderer-dimension-mismatch') return new ExportDimensionError(error.message);
+    const message = error instanceof Error && error.message
+      ? `The molecular image could not be rendered: ${error.message}`
+      : 'The molecular image could not be rendered.';
+    return new ExportRenderError(message, { cause: error });
+  }
+
+  function withTimeout(promise, timeoutMs) {
+    let timer;
+    const timeout = new Promise((resolve, reject) => {
+      timer = setTimeout(() => reject(new ExportTimeoutError()), timeoutMs);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+  }
+
+  function nextAnimationFrame() {
+    return new Promise(resolve => requestAnimationFrame(() => resolve()));
+  }
+
+  async function settleClipboard(job, write) {
+    const [rendered, written] = await Promise.allSettled([job, write]);
+    if (rendered.status === 'rejected') throw rendered.reason;
+    const { blob, metadata } = rendered.value;
+    if (written.status === 'fulfilled') return { status: 'copied', metadata };
+    const reason = clipboardErrorReason(written.reason);
+    if (isClipboardDenied(written.reason)) return { status: 'denied', reason, blob, metadata };
+    if (isClipboardUnsupported(written.reason)) return { status: 'unsupported', reason, blob, metadata };
+    throw new ExportClipboardError(reason, { cause: written.reason });
+  }
+
+  function clipboardUnsupportedReason() {
+    if (typeof window.ClipboardItem !== 'function') return 'This browser does not support copying PNG images.';
+    if (!navigator.clipboard || typeof navigator.clipboard.write !== 'function') {
+      return 'Image clipboard access is unavailable in this context.';
+    }
+    if (typeof window.ClipboardItem.supports === 'function' && !window.ClipboardItem.supports('image/png')) {
+      return 'This browser clipboard does not accept PNG images.';
+    }
+    return '';
+  }
+
+  function clipboardErrorReason(error) {
+    if (error?.name === 'NotAllowedError' || error?.name === 'SecurityError') {
+      return 'The browser denied image clipboard access. You can download the rendered PNG instead.';
+    }
+    if (error?.name === 'NotSupportedError') return 'This browser does not support copying PNG images.';
+    return error?.message || 'The image could not be copied to the clipboard.';
+  }
+
+  function isClipboardDenied(error) {
+    return error?.name === 'NotAllowedError' || error?.name === 'SecurityError';
+  }
+
+  function isClipboardUnsupported(error) {
+    return error?.name === 'NotSupportedError';
+  }
+
+  function exportFilename(requested, title, width, height, transparent) {
+    const requestedText = String(requested || '').trim().replace(/\.png$/i, '');
+    const base = safeFilenameStem(requestedText || title);
+    const suffix = requestedText ? '' : `_${width}x${height}${transparent ? '_transparent' : ''}`;
+    return `${base}${suffix}.png`;
+  }
+
+  function safeFilenameStem(value) {
+    const scalarText = Array.from(String(value || ''), character => {
+      const code = character.charCodeAt(0);
+      return character.length === 1 && code >= 0xd800 && code <= 0xdfff ? ' ' : character;
+    }).join('');
+    let safe = scalarText
+      .normalize('NFKC')
+      .replace(/[<>:"/\\|?*\p{Cc}\p{Cf}]/gu, ' ')
+      .replace(/\s+/g, '_')
+      .replace(/[. ]+$/g, '')
+      .replace(/^\.+/g, '');
+    safe = Array.from(safe).slice(0, 80).join('');
+    if (/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(safe)) safe = `_${safe}`;
+    return safe || 'molecule';
+  }
+
+  function positiveInteger(value, fallback) {
+    const number = Number(value);
+    return Number.isInteger(number) && number > 0 ? number : fallback;
+  }
+
+  function positiveNumber(value, fallback) {
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0 ? number : fallback;
+  }
+
+  function minimumPositive(fallback, ...values) {
+    const positive = values.map(Number).filter(value => Number.isFinite(value) && value > 0);
+    return positive.length ? Math.min(fallback, ...positive) : fallback;
+  }
+
+  window.MolhtmlExport = Object.freeze({
+    ExportService,
+    MolhtmlExportError,
+    ExportBusyError,
+    ExportDimensionError,
+    ExportRenderError,
+    ExportTimeoutError,
+    ExportClipboardError,
+    ExportDownloadError,
+    normalizeOptions,
+    exportFilename
+  });
+})();
+
+//# sourceURL=molhtml:///src/export.js</script>
   <script>(function () {
   'use strict';
 
@@ -5807,6 +6672,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
 
   const Core = window.MolhtmlCore;
   const Persistence = window.MolhtmlPersistence;
+  const Export = window.MolhtmlExport;
   const pristine = Persistence.capturePristine();
   const embedded = document.getElementById('molhtml-doc')?.textContent?.trim();
   let doc;
@@ -5855,7 +6721,10 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     'quality-stats', 'quality-observations',
     'saved-views-button', 'saved-views-ribbon-value', 'create-saved-view', 'start-story',
     'saved-view-count', 'empty-saved-views', 'saved-view-list', 'story-overlay',
-    'story-position', 'story-title', 'story-narrative', 'story-previous', 'story-next', 'story-exit'
+    'story-position', 'story-title', 'story-narrative', 'story-previous', 'story-next', 'story-exit',
+    'export-button', 'export-controls', 'export-size', 'export-custom-fields', 'export-width',
+    'export-height', 'export-aspect-row', 'export-lock-aspect', 'export-background', 'export-summary',
+    'export-download', 'export-copy', 'export-status'
   ].map(id => [id, document.getElementById(id)]));
 
   const undoStack = [];
@@ -5871,6 +6740,9 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   let activeMeasurementId = null;
   let activeSavedSelectionId = null;
   let currentQuality = null;
+  let exportBusy = false;
+  let exportCustomInitialized = false;
+  let pendingClipboardExport = null;
   const storyState = { active: false, index: 0 };
   const navigatorState = {
     structureKey: '', chains: [], residueByKey: new Map(),
@@ -5885,7 +6757,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     navigator: 'Structure navigator', 'saved-selections': 'Named selections',
     ligands: 'Ligands and pocket', metadata: 'Metadata and quality',
     interactions: 'Interactions',
-    'saved-views': 'Saved views and story'
+    'saved-views': 'Saved views and story', export: 'Export image'
   };
 
   const renderer = new window.MoleculeRenderer(elements['molecule-viewer'], {
@@ -5893,7 +6765,24 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     onCamera: camera => {
       Core.applyDocumentCommand(doc, { type: 'set-camera', camera });
       touchDocument('browser', false);
+    },
+    onResize: () => {
+      if (activeInspector === 'export') syncExportControls();
     }
+  });
+  const exportService = new Export.ExportService(() => {
+    const sizing = renderer.getSizingInfo();
+    return {
+      document: doc,
+      camera: renderer.getCameraSnapshot(),
+      activeMeasurementId,
+      activeSavedSelectionId,
+      visibleSize: {
+        width: sizing.width,
+        height: sizing.height,
+        devicePixelRatio: sizing.devicePixelRatio
+      }
+    };
   });
 
   persistence = new Persistence.PersistenceManager(pristine, () => doc, {
@@ -5997,6 +6886,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     syncMetadata();
     syncSavedViews();
     syncStory();
+    syncExportControls();
   }
 
   function syncControls() {
@@ -7387,6 +8277,179 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     return true;
   }
 
+  function visibleExportSize() {
+    const sizing = renderer.getSizingInfo();
+    return { width: sizing.width, height: sizing.height };
+  }
+
+  function selectedExportOptions() {
+    const visible = visibleExportSize();
+    const transparent = elements['export-background'].value === 'transparent';
+    const preset = elements['export-size'].value;
+    if (preset === 'current') return { transparent };
+    if (preset === '2' || preset === '4') {
+      const scale = Number(preset);
+      return { width: visible.width * scale, height: visible.height * scale, transparent };
+    }
+    if (elements['export-width'].value === '' || elements['export-height'].value === '') {
+      throw new Export.ExportDimensionError('Enter both custom image dimensions.');
+    }
+    return {
+      width: Number(elements['export-width'].value),
+      height: Number(elements['export-height'].value),
+      transparent
+    };
+  }
+
+  function normalizedSelectedExport() {
+    const visible = visibleExportSize();
+    return Export.normalizeOptions(selectedExportOptions(), visible.width, visible.height);
+  }
+
+  function exportSelectionSignature() {
+    const selected = normalizedSelectedExport();
+    return `${selected.width}|${selected.height}|${selected.transparent}`;
+  }
+
+  function initializeCustomExportSize() {
+    if (exportCustomInitialized) return;
+    const visible = visibleExportSize();
+    elements['export-width'].value = String(visible.width);
+    elements['export-height'].value = String(visible.height);
+    exportCustomInitialized = true;
+  }
+
+  function updateLockedExportDimension(changed) {
+    if (!elements['export-lock-aspect'].checked) return;
+    const visible = visibleExportSize();
+    if (!visible.width || !visible.height) return;
+    if (changed === 'width') {
+      const width = Number(elements['export-width'].value);
+      if (Number.isFinite(width)) elements['export-height'].value = String(Math.round(width * visible.height / visible.width));
+    } else {
+      const height = Number(elements['export-height'].value);
+      if (Number.isFinite(height)) elements['export-width'].value = String(Math.round(height * visible.width / visible.height));
+    }
+  }
+
+  function syncExportControls(resetStatus = false) {
+    if (!elements['export-size']) return;
+    const custom = elements['export-size'].value === 'custom';
+    if (custom) initializeCustomExportSize();
+    elements['export-custom-fields'].hidden = !custom;
+    elements['export-aspect-row'].hidden = !custom;
+    elements['export-copy'].hidden = !exportService.canCopyImage();
+    let valid = false;
+    try {
+      const options = normalizedSelectedExport();
+      const background = options.transparent ? 'transparent' : 'scene color';
+      elements['export-summary'].textContent = `${options.width.toLocaleString()} x ${options.height.toLocaleString()} px - ${background}`;
+      elements['export-width'].removeAttribute('aria-invalid');
+      elements['export-height'].removeAttribute('aria-invalid');
+      valid = true;
+      if (resetStatus && !exportBusy) {
+        setExportStatus(exportService.canCopyImage()
+          ? 'Ready to render.'
+          : 'Ready to download. Image clipboard access is unavailable in this browser.', '');
+      }
+    } catch (error) {
+      elements['export-summary'].textContent = 'Choose valid output dimensions.';
+      if (custom) {
+        elements['export-width'].setAttribute('aria-invalid', 'true');
+        elements['export-height'].setAttribute('aria-invalid', 'true');
+      } else {
+        elements['export-width'].removeAttribute('aria-invalid');
+        elements['export-height'].removeAttribute('aria-invalid');
+      }
+      if (!exportBusy) setExportStatus(error.message, 'error');
+    }
+    elements['export-download'].disabled = exportBusy || !valid;
+    elements['export-copy'].disabled = exportBusy || !valid;
+  }
+
+  function setExportStatus(message, tone = '') {
+    elements['export-status'].textContent = message;
+    elements['export-status'].dataset.tone = tone;
+  }
+
+  function setExportBusy(busy) {
+    exportBusy = busy;
+    elements['export-controls'].setAttribute('aria-busy', String(busy));
+    for (const id of ['export-size', 'export-width', 'export-height', 'export-lock-aspect', 'export-background']) {
+      elements[id].disabled = busy;
+    }
+    syncExportControls();
+  }
+
+  function invalidatePendingClipboardExport() {
+    pendingClipboardExport = null;
+    syncExportControls(true);
+  }
+
+  async function downloadExportImage() {
+    let options;
+    let signature;
+    try {
+      options = selectedExportOptions();
+      signature = exportSelectionSignature();
+    } catch (error) {
+      setExportStatus(error.message, 'error');
+      return;
+    }
+    setExportBusy(true);
+    setExportStatus('Rendering PNG for download...');
+    try {
+      let result;
+      if (pendingClipboardExport?.signature === signature) {
+        const { blob, metadata } = pendingClipboardExport;
+        const filename = exportService.downloadBlob(blob, metadata, options.filename);
+        result = { status: 'downloaded', filename, ...metadata };
+        pendingClipboardExport = null;
+      } else result = await exportService.downloadPNG(options);
+      setExportStatus(`Downloaded ${result.filename} (${result.width} x ${result.height} px).`, 'success');
+      toast('PNG image downloaded', 'success');
+    } catch (error) {
+      setExportStatus(error.message, 'error');
+      toast(error.message, 'error');
+    } finally {
+      setExportBusy(false);
+    }
+  }
+
+  async function copyExportImage() {
+    let options;
+    let signature;
+    try {
+      options = selectedExportOptions();
+      signature = exportSelectionSignature();
+    } catch (error) {
+      setExportStatus(error.message, 'error');
+      return;
+    }
+    pendingClipboardExport = null;
+    setExportBusy(true);
+    setExportStatus('Rendering and copying PNG...');
+    const outcomePromise = exportService.copyImage(options);
+    try {
+      const outcome = await outcomePromise;
+      if (outcome.status === 'copied') {
+        setExportStatus(`Copied ${outcome.metadata.width} x ${outcome.metadata.height} px PNG.`, 'success');
+        toast('PNG image copied', 'success');
+      } else if (outcome.status === 'denied') {
+        pendingClipboardExport = { ...outcome, signature };
+        setExportStatus(`${outcome.reason} Choose Download PNG to keep this rendered image.`, 'warning');
+      } else {
+        if (outcome.blob) pendingClipboardExport = { ...outcome, signature };
+        setExportStatus(outcome.reason, 'warning');
+      }
+    } catch (error) {
+      setExportStatus(error.message, 'error');
+      toast(error.message, 'error');
+    } finally {
+      setExportBusy(false);
+    }
+  }
+
   function openInspector(name) {
     if (!inspectorTitles[name]) return;
     if (storyState.active) exitStory(false);
@@ -7404,6 +8467,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       revealNavigatorSelection();
       renderNavigator();
     }
+    if (name === 'export') syncExportControls(true);
   }
 
   function closeInspector() {
@@ -7888,6 +8952,22 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       else openInspector(target);
     });
   }
+  elements['export-size'].addEventListener('change', invalidatePendingClipboardExport);
+  elements['export-background'].addEventListener('change', invalidatePendingClipboardExport);
+  elements['export-lock-aspect'].addEventListener('change', () => {
+    if (elements['export-lock-aspect'].checked) updateLockedExportDimension('width');
+    invalidatePendingClipboardExport();
+  });
+  elements['export-width'].addEventListener('input', () => {
+    updateLockedExportDimension('width');
+    invalidatePendingClipboardExport();
+  });
+  elements['export-height'].addEventListener('input', () => {
+    updateLockedExportDimension('height');
+    invalidatePendingClipboardExport();
+  });
+  elements['export-download'].addEventListener('click', downloadExportImage);
+  elements['export-copy'].addEventListener('click', copyExportImage);
   elements['apply-color'].addEventListener('click', () => {
     try {
       applySelectionColor(elements['selection-color'].value, elements['selection-scope'].value);
@@ -8031,6 +9111,9 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       });
     },
     getSavedViews() { return structuredClone(doc.scene.savedViews); },
+    renderPNG(options = {}) { return exportService.renderPNG(options); },
+    downloadPNG(options = {}) { return exportService.downloadPNG(options); },
+    copyImage(options = {}) { return exportService.copyImage(options); },
     serialize() { return persistence.serialize(); },
     async save() { return persistence.save(false); },
     async importStructure(name, text, format) { return importStructure(name, text, { format }); },

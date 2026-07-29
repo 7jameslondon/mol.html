@@ -41,6 +41,21 @@ real-GPU behavior.
 - Confirm the Interactions inspector identifies explicit and inferred totals,
   labels safety-limited results as partial, and remains keyboard accessible.
 
+## Native PNG export
+
+- Export Current, 2x, and a changed-aspect Custom PNG; confirm their decoded
+  pixel dimensions exactly match the inspector summary.
+- Export once with the scene background and once transparent; confirm the first
+  is opaque and the second has transparent background pixels around the molecule.
+- Rotate, pan, and zoom, then export immediately; confirm the image uses the live
+  camera while the visible viewer size, camera, document revision, and undo stack
+  remain unchanged by export.
+- Export a molecular surface and repeat several exports; confirm there is no
+  blank frame, progressive slowdown, visible-viewer resize, or lost WebGL context.
+- Copy an image into an application that accepts PNG clipboard data. Deny
+  clipboard permission once and confirm mol.html offers an explicit download
+  without starting a surprise download.
+
 ## Release record
 
 Record the operating system, Chromium version, GPU/driver, date, tester, and any

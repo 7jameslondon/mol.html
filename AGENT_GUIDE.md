@@ -422,6 +422,9 @@ window.molhtml.getStructureSummary()
 window.molhtml.getMetadata()
 window.molhtml.getDataQuality()
 window.molhtml.getSavedViews()
+const pngBlob = await window.molhtml.renderPNG({ width: 2048, transparent: true })
+await window.molhtml.downloadPNG({ width: 2048, filename: 'active-site.png' })
+await window.molhtml.copyImage({ width: 2048, transparent: true })
 window.molhtml.importStructure('entry.cif', cifText, 'mmcif')
 window.molhtml.fetchStructure('4HHB')
 window.molhtml.fetchPDB('4HHB')
@@ -469,3 +472,15 @@ window.molhtml.loadDocument(updatedDocument, 'agent')
 window.molhtml.serialize()
 window.molhtml.save()
 ```
+
+PNG `width` and `height` are integer output pixels. Omit both for the visible
+canvas size or omit one to derive it from the visible aspect ratio. Supported
+dimensions are 64-8192 pixels per side and at most 32 megapixels, further
+limited by the active WebGL implementation. `renderPNG()` returns an `image/png`
+`Blob` without side effects. `downloadPNG()` returns download metadata.
+`copyImage()` returns a `copied`, `unsupported`, or `denied` outcome; denied
+outcomes can include the completed blob for a later explicit download. Export
+calls reject while another export or a timed-out surface generation is active.
+Failures use `MolhtmlExportError` subclasses with machine-readable codes:
+`export-busy`, `export-dimensions`, `export-render`, `export-timeout`,
+`export-clipboard`, or `export-download`.

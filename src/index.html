@@ -123,6 +123,16 @@ __DOCUMENT__
         </div>
         <div class="ribbon-group-label">Selection</div>
       </div>
+
+      <div class="ribbon-group" role="group" aria-label="Share and export commands">
+        <div class="ribbon-buttons">
+          <button id="export-button" class="ribbon-button" type="button" data-inspector-target="export" aria-controls="inspector" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-4-4 4 4 4-4M5 14v5h14v-5"/></svg>
+            <span>Export</span><small>PNG image</small>
+          </button>
+        </div>
+        <div class="ribbon-group-label">Share / Export</div>
+      </div>
     </section>
 
     <main id="workspace" class="workspace">
@@ -398,6 +408,40 @@ __DOCUMENT__
             <p class="panel-note">Explicit mmCIF annotations are identified as source records. Inferred interactions use local geometry and conservative atom-name or formal-charge typing; they are not energy calculations. Legacy PDB HYDBND/SLTBRG records, symmetry mates, protonation prediction, and solvent energetics are not included.</p>
           </section>
 
+          <section id="panel-export" class="inspector-panel" data-inspector-panel="export" hidden>
+            <p class="panel-intro">Render the current molecular composition without including editor controls or changing the document.</p>
+            <div id="export-controls" aria-busy="false">
+              <label class="field-label" for="export-size">Image size</label>
+              <select id="export-size">
+                <option value="current">Current</option>
+                <option value="2">2x</option>
+                <option value="4">4x</option>
+                <option value="custom">Custom</option>
+              </select>
+              <div id="export-custom-fields" class="export-custom-fields" hidden>
+                <label for="export-width"><span>Width</span><input id="export-width" type="number" inputmode="numeric" min="64" max="8192" step="1" aria-describedby="export-summary export-status" aria-errormessage="export-status"></label>
+                <span aria-hidden="true">x</span>
+                <label for="export-height"><span>Height</span><input id="export-height" type="number" inputmode="numeric" min="64" max="8192" step="1" aria-describedby="export-summary export-status" aria-errormessage="export-status"></label>
+              </div>
+              <label id="export-aspect-row" class="visibility-option export-aspect-row" hidden>
+                <span><strong>Lock aspect ratio</strong><small>Match the visible composition</small></span>
+                <span class="toggle"><input id="export-lock-aspect" type="checkbox" checked><i></i></span>
+              </label>
+              <label class="field-label" for="export-background">Background</label>
+              <select id="export-background">
+                <option value="scene">Scene color</option>
+                <option value="transparent">Transparent</option>
+              </select>
+              <output id="export-summary" class="export-summary" aria-live="polite"></output>
+              <div class="export-actions">
+                <button id="export-download" class="button accent full-width" type="button">Download PNG</button>
+                <button id="export-copy" class="button secondary full-width" type="button">Copy image</button>
+              </div>
+              <p id="export-status" class="export-status" role="status" aria-live="polite" aria-atomic="true">Ready to render.</p>
+              <p class="panel-note">Exports contain only renderer-owned molecular content. Large surfaces can take longer to finish.</p>
+            </div>
+          </section>
+
           <section id="panel-inspect" class="inspector-panel" data-inspector-panel="inspect" hidden>
             <div class="selection-panel-heading"><span>ACTIVE SELECTION</span><button id="clear-selection-panel" class="text-button" type="button" disabled>Clear</button></div>
             <div id="empty-selection" class="empty-selection">
@@ -467,6 +511,8 @@ __LICENSE_NOTICES__
 //# sourceURL=molhtml:///src/model.js</script>
   <script>__RENDERER_JS__
 //# sourceURL=molhtml:///src/renderer.js</script>
+  <script>__EXPORT_JS__
+//# sourceURL=molhtml:///src/export.js</script>
   <script>__PERSISTENCE_JS__
 //# sourceURL=molhtml:///src/persistence.js</script>
   <script data-role="molhtml-app">__APP_JS__

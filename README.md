@@ -167,6 +167,9 @@ Native file permissions and real-GPU behavior remain release checks; see
   sidebar's full-text search to find entries by molecule, organism, author,
   ligand, or other terms. Search results are temporary; the selected structure,
   its coordinates, and source provenance become embedded in the next saved HTML.
+- Open **Export** to download or copy a PNG of the live molecular composition.
+  Current, 2x, 4x, and custom backing-pixel sizes are available, with optional
+  transparency. Exporting does not include editor chrome or change the document.
 - Press `Ctrl+S` or use **Save**. Chromium browsers can rewrite a selected file
   in place; other browsers download a new complete copy.
 
@@ -188,6 +191,14 @@ trying the uncompressed legacy-PDB file first and text PDBx/mmCIF when legacy
 coordinates are unavailable. General discovery uses the official RCSB
 Search API and Data API. An internet connection is needed for searching and
 fetching, but not after the HTML is saved.
+
+PNG rendering is also fully local. The browser API exposes
+`renderPNG(options)`, `downloadPNG(options)`, and `copyImage(options)`; `width`
+and `height` are output pixels, either dimension can be omitted to preserve the
+visible aspect ratio, and `{ transparent: true }` requests an alpha background.
+Image clipboard support depends on browser and operating-system permission.
+Rejected calls expose stable export error codes, including `export-download`
+when a PNG rendered successfully but the browser could not start its download.
 
 PDB and mmCIF are normalized into a custom runtime model that keeps atom,
 residue, molecular-instance, entity, connected-component, assembly, and source
