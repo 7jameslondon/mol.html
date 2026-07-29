@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import vm from 'node:vm';
 
-const [structureSource, modelSource, mmcif, pdb, sharedChainPdb, multiModelPdb, multiModelCif, authorStructConnCif, modifiedResiduePdb, multiParentModifiedCif, alternateConformerPdb, alternateConformerCif, conformanceCif, equivalentCif, malformedCif, pdbAssemblyText] = await Promise.all([
-  readFile(new URL('../src/structure.js', import.meta.url), 'utf8'),
-  readFile(new URL('../src/model.js', import.meta.url), 'utf8'),
+globalThis.window = {};
+await import('../src/structure.js');
+await import('../src/model.js');
+const Core = window.MolhtmlCore;
+const Structure = window.MolhtmlStructure;
+
+const [mmcif, pdb, sharedChainPdb, multiModelPdb, multiModelCif, authorStructConnCif, modifiedResiduePdb, multiParentModifiedCif, alternateConformerPdb, alternateConformerCif, conformanceCif, equivalentCif, malformedCif, pdbAssemblyText] = await Promise.all([
   readFile(new URL('../fixtures/7ril-identity.cif', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/mini-peptide.pdb', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/7ril-author-chain.pdb', import.meta.url), 'utf8'),
@@ -20,12 +23,6 @@ const [structureSource, modelSource, mmcif, pdb, sharedChainPdb, multiModelPdb, 
   readFile(new URL('../fixtures/malformed.cif', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/pdb-assembly.pdb', import.meta.url), 'utf8')
 ]);
-const context = { window: {}, console, structuredClone };
-context.globalThis = context;
-vm.runInNewContext(structureSource, context, { filename: 'src/structure.js' });
-vm.runInNewContext(modelSource, context, { filename: 'src/model.js' });
-const Core = context.window.MolhtmlCore;
-const Structure = context.window.MolhtmlStructure;
 
 function assertNormalizedInvariants(structure) {
   const { atoms, residues, instances, entities, bonds, connectedComponents } = structure.topology;

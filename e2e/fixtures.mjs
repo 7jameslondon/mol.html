@@ -1,5 +1,6 @@
 import { expect, test as base } from '@playwright/test';
-import { readFile, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { inflateSync } from 'node:zlib';
@@ -9,6 +10,122 @@ export const artifactPath = resolve(root, 'dist/example.mol.html');
 export const artifactUrl = pathToFileURL(artifactPath).href;
 export const miniPeptidePath = resolve(root, 'fixtures/mini-peptide.pdb');
 export const ligandPocketPath = resolve(root, 'fixtures/ligand-pocket.pdb');
+const collectCoverage = process.env.MOLHTML_COVERAGE === '1';
+const coverageRawDirectory = resolve(root, 'test-results/coverage-raw');
+const coverageEntryPattern = /^molhtml:\/\/\/src\/(?:structure|model|renderer|persistence|app)\.js$/;
+let activeCoverageRecorder = null;
+
+function createCoverageRecorder(testInfo) {
+  const contexts = new Set();
+  const pageRecords = new Map();
+  const entries = [];
+  const errors = [];
+
+  async function instrumentPage(page) {
+    let pending = pageRecords.get(page);
+    if (pending) return pending;
+    pending = startPageCoverage(page);
+    pageRecords.set(page, pending);
+    return pending;
+  }
+
+  async function startPageCoverage(page) {
+    const session = await page.context().newCDPSession(page);
+    const scriptSources = new Map();
+    const sourceRequests = new Set();
+    const onScriptParsed = ({ scriptId }) => {
+      const request = session.send('Debugger.getScriptSource', { scriptId })
+        .then(result => scriptSources.set(scriptId, result.scriptSource || ''))
+        .catch(() => {})
+        .finally(() => sourceRequests.delete(request));
+      sourceRequests.add(request);
+    };
+    session.on('Debugger.scriptParsed', onScriptParsed);
+    await session.send('Debugger.enable');
+    await session.send('Profiler.enable');
+    await session.send('Profiler.startPreciseCoverage', { callCount: true, detailed: true });
+
+    let stopPromise;
+    const stop = () => {
+      if (stopPromise) return stopPromise;
+      stopPromise = (async () => {
+        if (page.isClosed()) {
+          await session.detach().catch(() => {});
+          return;
+        }
+        let response;
+        try {
+          response = await session.send('Profiler.takePreciseCoverage');
+          await Promise.allSettled([...sourceRequests]);
+          await session.send('Profiler.stopPreciseCoverage');
+          await session.send('Profiler.disable');
+        } finally {
+          session.off('Debugger.scriptParsed', onScriptParsed);
+          await session.detach().catch(() => {});
+        }
+        for (const entry of response.result) {
+          if (!coverageEntryPattern.test(entry.url)) continue;
+          entries.push({ ...entry, source: scriptSources.get(entry.scriptId) || '' });
+        }
+      })();
+      return stopPromise;
+    };
+
+    const originalClose = page.close.bind(page);
+    page.close = async (...args) => {
+      await stop();
+      return originalClose(...args);
+    };
+    return { stop };
+  }
+
+  async function stopContext(context) {
+    const records = await Promise.all(
+      context.pages().map(page => instrumentPage(page).catch(error => {
+        errors.push(error);
+        return null;
+      }))
+    );
+    await Promise.all(records.filter(Boolean).map(record => record.stop().catch(error => errors.push(error))));
+  }
+
+  async function instrumentContext(context) {
+    if (contexts.has(context)) return;
+    contexts.add(context);
+    const originalNewPage = context.newPage.bind(context);
+    context.newPage = async (...args) => {
+      const page = await originalNewPage(...args);
+      await instrumentPage(page);
+      return page;
+    };
+    const originalClose = context.close.bind(context);
+    context.close = async (...args) => {
+      await stopContext(context);
+      return originalClose(...args);
+    };
+    context.on('page', page => {
+      void instrumentPage(page).catch(error => errors.push(error));
+    });
+    await Promise.all(context.pages().map(page => instrumentPage(page)));
+  }
+
+  async function finish() {
+    await Promise.all([...contexts].map(stopContext));
+    if (testInfo.status !== testInfo.expectedStatus) return;
+    if (errors.length) throw new AggregateError(errors, 'Playwright coverage collection failed.');
+    if (!entries.length) {
+      throw new Error(`No first-party Playwright coverage was collected for ${testInfo.titlePath().join(' › ')}.`);
+    }
+    await mkdir(coverageRawDirectory, { recursive: true });
+    const coverageId = createHash('sha256')
+      .update(`${testInfo.project.name}\0${testInfo.testId}`)
+      .digest('hex')
+      .slice(0, 20);
+    await writeFile(resolve(coverageRawDirectory, `${coverageId}.json`), JSON.stringify(entries), 'utf8');
+  }
+
+  return { finish, instrumentContext };
+}
 
 export const test = base.extend({
   browser: [async ({ playwright, browserName, headless, channel, launchOptions }, use) => {
@@ -17,13 +134,40 @@ export const test = base.extend({
       headless,
       ...(channel ? { channel } : {})
     });
+    if (collectCoverage) {
+      const originalNewContext = browser.newContext.bind(browser);
+      browser.newContext = async (...args) => {
+        const context = await originalNewContext(...args);
+        if (activeCoverageRecorder) await activeCoverageRecorder.instrumentContext(context);
+        return context;
+      };
+    }
     await use(browser);
     const closing = browser.close();
     if (process.platform === 'win32' && !process.env.CI) {
       await Promise.race([closing, new Promise(resolvePromise => setTimeout(resolvePromise, 2_000))]);
     } else await closing;
   }, { scope: 'worker' }],
-  renderProbe: [async ({ context }, use) => {
+  coverageRecorder: [async ({ browser, browserName }, use, testInfo) => {
+    if (!collectCoverage) {
+      await use(null);
+      return;
+    }
+    if (browserName !== 'chromium') {
+      throw new Error('Playwright JavaScript coverage is supported only by the Chromium project.');
+    }
+    const recorder = createCoverageRecorder(testInfo);
+    activeCoverageRecorder = recorder;
+    try {
+      await Promise.all(browser.contexts().map(context => recorder.instrumentContext(context)));
+      await use(recorder);
+      await recorder.finish();
+    } finally {
+      activeCoverageRecorder = null;
+    }
+  }, { auto: true }],
+  renderProbe: [async ({ context, coverageRecorder }, use) => {
+    void coverageRecorder;
     await context.addInitScript(() => {
       const state = { contextLost: false, contextRestored: false };
       globalThis.__molhtmlRenderProbe = state;
@@ -34,7 +178,7 @@ export const test = base.extend({
   }, { auto: true }],
   rendererCleanup: [async ({ page }, use) => {
     await use();
-    if (!page.isClosed()) {
+    if (!collectCoverage && !page.isClosed()) {
       await page.goto('about:blank', { waitUntil: 'commit', timeout: 5_000 }).catch(() => {});
     }
   }, { auto: true }]
@@ -253,8 +397,10 @@ export async function savedPickerHtml(page) {
 }
 
 export async function closeContext(context) {
-  for (const page of context.pages()) {
-    if (!page.isClosed()) await page.goto('about:blank', { waitUntil: 'commit', timeout: 5_000 }).catch(() => {});
+  if (!collectCoverage) {
+    for (const page of context.pages()) {
+      if (!page.isClosed()) await page.goto('about:blank', { waitUntil: 'commit', timeout: 5_000 }).catch(() => {});
+    }
   }
   await context.close();
 }

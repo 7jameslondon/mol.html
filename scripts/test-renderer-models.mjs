@@ -2,9 +2,13 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
-const [structureSource, modelSource, rendererSource, multiModelCif, multiModelPdb, authorStructConnCif, ligandPocketPdb] = await Promise.all([
-  readFile(new URL('../src/structure.js', import.meta.url), 'utf8'),
-  readFile(new URL('../src/model.js', import.meta.url), 'utf8'),
+globalThis.window = {};
+await import('../src/structure.js');
+await import('../src/model.js');
+const Core = window.MolhtmlCore;
+const Structure = window.MolhtmlStructure;
+
+const [rendererSource, multiModelCif, multiModelPdb, authorStructConnCif, ligandPocketPdb] = await Promise.all([
   readFile(new URL('../src/renderer.js', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/multi-model.cif', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/multi-model.pdb', import.meta.url), 'utf8'),
@@ -12,7 +16,6 @@ const [structureSource, modelSource, rendererSource, multiModelCif, multiModelPd
   readFile(new URL('../fixtures/ligand-pocket.pdb', import.meta.url), 'utf8')
 ]);
 
-let Core;
 const renderedModels = [];
 const addedStyles = [];
 const addedLabels = [];
@@ -49,15 +52,12 @@ const viewer = {
   getView() { return [0, 0, 0, 1, 0, 0, 0, 1]; }
 };
 const context = {
-  window: {}, console, structuredClone, crypto: globalThis.crypto,
+  window: { MolhtmlCore: Core, MolhtmlStructure: Structure }, console, structuredClone, crypto: globalThis.crypto,
   requestAnimationFrame(callback) { callback(); },
   ResizeObserver: class { observe() {} },
   setTimeout, clearTimeout
 };
 context.globalThis = context;
-vm.runInNewContext(structureSource, context, { filename: 'src/structure.js' });
-vm.runInNewContext(modelSource, context, { filename: 'src/model.js' });
-Core = context.window.MolhtmlCore;
 context.window.$3Dmol = { createViewer: () => viewer, SurfaceType: { VDW: 1 } };
 vm.runInNewContext(rendererSource, context, { filename: 'src/renderer.js' });
 

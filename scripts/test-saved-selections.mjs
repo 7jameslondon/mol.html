@@ -1,13 +1,9 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import vm from 'node:vm';
 
-const structureSource = await readFile(new URL('../src/structure.js', import.meta.url), 'utf8');
-const source = await readFile(new URL('../src/model.js', import.meta.url), 'utf8');
-const context = vm.createContext({ window: {}, structuredClone, console });
-vm.runInContext(structureSource, context, { filename: 'structure.js' });
-vm.runInContext(source, context, { filename: 'model.js' });
-const Core = context.window.MolhtmlCore;
+globalThis.window = {};
+await import('../src/structure.js');
+await import('../src/model.js');
+const Core = window.MolhtmlCore;
 
 const atom = (serial, model, chain, resi, resn, name, x, y, z, options = {}) => ({
   index: serial - 1, serial, model, chain, resi, resn, name,

@@ -116,7 +116,8 @@ const replacements = {
   __LICENSE_NOTICES__: legal.canonicalNotices,
   __LICENSE_NOTICES_SHA256__: legal.canonicalSha256,
   __THREEDMOL_JS__: legal.minifiedBundle,
-  __MODEL_JS__: `${structure}\n${model}`,
+  __STRUCTURE_JS__: structure,
+  __MODEL_JS__: model,
   __RENDERER_JS__: renderer,
   __PERSISTENCE_JS__: persistenceWithNotices,
   __APP_JS__: app
