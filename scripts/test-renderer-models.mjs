@@ -19,6 +19,19 @@ const [rendererSource, multiModelCif, multiModelPdb, authorStructConnCif, ligand
 const renderedModels = [];
 const addedStyles = [];
 const addedLabels = [];
+const assignedStyles = [];
+const addedLines = [];
+let clickableCalls = 0;
+let framebufferInitCalls = 0;
+function nativeInitFrameBuffer() { framebufferInitCalls += 1; }
+const mockGl = {
+  ALIASED_LINE_WIDTH_RANGE: 'line-width-range',
+  getParameter(key) { return key === this.ALIASED_LINE_WIDTH_RANGE ? [1, 2] : 8192; },
+  isContextLost() { return false; }
+};
+const webglRenderer = {
+  getContext: () => mockGl, devicePixelRatio: 1, initFrameBuffer: nativeInitFrameBuffer
+};
 function addRenderedModel(domainAtoms) {
   const id = renderedModels.length;
   const atoms = domainAtoms.map((atom, index) => ({
@@ -45,10 +58,13 @@ const viewer = {
   },
   removeAllModels() { renderedModels.length = 0; },
   removeAllSurfaces() {}, removeAllLabels() {}, removeAllShapes() {},
-  setViewChangeCallback() {}, setBackgroundColor() {}, setStyle() {},
+  setViewChangeCallback() {}, setBackgroundColor() {},
+  setStyle(selection, style) { assignedStyles.push({ selection, style }); },
   addStyle(selection, style) { addedStyles.push({ selection, style }); },
   addLabel(text, style) { addedLabels.push({ text, style }); },
-  setClickable() {}, zoomTo() {}, render() {}, setView() {},
+  addLine(style) { addedLines.push(style); }, addSphere() {},
+  setClickable() { clickableCalls += 1; }, zoomTo() {}, render() {}, setView() {},
+  getRenderer() { return webglRenderer; },
   getView() { return [0, 0, 0, 1, 0, 0, 0, 1]; }
 };
 const context = {
@@ -67,6 +83,8 @@ const doc = Core.normalizeDocument({
   scene: {}
 });
 const renderer = new context.window.MoleculeRenderer({}, {});
+assert.equal(webglRenderer.initFrameBuffer, nativeInitFrameBuffer,
+  'the visible interactive renderer retains 3Dmol framebuffer initialization');
 renderer.setDocument(doc, { fit: true });
 
 assert.equal(renderedModels.length, 2, 'each normalized mmCIF coordinate set becomes a separate renderer model');
@@ -180,5 +198,92 @@ const completeResidueStyle = addedStyles.find(entry => entry.selection.and?.[0]?
 assert.deepEqual(JSON.parse(JSON.stringify(completeResidueStyle.selection)), {
   and: [{ model: 0, index: [0, 1, 8, 9] }, { not: { elem: 'H' } }]
 }, 'pocket styling includes complete normalized residues without overriding hydrogen visibility');
+
+const exportStructure = Core.parseStructure(authorStructConnCif, 'mmcif');
+const exportAtom = exportStructure.atoms[0];
+const exportTarget = exportStructure.atoms[2];
+const exportDocument = Core.normalizeDocument({
+  ...authorDoc,
+  documentId: 'renderer-export-contract',
+  scene: {
+    ...authorDoc.scene,
+    representation: 'lines',
+    camera: { view: [0, 0, 0, 1, 0, 0, 0, 1] },
+    selection: { kind: 'atom', selector: Core.selectorForAtom(exportTarget, 'atom', authorDoc.structure.id) },
+    savedSelections: [{
+      id: 'saved-export-active', name: 'Export active',
+      selector: { kind: 'atom', ...Core.selectorForAtom(exportAtom, 'atom', authorDoc.structure.id) }
+    }],
+    measurements: [{
+      id: 'measurement-export-active', type: 'distance', label: 'Span',
+      atoms: [
+        Core.selectorForAtom(exportAtom, 'atom', authorDoc.structure.id),
+        Core.selectorForAtom(exportTarget, 'atom', authorDoc.structure.id)
+      ]
+    }]
+  }
+});
+const exportDocumentBefore = JSON.stringify(exportDocument);
+const presentationState = {
+  activeMeasurementId: 'measurement-export-active',
+  activeSavedSelectionId: 'saved-export-active'
+};
+
+function renderExportScale(screenScale) {
+  addedStyles.length = 0;
+  addedLabels.length = 0;
+  assignedStyles.length = 0;
+  addedLines.length = 0;
+  clickableCalls = 0;
+  const exportRenderer = new context.window.MoleculeRenderer({}, {}, {
+    backgroundAlpha: 0, interactive: false, screenScale, upscale: false
+  });
+  const generation = exportRenderer.setDocument(exportDocument, {
+    cameraMode: 'snapshot', writeCamera: false, presentationState
+  });
+  return {
+    renderer: exportRenderer,
+    generation,
+    labels: [...addedLabels],
+    addedStyles: [...addedStyles],
+    assignedStyles: [...assignedStyles],
+    lines: [...addedLines],
+    clickableCalls
+  };
+}
+
+const currentExport = renderExportScale(1);
+const highResolutionExport = renderExportScale(4);
+assert.notEqual(webglRenderer.initFrameBuffer, nativeInitFrameBuffer,
+  'the hidden non-interactive renderer stabilizes framebuffer reuse');
+assert.equal(framebufferInitCalls, 0, 'the export-only framebuffer shim does not invoke the native resize allocator');
+assert.equal(JSON.stringify(exportDocument), exportDocumentBefore,
+  'snapshot export rendering never writes its camera or presentation state into the document clone');
+assert.equal(currentExport.labels.length, 2, 'current-scale export includes only the persisted atom and measurement labels');
+assert.equal(highResolutionExport.labels.length, 2, '4x export does not add a measurement-draft label');
+assert.ok(!highResolutionExport.labels.some(label => label.text === '1'),
+  'an unfinished measurement draft is absent from export rendering');
+for (let index = 0; index < currentExport.labels.length; index += 1) {
+  const current = currentExport.labels[index].style;
+  const highResolution = highResolutionExport.labels[index].style;
+  assert.equal(highResolution.fontSize / current.fontSize, 4, '4x label font size preserves normalized composition');
+  assert.equal(highResolution.padding / current.padding, 4, '4x label padding preserves normalized composition');
+  assert.equal(highResolution.borderThickness / current.borderThickness, 4,
+    '4x label border preserves normalized composition');
+}
+assert.ok(highResolutionExport.addedStyles.some(entry => entry.style.stick?.color === '#30e3d2'),
+  'the active persisted saved selection is emphasized in export rendering');
+assert.ok(highResolutionExport.lines.some(line => line.color === '#ffcf5a'),
+  'the active persisted measurement is emphasized in export rendering');
+assert.ok(highResolutionExport.lines.every(line => line.linewidth >= 1 && line.linewidth <= 2),
+  'measurement line widths are present and clamped to the reported WebGL range');
+const currentLineStyle = currentExport.assignedStyles.find(entry => entry.style.line)?.style.line;
+const highResolutionLineStyle = highResolutionExport.assignedStyles.find(entry => entry.style.line)?.style.line;
+assert.equal(currentLineStyle.linewidth, 1.5, 'current-scale line representation retains its requested visible width');
+assert.equal(highResolutionLineStyle.linewidth, 2, '4x line representation clamps to the hardware maximum');
+assert.equal(currentExport.clickableCalls, 0, 'non-interactive export rendering installs no picking behavior');
+assert.equal(highResolutionExport.clickableCalls, 0, 'repeated non-interactive export rendering installs no picking behavior');
+await currentExport.renderer.whenSurfacesReady(currentExport.generation);
+await highResolutionExport.renderer.whenSurfacesReady(highResolutionExport.generation);
 
 console.log('Normalized PDB/mmCIF renderer bond, mapping, and strict selection tests passed.');

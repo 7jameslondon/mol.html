@@ -29,7 +29,8 @@ assert(html.includes('rebuildLicenseBlock(clone)') && html.includes('validateSer
 assert(!html.includes('id="third-party-notices"'), 'obsolete third-party-only notice block is absent');
 for (const marker of legal.manifest.notices.requiredMarkers) assert(licenseMatch?.[2].includes(marker), `license block includes ${marker}`);
 assert(html.includes('window.molhtml'), 'artifact exposes the agent/browser API');
-assert(html.includes('window.MolhtmlCore') && html.includes('window.MolhtmlPersistence'), 'artifact exposes the renamed internal globals');
+assert(html.includes('window.MolhtmlCore') && html.includes('window.MolhtmlPersistence') && html.includes('window.MolhtmlExport'),
+  'artifact exposes the internal core, persistence, and export globals');
 assert(html.includes('data-role="molhtml-app"'), 'artifact uses the renamed application data role');
 assert(html.includes("const DB_NAME = 'molhtml-autosave'") && html.includes("id: 'molhtml-document'"), 'artifact uses the renamed persistence identifiers');
 assert(html.includes("return `${base}.mol.html`;"), 'artifact suggests the .mol.html saved-document suffix');
@@ -59,6 +60,8 @@ assert(html.includes('data-inspector-target="metadata"') && html.includes('id="q
 assert(html.includes('getMetadata()') && html.includes('getDataQuality()') && html.includes('deriveDataQuality'), 'artifact exposes metadata and locally derived quality APIs');
 assert(html.includes('data-inspector-target="saved-views"') && html.includes('id="saved-view-list"'), 'artifact includes the saved-view ribbon command and inspector');
 assert(html.includes('id="story-overlay"') && html.includes('startStory(id)'), 'artifact includes presentation story controls and API');
+assert(html.includes('data-inspector-target="export"') && html.includes('id="export-download"'), 'artifact includes the PNG export command and inspector');
+assert(html.includes('renderPNG(options') && html.includes('copyImage(options'), 'artifact exposes PNG render, download, and clipboard APIs');
 
 const match = html.match(/<script type="application\/molhtml\+json" id="molhtml-doc">\s*([\s\S]*?)\s*<\/script>/i);
 assert(Boolean(match), 'document JSON can be extracted with a simple splice contract');

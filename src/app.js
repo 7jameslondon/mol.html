@@ -3,6 +3,7 @@
 
   const Core = window.MolhtmlCore;
   const Persistence = window.MolhtmlPersistence;
+  const Export = window.MolhtmlExport;
   const pristine = Persistence.capturePristine();
   const embedded = document.getElementById('molhtml-doc')?.textContent?.trim();
   let doc;
@@ -47,7 +48,10 @@
     'quality-stats', 'quality-observations',
     'saved-views-button', 'saved-views-ribbon-value', 'create-saved-view', 'start-story',
     'saved-view-count', 'empty-saved-views', 'saved-view-list', 'story-overlay',
-    'story-position', 'story-title', 'story-narrative', 'story-previous', 'story-next', 'story-exit'
+    'story-position', 'story-title', 'story-narrative', 'story-previous', 'story-next', 'story-exit',
+    'export-button', 'export-controls', 'export-size', 'export-custom-fields', 'export-width',
+    'export-height', 'export-aspect-row', 'export-lock-aspect', 'export-background', 'export-summary',
+    'export-download', 'export-copy', 'export-status'
   ].map(id => [id, document.getElementById(id)]));
 
   const undoStack = [];
@@ -63,6 +67,9 @@
   let activeMeasurementId = null;
   let activeSavedSelectionId = null;
   let currentQuality = null;
+  let exportBusy = false;
+  let exportCustomInitialized = false;
+  let pendingClipboardExport = null;
   const storyState = { active: false, index: 0 };
   const navigatorState = {
     structureKey: '', chains: [], residueByKey: new Map(),
@@ -76,7 +83,7 @@
     show: 'Show and hide', inspect: 'Selection inspector', measurements: 'Measurements',
     navigator: 'Structure navigator', 'saved-selections': 'Named selections',
     ligands: 'Ligands and pocket', metadata: 'Metadata and quality',
-    'saved-views': 'Saved views and story'
+    'saved-views': 'Saved views and story', export: 'Export image'
   };
 
   const renderer = new window.MoleculeRenderer(elements['molecule-viewer'], {
@@ -85,6 +92,16 @@
       Core.applyDocumentCommand(doc, { type: 'set-camera', camera });
       touchDocument('browser', false);
     }
+  });
+  const exportService = new Export.ExportService(() => {
+    const sizing = renderer.getSizingInfo();
+    return {
+      document: doc,
+      camera: renderer.getCameraSnapshot(),
+      activeMeasurementId,
+      activeSavedSelectionId,
+      visibleSize: { width: sizing.width, height: sizing.height }
+    };
   });
 
   persistence = new Persistence.PersistenceManager(pristine, () => doc, {
@@ -183,6 +200,7 @@
     syncMetadata();
     syncSavedViews();
     syncStory();
+    syncExportControls();
   }
 
   function syncControls() {
@@ -1519,6 +1537,179 @@
     return true;
   }
 
+  function visibleExportSize() {
+    const sizing = renderer.getSizingInfo();
+    return { width: sizing.width, height: sizing.height };
+  }
+
+  function selectedExportOptions() {
+    const visible = visibleExportSize();
+    const transparent = elements['export-background'].value === 'transparent';
+    const preset = elements['export-size'].value;
+    if (preset === 'current') return { transparent };
+    if (preset === '2' || preset === '4') {
+      const scale = Number(preset);
+      return { width: visible.width * scale, height: visible.height * scale, transparent };
+    }
+    if (elements['export-width'].value === '' || elements['export-height'].value === '') {
+      throw new Export.ExportDimensionError('Enter both custom image dimensions.');
+    }
+    return {
+      width: Number(elements['export-width'].value),
+      height: Number(elements['export-height'].value),
+      transparent
+    };
+  }
+
+  function normalizedSelectedExport() {
+    const visible = visibleExportSize();
+    return Export.normalizeOptions(selectedExportOptions(), visible.width, visible.height);
+  }
+
+  function exportSelectionSignature() {
+    const selected = normalizedSelectedExport();
+    return `${selected.width}|${selected.height}|${selected.transparent}`;
+  }
+
+  function initializeCustomExportSize() {
+    if (exportCustomInitialized) return;
+    const visible = visibleExportSize();
+    elements['export-width'].value = String(visible.width);
+    elements['export-height'].value = String(visible.height);
+    exportCustomInitialized = true;
+  }
+
+  function updateLockedExportDimension(changed) {
+    if (!elements['export-lock-aspect'].checked) return;
+    const visible = visibleExportSize();
+    if (!visible.width || !visible.height) return;
+    if (changed === 'width') {
+      const width = Number(elements['export-width'].value);
+      if (Number.isFinite(width)) elements['export-height'].value = String(Math.round(width * visible.height / visible.width));
+    } else {
+      const height = Number(elements['export-height'].value);
+      if (Number.isFinite(height)) elements['export-width'].value = String(Math.round(height * visible.width / visible.height));
+    }
+  }
+
+  function syncExportControls(resetStatus = false) {
+    if (!elements['export-size']) return;
+    const custom = elements['export-size'].value === 'custom';
+    if (custom) initializeCustomExportSize();
+    elements['export-custom-fields'].hidden = !custom;
+    elements['export-aspect-row'].hidden = !custom;
+    elements['export-copy'].hidden = !exportService.canCopyImage();
+    let valid = false;
+    try {
+      const options = normalizedSelectedExport();
+      const background = options.transparent ? 'transparent' : 'scene color';
+      elements['export-summary'].textContent = `${options.width.toLocaleString()} x ${options.height.toLocaleString()} px - ${background}`;
+      elements['export-width'].removeAttribute('aria-invalid');
+      elements['export-height'].removeAttribute('aria-invalid');
+      valid = true;
+      if (resetStatus && !exportBusy) {
+        setExportStatus(exportService.canCopyImage()
+          ? 'Ready to render.'
+          : 'Ready to download. Image clipboard access is unavailable in this browser.', '');
+      }
+    } catch (error) {
+      elements['export-summary'].textContent = 'Choose valid output dimensions.';
+      if (custom) {
+        elements['export-width'].setAttribute('aria-invalid', 'true');
+        elements['export-height'].setAttribute('aria-invalid', 'true');
+      } else {
+        elements['export-width'].removeAttribute('aria-invalid');
+        elements['export-height'].removeAttribute('aria-invalid');
+      }
+      if (!exportBusy) setExportStatus(error.message, 'error');
+    }
+    elements['export-download'].disabled = exportBusy || !valid;
+    elements['export-copy'].disabled = exportBusy || !valid;
+  }
+
+  function setExportStatus(message, tone = '') {
+    elements['export-status'].textContent = message;
+    elements['export-status'].dataset.tone = tone;
+  }
+
+  function setExportBusy(busy) {
+    exportBusy = busy;
+    elements['export-controls'].setAttribute('aria-busy', String(busy));
+    for (const id of ['export-size', 'export-width', 'export-height', 'export-lock-aspect', 'export-background']) {
+      elements[id].disabled = busy;
+    }
+    syncExportControls();
+  }
+
+  function invalidatePendingClipboardExport() {
+    pendingClipboardExport = null;
+    syncExportControls(true);
+  }
+
+  async function downloadExportImage() {
+    let options;
+    let signature;
+    try {
+      options = selectedExportOptions();
+      signature = exportSelectionSignature();
+    } catch (error) {
+      setExportStatus(error.message, 'error');
+      return;
+    }
+    setExportBusy(true);
+    setExportStatus('Rendering PNG for download...');
+    try {
+      let result;
+      if (pendingClipboardExport?.signature === signature) {
+        const { blob, metadata } = pendingClipboardExport;
+        const filename = exportService.downloadBlob(blob, metadata, options.filename);
+        result = { status: 'downloaded', filename, ...metadata };
+        pendingClipboardExport = null;
+      } else result = await exportService.downloadPNG(options);
+      setExportStatus(`Downloaded ${result.filename} (${result.width} x ${result.height} px).`, 'success');
+      toast('PNG image downloaded', 'success');
+    } catch (error) {
+      setExportStatus(error.message, 'error');
+      toast(error.message, 'error');
+    } finally {
+      setExportBusy(false);
+    }
+  }
+
+  async function copyExportImage() {
+    let options;
+    let signature;
+    try {
+      options = selectedExportOptions();
+      signature = exportSelectionSignature();
+    } catch (error) {
+      setExportStatus(error.message, 'error');
+      return;
+    }
+    pendingClipboardExport = null;
+    setExportBusy(true);
+    setExportStatus('Rendering and copying PNG...');
+    const outcomePromise = exportService.copyImage(options);
+    try {
+      const outcome = await outcomePromise;
+      if (outcome.status === 'copied') {
+        setExportStatus(`Copied ${outcome.metadata.width} x ${outcome.metadata.height} px PNG.`, 'success');
+        toast('PNG image copied', 'success');
+      } else if (outcome.status === 'denied') {
+        pendingClipboardExport = { ...outcome, signature };
+        setExportStatus(`${outcome.reason} Choose Download PNG to keep this rendered image.`, 'warning');
+      } else {
+        if (outcome.blob) pendingClipboardExport = { ...outcome, signature };
+        setExportStatus(outcome.reason, 'warning');
+      }
+    } catch (error) {
+      setExportStatus(error.message, 'error');
+      toast(error.message, 'error');
+    } finally {
+      setExportBusy(false);
+    }
+  }
+
   function openInspector(name) {
     if (!inspectorTitles[name]) return;
     if (storyState.active) exitStory(false);
@@ -1536,6 +1727,7 @@
       revealNavigatorSelection();
       renderNavigator();
     }
+    if (name === 'export') syncExportControls(true);
   }
 
   function closeInspector() {
@@ -2016,6 +2208,22 @@
       else openInspector(target);
     });
   }
+  elements['export-size'].addEventListener('change', invalidatePendingClipboardExport);
+  elements['export-background'].addEventListener('change', invalidatePendingClipboardExport);
+  elements['export-lock-aspect'].addEventListener('change', () => {
+    if (elements['export-lock-aspect'].checked) updateLockedExportDimension('width');
+    invalidatePendingClipboardExport();
+  });
+  elements['export-width'].addEventListener('input', () => {
+    updateLockedExportDimension('width');
+    invalidatePendingClipboardExport();
+  });
+  elements['export-height'].addEventListener('input', () => {
+    updateLockedExportDimension('height');
+    invalidatePendingClipboardExport();
+  });
+  elements['export-download'].addEventListener('click', downloadExportImage);
+  elements['export-copy'].addEventListener('click', copyExportImage);
   elements['apply-color'].addEventListener('click', () => {
     try {
       applySelectionColor(elements['selection-color'].value, elements['selection-scope'].value);
@@ -2141,6 +2349,9 @@
       });
     },
     getSavedViews() { return structuredClone(doc.scene.savedViews); },
+    renderPNG(options = {}) { return exportService.renderPNG(options); },
+    downloadPNG(options = {}) { return exportService.downloadPNG(options); },
+    copyImage(options = {}) { return exportService.copyImage(options); },
     serialize() { return persistence.serialize(); },
     async save() { return persistence.save(false); },
     async importStructure(name, text, format) { return importStructure(name, text, { format }); },

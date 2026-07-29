@@ -8,9 +8,9 @@ const normalizeLf = text => text.replace(/\r\n?/g, '\n');
 const read = async path => normalizeLf(await readFile(resolve(root, path), 'utf8'));
 const legal = await loadLegalNotices(root);
 
-const [template, styles, structure, model, renderer, persistence, app, starterPdb] = await Promise.all([
+const [template, styles, structure, model, renderer, exportSource, persistence, app, starterPdb] = await Promise.all([
   read('src/index.html'), read('src/styles.css'),
-  read('src/structure.js'), read('src/model.js'), read('src/renderer.js'), read('src/persistence.js'), read('src/app.js'),
+  read('src/structure.js'), read('src/model.js'), read('src/renderer.js'), read('src/export.js'), read('src/persistence.js'), read('src/app.js'),
   read('src/starter-1bna.pdb')
 ]);
 const canonicalNoticesJson = JSON.stringify(legal.canonicalNotices).replace(/</g, '\\u003c');
@@ -21,7 +21,7 @@ if (persistenceWithNotices === persistence || /__CANONICAL_LICENSE_NOTICES_(?:JS
   throw new Error('Could not inject canonical license notices into persistence.js.');
 }
 
-for (const [name, source] of Object.entries({ threeDmol: legal.minifiedBundle, structure, model, renderer, persistence: persistenceWithNotices, app })) {
+for (const [name, source] of Object.entries({ threeDmol: legal.minifiedBundle, structure, model, renderer, exportSource, persistence: persistenceWithNotices, app })) {
   if (/<\/script/i.test(source)) throw new Error(`${name}.js contains a script-close sequence that would corrupt the single-file build.`);
 }
 
@@ -119,6 +119,7 @@ const replacements = {
   __STRUCTURE_JS__: structure,
   __MODEL_JS__: model,
   __RENDERER_JS__: renderer,
+  __EXPORT_JS__: exportSource,
   __PERSISTENCE_JS__: persistenceWithNotices,
   __APP_JS__: app
 };

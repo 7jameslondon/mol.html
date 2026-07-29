@@ -5,16 +5,23 @@
   const ThreeDmol = window.$3Dmol || window['3Dmol'];
 
   class MoleculeRenderer {
-    constructor(container, callbacks = {}) {
+    constructor(container, callbacks = {}, options = {}) {
       if (!ThreeDmol?.createViewer) throw new Error('The bundled 3Dmol.js renderer did not load.');
       this.container = container;
       this.callbacks = callbacks;
+      this.options = {
+        backgroundAlpha: options.backgroundAlpha === 0 ? 0 : 1,
+        interactive: options.interactive !== false,
+        screenScale: positiveNumber(options.screenScale, 1),
+        upscale: options.upscale !== false
+      };
       this.doc = null;
       this.parsed = null;
       this.model = null;
       this.models = [];
       this.cacheKey = '';
       this.surfaceGeneration = 0;
+      this.surfaceTasks = new Map();
       this.applyingDocument = false;
       this.lastReportedView = '';
       this.measurementDraft = [];
@@ -24,18 +31,34 @@
       this.rendererLocationByDomainIndex = new Map();
       this.viewer = ThreeDmol.createViewer(container, {
         backgroundColor: '#07111f',
-        antialias: true
+        backgroundAlpha: this.options.backgroundAlpha,
+        antialias: true,
+        upscale: this.options.upscale,
+        nomouse: !this.options.interactive
       });
-      this.viewer.setViewChangeCallback(() => this.queueViewChange());
-      this.resizeObserver = new ResizeObserver(() => {
-        this.viewer.resize();
-        this.viewer.render();
-      });
-      this.resizeObserver.observe(container);
+      if (!this.options.interactive) this.stabilizeFramebufferResources();
+      if (this.options.interactive) {
+        this.viewer.setViewChangeCallback(() => this.queueViewChange());
+        this.resizeObserver = new ResizeObserver(() => {
+          this.viewer.resize();
+          this.viewer.render();
+        });
+        this.resizeObserver.observe(container);
+      } else {
+        this.viewer.divwatcher?.disconnect?.();
+        this.viewer.intwatcher?.disconnect?.();
+      }
     }
 
-    setDocument(doc, { fit = false } = {}) {
+    setDocument(doc, {
+      fit = false, cameraMode = 'document', writeCamera = true, presentationState = null
+    } = {}) {
       this.doc = doc;
+      this.writeCamera = writeCamera !== false;
+      if (presentationState) {
+        this.activeMeasurementId = presentationState.activeMeasurementId || null;
+        this.activeSavedSelectionId = presentationState.activeSavedSelectionId || null;
+      }
       const key = `${doc.structure.id}:${doc.structure.data.length}:${doc.structure.data.slice(0, 60)}`;
       const structureChanged = key !== this.cacheKey;
       this.applyingDocument = true;
@@ -45,9 +68,12 @@
           this.parsed = Core.parseStructure(doc.structure.data, doc.structure.format);
           this.cacheKey = key;
           this.surfaceGeneration += 1;
+          this.disposeSurfaceRenderResources();
           this.viewer.removeAllSurfaces();
           this.viewer.removeAllLabels();
+          this.disposeShapeRenderResources();
           this.viewer.removeAllShapes();
+          this.disposeModelRenderResources();
           this.viewer.removeAllModels();
           const rendererFormat = doc.structure.format === 'mmcif' ? 'cif' : doc.structure.format;
           const multiplePdbModels = doc.structure.format === 'pdb' && this.parsed.coordinateSets.length > 1;
@@ -66,10 +92,10 @@
           if (multipleMmcifModels) this.buildCoordinateSetAtomMapping();
           else this.buildAtomMapping();
           this.applyNormalizedBonds();
-          fit = true;
+          if (cameraMode !== 'snapshot') fit = true;
         }
 
-        this.applyAppearance();
+        const generation = this.applyAppearance();
         const savedView = doc.scene.camera?.view;
         if (fit || !validView(savedView)) {
           this.viewer.zoomTo(this.visibleSelection());
@@ -77,8 +103,17 @@
           this.viewer.setView(savedView);
         }
         this.viewer.render();
-        doc.scene.camera = { view: this.viewer.getView() };
-        this.lastReportedView = JSON.stringify(doc.scene.camera.view);
+        const appliedView = this.viewer.getView();
+        if (this.writeCamera) doc.scene.camera = { view: appliedView };
+        this.lastReportedView = JSON.stringify(appliedView);
+        return generation;
+      } catch (error) {
+        if (error && (typeof error === 'object' || typeof error === 'function') && Object.isExtensible(error)) {
+          Object.defineProperty(error, 'molhtmlRenderGeneration', {
+            configurable: true, value: this.surfaceGeneration
+          });
+        }
+        throw error;
       } finally {
         requestAnimationFrame(() => { this.applyingDocument = false; });
       }
@@ -87,13 +122,19 @@
     applyAppearance() {
       this.surfaceGeneration += 1;
       const generation = this.surfaceGeneration;
+      const surfaceTasks = [];
+      this.surfaceTasks.clear();
+      this.surfaceTasks.set(generation, surfaceTasks);
       const visible = this.visibleSelection();
       const colorfunc = atom => this.colorFor3DAtom(atom);
 
-      this.viewer.setBackgroundColor(this.doc.scene.background, 1);
-      this.viewer.removeAllLabels();
+      this.applyBackground();
+      this.removeLabels();
+      this.disposeShapeRenderResources();
       this.viewer.removeAllShapes();
+      this.disposeSurfaceRenderResources();
       this.viewer.removeAllSurfaces();
+      this.disposeModelRenderResources();
       this.viewer.setStyle({}, {});
       for (const model of this.models) model?.setColorByFunction({}, colorfunc);
 
@@ -111,14 +152,19 @@
           this.viewer.setStyle(visible, { sphere: { scale: 1, colorfunc } });
           break;
         case 'lines':
-          this.viewer.setStyle(visible, { line: { linewidth: 1.5, colorfunc } });
+          this.viewer.setStyle(visible, { line: { linewidth: this.scaledLineWidth(1.5), colorfunc } });
           break;
         case 'surface': {
           this.viewer.setStyle(visible, { cartoon: { colorfunc, opacity: .62 } });
           const surface = this.viewer.addSurface(ThreeDmol.SurfaceType.VDW, { opacity: .78 }, visible);
-          Promise.resolve(surface).then(() => {
+          const task = Promise.resolve(surface).then(() => {
             if (generation === this.surfaceGeneration) this.viewer.render();
-          }).catch(error => console.error('3Dmol surface rendering failed:', error));
+            return { ok: true };
+          }, error => {
+            if (this.options.interactive) console.error('3Dmol surface rendering failed:', error);
+            return { ok: false, error };
+          });
+          surfaceTasks.push(task);
           break;
         }
         case 'ball-and-stick':
@@ -135,11 +181,14 @@
       this.applySelectionHighlight();
       this.applyMeasurements();
       this.applyMeasurementDraft();
-      this.viewer.setClickable({}, false);
-      this.viewer.setClickable(visible, true, atom => {
-        const selected = this.domainAtomForRenderer(atom) || this.normalizeAtom(atom);
-        this.callbacks.onPick?.(selected);
-      });
+      if (this.options.interactive) {
+        this.viewer.setClickable({}, false);
+        this.viewer.setClickable(visible, true, atom => {
+          const selected = this.domainAtomForRenderer(atom) || this.normalizeAtom(atom);
+          this.callbacks.onPick?.(selected);
+        });
+      }
+      return generation;
     }
 
     applySelectionHighlight() {
@@ -154,17 +203,17 @@
         stick: { radius: .28, color: '#ffe66d' },
         sphere: { scale: .5, color: '#ffe66d' }
       });
-      this.viewer.addLabel(Core.atomLabel(atom), {
+      this.viewer.addLabel(Core.atomLabel(atom), this.labelOptions({
         position: { x: atom.x, y: atom.y, z: atom.z },
         fontColor: '#07111f',
-        backgroundColor: '#ffe66d',
+        backgroundColor: '#f4c95d',
         backgroundOpacity: .9,
         borderColor: '#ffffff',
         borderThickness: 1,
         fontSize: 12,
         padding: 4,
         inFront: true
-      });
+      }));
     }
 
     applySavedSelectionHighlight() {
@@ -212,7 +261,7 @@
           const color = contact.polar ? '#ffcf5a' : contact.close ? '#71ddf8' : '#7c91a7';
           this.viewer.addLine({
             start: point(contact.ligandAtom), end: point(contact.targetAtom),
-            color, dashed: true, linewidth: contact.polar ? 2.5 : 1.5, opacity: .82
+            color, dashed: true, linewidth: this.scaledLineWidth(contact.polar ? 2.5 : 1.5), opacity: .82
           });
         }
       }
@@ -227,7 +276,7 @@
         for (let index = 1; index < atoms.length; index++) {
           this.viewer.addLine({
             start: point(atoms[index - 1]), end: point(atoms[index]),
-            color, dashed: true, linewidth: active ? 3 : 2
+            color, dashed: true, linewidth: this.scaledLineWidth(active ? 3 : 2)
           });
         }
         for (const atom of atoms) {
@@ -235,12 +284,12 @@
         }
         const value = Core.formatMeasurementValue(measurement.type, Core.measurementValue(measurement.type, atoms));
         const label = String(measurement.label || '').trim();
-        this.viewer.addLabel(label ? `${label}: ${value}` : value, {
+        this.viewer.addLabel(label ? `${label}: ${value}` : value, this.labelOptions({
           position: measurementLabelPosition(measurement.type, atoms),
           fontColor: '#07111f', backgroundColor: color, backgroundOpacity: .92,
           borderColor: '#ffffff', borderThickness: active ? 2 : 1,
           fontSize: active ? 13 : 11, padding: 4, inFront: true
-        });
+        }));
       }
     }
 
@@ -251,15 +300,15 @@
         this.viewer.addStyle(this.to3DSelection(Core.selectorForAtom(atom, 'atom', this.doc.structure.id)), {
           stick: { radius: .3, color: '#ff5e83' }, sphere: { scale: .54, color: '#ff5e83' }
         });
-        this.viewer.addLabel(String(index + 1), {
+        this.viewer.addLabel(String(index + 1), this.labelOptions({
           position: point(atom), fontColor: '#ffffff', backgroundColor: '#d92d57',
           backgroundOpacity: .96, borderColor: '#ffffff', borderThickness: 1,
           fontSize: 12, padding: 4, inFront: true
-        });
+        }));
         if (index > 0) {
           this.viewer.addLine({
             start: point(this.measurementDraft[index - 1]), end: point(atom),
-            color: '#ff5e83', dashed: true, linewidth: 3
+            color: '#ff5e83', dashed: true, linewidth: this.scaledLineWidth(3)
           });
         }
       }
@@ -510,8 +559,273 @@
 
     render() {
       if (!this.doc) return;
-      this.viewer.setBackgroundColor(this.doc.scene.background, 1);
+      this.applyBackground();
       this.viewer.render();
+    }
+
+    setExportOptions({ backgroundAlpha, screenScale } = {}) {
+      if (backgroundAlpha === 0 || backgroundAlpha === 1) this.options.backgroundAlpha = backgroundAlpha;
+      if (screenScale != null) this.options.screenScale = positiveNumber(screenScale, 1);
+      if (this.doc) this.applyBackground();
+    }
+
+    applyBackground() {
+      if (!this.doc) return;
+      if (this.viewer.config) this.viewer.config.backgroundAlpha = this.options.backgroundAlpha;
+      this.viewer.setBackgroundColor(this.doc.scene.background, this.options.backgroundAlpha);
+    }
+
+    labelOptions(style) {
+      const scale = this.options.screenScale;
+      const scaled = { ...style };
+      for (const key of ['fontSize', 'padding', 'borderThickness']) {
+        if (Number.isFinite(style[key])) scaled[key] = Math.max(1, Math.round(style[key] * scale));
+      }
+      return scaled;
+    }
+
+    scaledLineWidth(width) {
+      const [minimum, maximum] = this.getLineWidthRange();
+      return Math.min(maximum, Math.max(minimum, Number(width) * this.options.screenScale));
+    }
+
+    getLineWidthRange() {
+      const gl = this.viewer.getRenderer?.().getContext?.();
+      if (!gl || gl.isContextLost?.()) return [1, 1];
+      const range = gl.getParameter(gl.ALIASED_LINE_WIDTH_RANGE);
+      return range && range.length === 2 ? [Number(range[0]), Number(range[1])] : [1, 1];
+    }
+
+    getCameraSnapshot() {
+      return { view: structuredClone(this.viewer.getView()) };
+    }
+
+    getSizingInfo() {
+      const canvas = this.viewer.getCanvas?.();
+      const renderer = this.viewer.getRenderer?.();
+      const gl = renderer?.getContext?.();
+      const lost = !gl || Boolean(gl.isContextLost?.());
+      const parameter = key => lost ? 0 : gl.getParameter(key);
+      const viewport = parameter(gl?.MAX_VIEWPORT_DIMS);
+      return {
+        width: Number(canvas?.width) || 0,
+        height: Number(canvas?.height) || 0,
+        drawingBufferWidth: Number(gl?.drawingBufferWidth) || 0,
+        drawingBufferHeight: Number(gl?.drawingBufferHeight) || 0,
+        devicePixelRatio: positiveNumber(renderer?.devicePixelRatio, positiveNumber(window.devicePixelRatio, 1)),
+        contextLost: lost,
+        limits: {
+          maxViewportWidth: Number(viewport?.[0]) || 0,
+          maxViewportHeight: Number(viewport?.[1]) || 0,
+          maxTextureSize: Number(parameter(gl?.MAX_TEXTURE_SIZE)) || 0,
+          maxRenderbufferSize: Number(parameter(gl?.MAX_RENDERBUFFER_SIZE)) || 0
+        }
+      };
+    }
+
+    setOutputSize(width, height) {
+      this.stabilizeFramebufferResources();
+      const configuredRatio = positiveNumber(window.devicePixelRatio, 1);
+      const ratio = this.options.upscale && configuredRatio < 2 ? 2 : configuredRatio;
+      const logicalWidth = (Number(width) + .01) / ratio;
+      const logicalHeight = (Number(height) + .01) / ratio;
+      this.viewer.setWidth(logicalWidth);
+      this.viewer.setHeight(logicalHeight);
+      return this.getSizingInfo();
+    }
+
+    async whenSurfacesReady(generation) {
+      const tasks = this.surfaceTasks.get(generation);
+      if (!tasks) throw new Error('The requested render generation is no longer available.');
+      const results = await Promise.all(tasks);
+      const failure = results.find(result => !result.ok);
+      if (failure) throw failure.error instanceof Error ? failure.error : new Error('3Dmol surface rendering failed.');
+      return generation;
+    }
+
+    capturePNG(generation, { width, height, backgroundAlpha = this.options.backgroundAlpha } = {}) {
+      if (generation !== this.surfaceGeneration) {
+        return Promise.reject(new Error('The requested render generation was superseded.'));
+      }
+      this.setExportOptions({ backgroundAlpha });
+      const requestedWidth = Number(width);
+      const requestedHeight = Number(height);
+      this.setOutputSize(requestedWidth, requestedHeight);
+      this.applyBackground();
+      this.viewer.render();
+      const exact = this.getSizingInfo();
+      if (exact.contextLost) return Promise.reject(new Error('The export WebGL context was lost.'));
+      if (exact.width !== requestedWidth || exact.height !== requestedHeight
+        || exact.drawingBufferWidth !== requestedWidth || exact.drawingBufferHeight !== requestedHeight) {
+        const error = new Error(
+          `The browser created ${exact.width} x ${exact.height} canvas pixels and `
+          + `${exact.drawingBufferWidth} x ${exact.drawingBufferHeight} WebGL pixels instead of `
+          + `${requestedWidth} x ${requestedHeight}.`
+        );
+        error.code = 'renderer-dimension-mismatch';
+        return Promise.reject(error);
+      }
+      const canvas = this.viewer.getCanvas?.();
+      return new Promise((resolve, reject) => {
+        try {
+          canvas.toBlob(blob => resolve(blob), 'image/png');
+        } catch (error) {
+          reject(error);
+        }
+      });
+    }
+
+    resetAfterExport(generation) {
+      if (generation !== this.surfaceGeneration) return false;
+      this.surfaceGeneration += 1;
+      clearTimeout(this.viewTimer);
+      this.removeLabels();
+      this.disposeShapeRenderResources();
+      this.viewer.removeAllShapes();
+      this.disposeSurfaceRenderResources();
+      this.viewer.removeAllSurfaces();
+      this.disposeModelRenderResources();
+      this.viewer.removeAllModels();
+      this.viewer.setClickable?.({}, false);
+      this.doc = null;
+      this.parsed = null;
+      this.model = null;
+      this.models = [];
+      this.cacheKey = '';
+      this.measurementDraft = [];
+      this.activeMeasurementId = null;
+      this.activeSavedSelectionId = null;
+      this.domainByRendererKey.clear();
+      this.rendererLocationByDomainIndex.clear();
+      this.surfaceTasks.clear();
+      this.options.backgroundAlpha = 1;
+      this.options.screenScale = 1;
+      if (this.viewer.config) this.viewer.config.backgroundAlpha = 1;
+      this.viewer.setBackgroundColor('#07111f', 1);
+      this.setOutputSize(64, 64);
+      this.viewer.render();
+      return true;
+    }
+
+    removeLabels() {
+      for (const label of this.viewer.labels || []) label?.dispose?.();
+      this.viewer.removeAllLabels();
+    }
+
+    disposeModelRenderResources() {
+      if (this.options.interactive) return;
+      // GLModel.removegl() in pinned 3Dmol 2.5.5 does not recurse through the
+      // cloned scene graph or release instancing buffers, so do both before a
+      // hidden export generation is replaced.
+      const geometries = new Set();
+      const materials = new Set();
+      const visit = object => {
+        if (!object) return;
+        if (object.geometry) geometries.add(object.geometry);
+        const entries = Array.isArray(object.material) ? object.material : [object.material];
+        for (const material of entries) if (material) materials.add(material);
+        for (const child of object.children || []) visit(child);
+      };
+      for (const model of this.models) visit(model?.renderedMolObj);
+      const gl = this.viewer.getRenderer?.()?.getContext?.();
+      for (const geometry of geometries) {
+        this.disposeGeometryBuffers(geometry, gl);
+        geometry.dispose?.();
+      }
+      for (const material of materials) {
+        const shaders = material?.program && gl?.getAttachedShaders?.(material.program);
+        material.dispose?.();
+        for (const shader of shaders || []) gl.deleteShader?.(shader);
+      }
+      for (const model of this.models) {
+        const rendered = model?.renderedMolObj;
+        if (rendered) this.viewer.modelGroup?.remove?.(rendered);
+        if (model) {
+          model.renderedMolObj = null;
+          model.molObj = null;
+        }
+      }
+    }
+
+    disposeSurfaceRenderResources() {
+      if (this.options.interactive) return;
+      const gl = this.viewer.getRenderer?.()?.getContext?.();
+      const geometries = new Set();
+      const materials = new Set();
+      for (const surface of Object.values(this.viewer.surfaces || {})) {
+        for (const entry of surface || []) {
+          if (entry?.geo) geometries.add(entry.geo);
+          if (entry?.mat) materials.add(entry.mat);
+        }
+      }
+      for (const geometry of geometries) this.disposeGeometryBuffers(geometry, gl);
+      for (const material of materials) {
+        const shaders = material?.program && gl?.getAttachedShaders?.(material.program);
+        material.dispose?.();
+        for (const shader of shaders || []) gl.deleteShader?.(shader);
+      }
+    }
+
+    disposeShapeRenderResources() {
+      if (this.options.interactive) return;
+      const gl = this.viewer.getRenderer?.()?.getContext?.();
+      const geometries = new Set();
+      const materials = new Set();
+      const visit = object => {
+        if (!object) return;
+        if (object.geometry) geometries.add(object.geometry);
+        const entries = Array.isArray(object.material) ? object.material : [object.material];
+        for (const material of entries) if (material) materials.add(material);
+        for (const child of object.children || []) visit(child);
+      };
+      for (const shape of this.viewer.shapes || []) visit(shape?.renderedShapeObj);
+      for (const geometry of geometries) {
+        this.disposeGeometryBuffers(geometry, gl);
+        geometry.dispose?.();
+      }
+      for (const material of materials) {
+        const shaders = material?.program && gl?.getAttachedShaders?.(material.program);
+        material.dispose?.();
+        for (const shader of shaders || []) gl.deleteShader?.(shader);
+      }
+      for (const shape of this.viewer.shapes || []) {
+        const rendered = shape?.renderedShapeObj;
+        if (rendered) this.viewer.modelGroup?.remove?.(rendered);
+        if (shape) {
+          shape.renderedShapeObj = null;
+          shape.shapeObj = null;
+        }
+      }
+    }
+
+    disposeGeometryBuffers(geometry, gl) {
+      for (const holder of [geometry, ...(geometry?.geometryGroups || [])]) {
+        for (const key of Object.keys(holder || {})) {
+          if (!/^__webgl.*Buffer$/.test(key) || holder[key] === undefined) continue;
+          gl?.deleteBuffer?.(holder[key]);
+          holder[key] = undefined;
+        }
+      }
+    }
+
+    stabilizeFramebufferResources() {
+      if (this.options.interactive) return;
+      const renderer = this.viewer?.getRenderer?.();
+      if (!renderer || renderer.__molhtmlStableFramebuffer) return;
+      // 3Dmol 2.5.5 recreates framebuffer objects on every resize. The export
+      // viewer reuses its initialized objects because setFrameBuffer resizes
+      // their storage; the visible interactive renderer retains native setup.
+      if (typeof renderer.initFrameBuffer === 'function') renderer.initFrameBuffer = () => {};
+      Object.defineProperty(renderer, '__molhtmlStableFramebuffer', { value: true });
+    }
+
+    resourceCounts() {
+      return {
+        models: this.viewer.models?.filter(Boolean).length || 0,
+        shapes: this.viewer.shapes?.filter(Boolean).length || 0,
+        labels: this.viewer.labels?.filter(Boolean).length || 0,
+        surfaces: this.viewer.surfaces ? Object.keys(this.viewer.surfaces).length : 0
+      };
     }
 
     queueViewChange() {
@@ -530,6 +844,11 @@
 
   function validView(view) {
     return Array.isArray(view) && view.length === 8 && view.every(Number.isFinite);
+  }
+
+  function positiveNumber(value, fallback) {
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0 ? number : fallback;
   }
 
   function point(atom) {
