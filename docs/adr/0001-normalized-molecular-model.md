@@ -99,14 +99,18 @@ The accepted implementation was measured on the feature branch after the determi
 release build:
 
 - Branch-start artifact: 862,392 bytes.
-- Final artifact after integrating the 1BNA starter from `main`: 975,129 bytes.
-- Increase from the branch-start artifact: 112,737 bytes.
+- Final artifact after integrating the 1BNA starter from `main`: 978,199 bytes.
+- Increase from the branch-start artifact: 115,807 bytes.
 - Bundled 3Dmol payload: unchanged at 537,792 bytes.
 - Enforced artifact ceiling: 10,000,000 bytes, adopted by explicit project decision.
-- Remaining headroom under the ceiling: 9,024,871 bytes.
+- Remaining headroom under the ceiling: 9,021,801 bytes.
 - Model/schema and artifact verification: passed, including 70 artifact invariants.
 - Browser regression suite: 29 tests passed in Chromium.
 - Scheduled performance observation: the deterministic 5,000-atom case passed.
+
+The final size includes 3,070 bytes intentionally spent restoring maintainable source after the
+ceiling was raised: explicit oligomer and `struct_conn` mappings, named safety limits, descriptive
+errors, and readable document-version and assembly traversal replaced earlier byte-saving forms.
 
 The measurements did not justify an inline worker or columnar storage in this iteration.
 The model interfaces preserve those implementation options if larger real-world profiles do.

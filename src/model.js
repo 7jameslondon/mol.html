@@ -18,6 +18,8 @@
   const MEASUREMENT_ATOM_COUNTS = Object.freeze({ distance: 2, angle: 3, dihedral: 4 });
   const REPRESENTATIONS = new Set(['cartoon', 'ball-and-stick', 'sticks', 'spacefill', 'lines', 'surface']);
   const COLOR_MODES = new Set(['element', 'chain', 'author-chain', 'instance', 'entity', 'role', 'residue', 'uniform']);
+  const DOCUMENT_V2_COLOR_MODES = new Set(['author-chain', 'instance', 'entity', 'role']);
+  const DOCUMENT_V2_SELECTOR_KINDS = new Set(['instance', 'entity', 'role', 'connected-component']);
   const ROLE_COLORS = Object.freeze({
     polymer: '#54a7ff', ligand: '#ff6b8a', ion: '#ffc857', solvent: '#7c91a7', unknown: '#a98bff'
   });
@@ -566,23 +568,46 @@
     return doc;
   }
 
-  function requiresDocumentV2(doc) {
-    const scene = doc?.scene || {};
-    const views = scene.savedViews || [];
-    if (doc?.structure?.format === 'mmcif'
-      || ['author-chain', 'instance', 'entity', 'role'].some(mode =>
-        mode === scene.colorMode || views.some(view => mode === view?.snapshot?.colorMode))) return true;
-    const pending = [scene.selection, scene.ligandAnalysis?.selectedLigand, ...(scene.customColors || []),
-      ...(scene.measurements || []).flatMap(record => record?.atoms || []),
-      ...(scene.savedSelections || []), ...views.flatMap(view =>
-        [view?.snapshot?.selection, ...(view?.snapshot?.customColors || [])])];
-    for (const value of pending) {
-      if (!value || typeof value !== 'object') continue;
-      if (value.sourceIdentity || value.instanceId || value.entityId || value.role || value.connectedComponentId
-        || ['instance', 'entity', 'role', 'connected-component'].includes(value.kind || value.scope)) return true;
-      pending.push(value.selector, value.target);
+  function selectorRequiresDocumentV2(value) {
+    const pending = [value];
+    while (pending.length) {
+      const candidate = pending.pop();
+      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue;
+      if (candidate.sourceIdentity != null
+        || candidate.instanceId != null
+        || candidate.entityId != null
+        || candidate.role != null
+        || candidate.connectedComponentId != null
+        || DOCUMENT_V2_SELECTOR_KINDS.has(candidate.kind || candidate.scope)) {
+        return true;
+      }
+      pending.push(candidate.selector, candidate.target);
     }
     return false;
+  }
+
+  function requiresDocumentV2(doc) {
+    if (doc?.structure?.format === 'mmcif') return true;
+
+    const scene = doc?.scene || {};
+    const savedViews = Array.isArray(scene.savedViews) ? scene.savedViews : [];
+    if (DOCUMENT_V2_COLOR_MODES.has(scene.colorMode)
+      || savedViews.some(view => DOCUMENT_V2_COLOR_MODES.has(view?.snapshot?.colorMode))) {
+      return true;
+    }
+
+    const persistedSelectorValues = [scene.selection, scene.ligandAnalysis?.selectedLigand];
+    persistedSelectorValues.push(...(Array.isArray(scene.customColors) ? scene.customColors : []));
+    persistedSelectorValues.push(...(Array.isArray(scene.savedSelections) ? scene.savedSelections : []));
+    for (const measurement of Array.isArray(scene.measurements) ? scene.measurements : []) {
+      persistedSelectorValues.push(...(Array.isArray(measurement?.atoms) ? measurement.atoms : []));
+    }
+    for (const view of savedViews) {
+      persistedSelectorValues.push(view?.snapshot?.selection);
+      persistedSelectorValues.push(...(Array.isArray(view?.snapshot?.customColors)
+        ? view.snapshot.customColors : []));
+    }
+    return persistedSelectorValues.some(selectorRequiresDocumentV2);
   }
 
   function normalizeMeasurements(value) {

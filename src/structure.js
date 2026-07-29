@@ -28,11 +28,46 @@
     + 'YB LU HF TA W RE OS IR PT AU HG TL PB BI PO AT RN FR RA AC TH PA U NP PU AM CM BK CF ES FM MD NO LR '
     + 'RF DB SG BH HS MT DS RG CN NH FL MC LV TS OG'
   ).split(' '));
+  const NAMED_OLIGOMER_COUNTS = new Map([
+    ['monomer', 1],
+    ['dimer', 2],
+    ['trimer', 3],
+    ['tetramer', 4],
+    ['pentamer', 5],
+    ['hexamer', 6],
+    ['heptamer', 7],
+    ['octamer', 8],
+    ['nonamer', 9],
+    ['decamer', 10],
+    ['undecamer', 11],
+    ['dodecamer', 12],
+    ['tridecamer', 13],
+    ['tetradecamer', 14],
+    ['pentadecamer', 15],
+    ['hexadecamer', 16],
+    ['heptadecamer', 17],
+    ['octadecamer', 18],
+    ['nonadecamer', 19],
+    ['eicosamer', 20]
+  ]);
   const MAX_ATOMS = 2_000_000;
+  const MAX_CONNECTION_RESOLUTION_WORK = 25_000_000;
+  const MAX_DENIED_INFERENCE_PAIRS = 1_000_000;
+  const MAX_ASSEMBLY_OPERATOR_GROUPS = 100;
+  const MAX_ASSEMBLY_OPERATOR_RANGE_SIZE = 10_000;
+  const MAX_ASSEMBLY_OPERATOR_COMBINATIONS = 10_000;
+  const MAX_ASSEMBLY_TRANSFORMS = 10_000;
+  const MAX_ASSEMBLY_INSTANCES = 100_000;
   const spatialIndexCache = new WeakMap();
 
   function bondRecord(left, right, order = 1, provenance = 'inferred-distance', connectionType = 'covalent') {
     return { atomIndices: [left, right], order, provenance, connectionType };
+  }
+
+  function numericAtomPairKey(leftIndex, rightIndex, atomCount) {
+    const lowerIndex = Math.min(leftIndex, rightIndex);
+    const higherIndex = Math.max(leftIndex, rightIndex);
+    return lowerIndex * atomCount + higherIndex;
   }
 
   function alternateLocationsCompatible(left, right) {
@@ -235,7 +270,9 @@
         for (const id of activeAssemblyIds) ensureAssembly(id);
         continue;
       }
-      const oligomer = body.match(/^(?:(?:AUTHOR|SOFTWARE) DETERMINED (?:BIOLOGICAL UNIT|QUATERNARY STRUCTURE)|QUATERNARY STRUCTURE FOR THIS ENTRY):\s*(.+)$/i);
+      const oligomer = body.match(
+        /^(?:(?:AUTHOR|SOFTWARE) DETERMINED (?:BIOLOGICAL UNIT|QUATERNARY STRUCTURE)|QUATERNARY STRUCTURE FOR THIS ENTRY):\s*(.+)$/i
+      );
       if (oligomer) {
         const details = oligomer[1].trim();
         for (const id of activeAssemblyIds) {
@@ -309,8 +346,7 @@
     const normalized = String(value || '').trim().toLowerCase().replace(/ic$/, '');
     const numeric = normalized.match(/^(\d+)\s*-?\s*mer$/);
     if (numeric) return Number(numeric[1]) || null;
-    const named = 'monomer,dimer,trimer,tetramer,pentamer,hexamer,heptamer,octamer,nonamer,decamer,undecamer,dodecamer,tridecamer,tetradecamer,pentadecamer,hexadecamer,heptadecamer,octadecamer,nonadecamer,eicosamer'.split(',').indexOf(normalized);
-    return named < 0 ? null : named + 1;
+    return NAMED_OLIGOMER_COUNTS.get(normalized) || null;
   }
 
   function tokenizeMmcif(value) {
@@ -908,12 +944,19 @@
     const scopedConnections = connections.map(row => {
       const leftModel = cifNumber(row.pdbx_ptnr1_pdb_model_num);
       const rightModel = cifNumber(row.pdbx_ptnr2_pdb_model_num);
-      return { row, leftModel, rightModel, modelNumbers: leftModel == null && rightModel == null
-        ? modelNumbers : [leftModel ?? rightModel] };
+      const applicableModels = leftModel == null && rightModel == null
+        ? modelNumbers
+        : [leftModel ?? rightModel];
+      return { row, leftModel, rightModel, applicableModels };
     });
-    if (scopedConnections.reduce((sum, connection) => sum + connection.modelNumbers.length, 0)
-      * atoms.length > 25e6) throw new Error('Connection limit.');
-    for (const { row, leftModel, rightModel, modelNumbers: rowModels } of scopedConnections) {
+    const resolutionWork = scopedConnections.reduce(
+      (sum, connection) => sum + connection.applicableModels.length,
+      0
+    ) * atoms.length;
+    if (resolutionWork > MAX_CONNECTION_RESOLUTION_WORK) {
+      throw new Error('Connection limit exceeded while resolving struct_conn endpoints.');
+    }
+    for (const { row, leftModel, rightModel, applicableModels } of scopedConnections) {
       if (leftModel != null && rightModel != null && leftModel !== rightModel) {
         if (diagnostics?.parserWarnings?.length < 50) {
           diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} connects different coordinate models and was excluded from topology.`);
@@ -926,18 +969,22 @@
       if (!baseCoordinates && diagnostics?.parserWarnings?.length < 50) {
         diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} references a crystallographic symmetry mate and was excluded from base topology.`);
       }
-      for (const modelNumber of rowModels) {
+      for (const modelNumber of applicableModels) {
         const leftMatches = leftAtoms.filter(atom => atom.model === modelNumber);
         const rightMatches = rightAtoms.filter(atom => atom.model === modelNumber);
         if (!baseCoordinates) {
           deniedPairAttempts += leftMatches.length * rightMatches.length;
-          if (deniedPairAttempts > 1e6) throw new Error('Connection limit.');
-          for (const left of leftMatches) for (const right of rightMatches) {
-            if (left.index === right.index) continue;
-            const key = left.index < right.index
-              ? left.index * atoms.length + right.index : right.index * atoms.length + left.index;
-            deniedInferencePairs.add(key);
-            if (deniedInferencePairs.size > 1e6) throw new Error('Connection limit.');
+          if (deniedPairAttempts > MAX_DENIED_INFERENCE_PAIRS) {
+            throw new Error('Connection limit exceeded while materializing symmetry-denied atom pairs.');
+          }
+          for (const left of leftMatches) {
+            for (const right of rightMatches) {
+              if (left.index === right.index) continue;
+              deniedInferencePairs.add(numericAtomPairKey(left.index, right.index, atoms.length));
+              if (deniedInferencePairs.size > MAX_DENIED_INFERENCE_PAIRS) {
+                throw new Error('Connection limit exceeded while storing symmetry-denied atom pairs.');
+              }
+            }
           }
           continue;
         }
@@ -980,19 +1027,23 @@
   }
 
   function findStructConnAtoms(atoms, row, prefix) {
-    const criteria = ['labelAsymId', 'labelSeqId', 'labelCompId', 'labelAtomId',
-      'authAsymId', 'authSeqId', 'authCompId', 'authAtomId'].map(key => [key,
-      cifValue(row[`${prefix}_${key.replace(/[A-Z]/g, c => `_${c.toLowerCase()}`)}`])]);
-    criteria.push(
-      ['labelAltId', cifValue(row[`pdbx_${prefix}_label_alt_id`]) || cifValue(row[`${prefix}_label_alt_id`])],
+    const criteria = [
+      ['labelAsymId', cifValue(row[`${prefix}_label_asym_id`])],
+      ['labelSeqId', cifValue(row[`${prefix}_label_seq_id`])],
+      ['labelCompId', cifValue(row[`${prefix}_label_comp_id`])],
+      ['labelAtomId', cifValue(row[`${prefix}_label_atom_id`])],
+      ['authAsymId', cifValue(row[`${prefix}_auth_asym_id`])],
+      ['authSeqId', cifValue(row[`${prefix}_auth_seq_id`])],
+      ['authCompId', cifValue(row[`${prefix}_auth_comp_id`])],
+      ['authAtomId', cifValue(row[`${prefix}_auth_atom_id`])],
+      ['labelAltId',
+        cifValue(row[`pdbx_${prefix}_label_alt_id`]) || cifValue(row[`${prefix}_label_alt_id`])],
       ['authAltId', cifValue(row[`pdbx_${prefix}_auth_alt_id`])],
       ['icode', cifValue(row[`pdbx_${prefix}_pdb_ins_code`])],
       ['model', cifNumber(row[`pdbx_${prefix}_pdb_model_num`])]
-    );
+    ];
     return atoms.filter(atom => criteria.every(([key, value]) => value == null || atom[key] === value));
   }
-
-  function assemblyCap() { throw new Error('Assembly limit.'); }
 
   function mmcifAssemblies(categories) {
     const operatorMap = new Map();
@@ -1030,7 +1081,10 @@
       }
       const operatorExpression = cifValue(row.oper_expression) || '';
       const operatorSequences = expandOperatorExpression(operatorExpression);
-      if ((transformCount += operatorSequences.length) > 1e4) assemblyCap();
+      transformCount += operatorSequences.length;
+      if (transformCount > MAX_ASSEMBLY_TRANSFORMS) {
+        throw new Error('Assembly limit exceeded: too many generated transforms.');
+      }
       const operatorIds = [...new Set(operatorSequences.flat())];
       assemblyMap.get(id).generators.push({
         asymIds: (cifValue(row.asym_id_list) || '').split(',').map(item => item.trim()).filter(Boolean),
@@ -1054,10 +1108,14 @@
     const groups = [];
     for (const match of expression.matchAll(/\(([^()]*)\)/g)) groups.push(expandOperatorGroup(match[1]));
     if (!groups.length) groups.push(expandOperatorGroup(expression));
-    if (groups.length > 100) assemblyCap();
+    if (groups.length > MAX_ASSEMBLY_OPERATOR_GROUPS) {
+      throw new Error('Assembly limit exceeded: too many operator groups.');
+    }
     if (groups.some(group => !group.length)) return [];
     return groups.reduce((combinations, group) => {
-      if (combinations.length * group.length > 1e4) assemblyCap();
+      if (combinations.length * group.length > MAX_ASSEMBLY_OPERATOR_COMBINATIONS) {
+        throw new Error('Assembly limit exceeded: too many operator combinations.');
+      }
       return combinations.flatMap(sequence => group.map(operatorId => [...sequence, operatorId]));
     }, [[]]);
   }
@@ -1071,7 +1129,9 @@
         const start = Number(range[1]);
         const end = Number(range[2]);
         if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end)
-          || Math.abs(end - start) >= 1e4) assemblyCap();
+          || Math.abs(end - start) >= MAX_ASSEMBLY_OPERATOR_RANGE_SIZE) {
+          throw new Error('Assembly limit exceeded: operator range is too large.');
+        }
         const step = start <= end ? 1 : -1;
         for (let number = start; number !== end + step; number += step) ids.push(String(number));
       } else if (part) ids.push(part);
@@ -1109,9 +1169,11 @@
       .filter(instance => instance.labelAsymId)
       .map(instance => [instance.labelAsymId, instance]));
     const instancesByAuthorChain = new Map();
-    for (const instance of instances) for (const authorChain of instance.authAsymIds) {
-      if (!instancesByAuthorChain.has(authorChain)) instancesByAuthorChain.set(authorChain, []);
-      instancesByAuthorChain.get(authorChain).push(instance);
+    for (const instance of instances) {
+      for (const authorChain of instance.authAsymIds) {
+        if (!instancesByAuthorChain.has(authorChain)) instancesByAuthorChain.set(authorChain, []);
+        instancesByAuthorChain.get(authorChain).push(instance);
+      }
     }
     let expandedCount = 0;
     return assemblies.map(assembly => {
@@ -1119,9 +1181,16 @@
       for (const [generatorIndex, generator] of assembly.generators.entries()) {
         for (const asymId of new Set(generator.asymIds.length ? generator.asymIds : [null])) {
           const labeled = instanceByLabelAsymId.get(asymId);
-          const bases = asymId == null ? instances : labeled ? [labeled] : (instancesByAuthorChain.get(asymId) || []);
-          for (const base of bases) for (const transform of generator.transforms || []) {
-              if (expandedCount++ >= 1e5) assemblyCap();
+          let bases;
+          if (asymId == null) bases = instances;
+          else if (labeled) bases = [labeled];
+          else bases = instancesByAuthorChain.get(asymId) || [];
+          for (const base of bases) {
+            for (const transform of generator.transforms || []) {
+              expandedCount += 1;
+              if (expandedCount > MAX_ASSEMBLY_INSTANCES) {
+                throw new Error('Assembly limit exceeded: too many expanded instances.');
+              }
               expanded.push({
                 index: expanded.length,
                 id: `${assembly.id}:${generatorIndex}:${base.id}:${transform.id}`,
@@ -1133,6 +1202,7 @@
                 operatorIds: [...transform.operatorIds],
                 transform: transform.matrix.map(row => [...row])
               });
+            }
           }
         }
       }
@@ -1175,7 +1245,8 @@
           const maximum = (COVALENT_RADII[atom.element] || .77) + (COVALENT_RADII[other.element] || .77) + .46;
           if (distanceSquared < .16 || distanceSquared > maximum * maximum) continue;
           const key = atom.index < otherIndex ? `${atom.index}:${otherIndex}` : `${otherIndex}:${atom.index}`;
-          if (!existing.has(key) && !deniedPairs.has(atom.index * atoms.length + otherIndex)) {
+          if (!existing.has(key)
+            && !deniedPairs.has(numericAtomPairKey(atom.index, otherIndex, atoms.length))) {
             existing.add(key);
             bonds.push(bondRecord(atom.index, otherIndex));
           }

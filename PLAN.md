@@ -56,11 +56,16 @@ numeric oligomer counts. Final assembly hardening also supports the legacy `QUAT
 STRUCTURE FOR THIS ENTRY` form and maps REMARK 350 `NULL` to the normalized blank chain.
 
 After integrating the 1BNA starter from the latest `main`, the final deterministic artifact is
-975,129 bytes. An explicit project decision raises the enforced artifact ceiling to 10,000,000
-bytes, leaving 9,024,871 bytes of headroom. Model/schema checks, 70 artifact invariants, all 29
+978,199 bytes. An explicit project decision raises the enforced artifact ceiling to 10,000,000
+bytes, leaving 9,021,801 bytes of headroom. Model/schema checks, 70 artifact invariants, all 29
 Chromium regression tests, and the scheduled 5,000-atom performance case pass. Publication is
 performed from the dedicated branch through a review-ready pull request; merging is intentionally
 outside this plan's implementation step.
+
+The final measurement includes a 3,070-byte maintainability pass made possible by the larger
+ceiling. It replaces byte-oriented lookup strings, generated field names, terse limit helpers,
+magic-number notation, and compressed version-gating control flow with explicit tables, named
+constants, descriptive errors, and directly readable traversal logic.
 
 ## Target architecture
 
