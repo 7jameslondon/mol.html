@@ -1,12 +1,9 @@
 import { readFile } from 'node:fs/promises';
-import vm from 'node:vm';
 
-const source = await readFile(new URL('../src/model.js', import.meta.url), 'utf8');
 const fixture = await readFile(new URL('../fixtures/mini-peptide.pdb', import.meta.url), 'utf8');
-const context = { window: {}, console, structuredClone };
-context.globalThis = context;
-vm.runInNewContext(source, context, { filename: 'src/model.js' });
-const Core = context.window.MolhtmlCore;
+globalThis.window = {};
+await import('../src/model.js');
+const Core = window.MolhtmlCore;
 
 const extra = [
   'ATOM      6  P    DA B   1       4.000   0.000   0.000  1.00 20.00           P',

@@ -1,6 +1,8 @@
 # mol.html
 
 [![Validate](https://github.com/7jameslondon/mol.html/actions/workflows/ci.yml/badge.svg)](https://github.com/7jameslondon/mol.html/actions/workflows/ci.yml)
+[![Node coverage](https://github.com/7jameslondon/mol.html/actions/workflows/node-coverage.yml/badge.svg)](https://github.com/7jameslondon/mol.html/actions/workflows/node-coverage.yml)
+[![Playwright coverage](https://github.com/7jameslondon/mol.html/actions/workflows/playwright-coverage.yml/badge.svg)](https://github.com/7jameslondon/mol.html/actions/workflows/playwright-coverage.yml)
 
 `mol.html` is a molecular viewer whose final document is one self-contained,
 self-editing HTML file. The HTML carries the viewer, editor, PDB coordinates,
@@ -44,6 +46,8 @@ pnpm test:artifact
 pnpm build
 pnpm test:e2e
 pnpm test:performance
+pnpm coverage:node
+pnpm coverage:playwright
 ```
 
 Model and artifact checks require no network. Browser tests abort unexpected
@@ -51,6 +55,11 @@ HTTP(S) traffic and mock exact RCSB coordinate, Search API, and Data API
 requests. Test output is isolated under Playwright's per-test output directory.
 CI retains failure traces, screenshots, video, and console diagnostics; local
 runs keep screenshots and an HTML report without the trace/video overhead.
+The two coverage commands enforce regression floors and write browsable reports
+to `coverage/node/` and `coverage/playwright/`. Playwright coverage uses
+Chromium's native JavaScript coverage API, so run `pnpm setup:e2e` first. The
+Node floor is 90% statements/lines, 85% functions, and 65% branches; the
+Playwright floor is 75% bytes, 60% functions, and 64% lines.
 
 ## Continuous integration
 
@@ -59,6 +68,11 @@ every commit to `main`. It uses read-only repository permission, immutable
 action SHAs, a frozen lockfile, and no release credentials. A weekly and manual
 job adds Firefox/WebKit smoke coverage, timing observations, and a masked
 Chromium UI snapshot.
+
+Separate Node and Playwright coverage workflows run for pull requests and every
+commit to `main`. They enforce the same local coverage floors and retain HTML,
+LCOV, and summary reports as workflow artifacts; the badges above show the
+status of those evaluations without requiring repository write credentials.
 
 After the `validate` job is stable on the repository, configure branch
 protection to require it and require the branch to be current before merge (or

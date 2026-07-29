@@ -1,5 +1,6 @@
 import { expect, test as base } from '@playwright/test';
-import { readFile, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { inflateSync } from 'node:zlib';
@@ -9,6 +10,8 @@ export const artifactPath = resolve(root, 'dist/example.mol.html');
 export const artifactUrl = pathToFileURL(artifactPath).href;
 export const miniPeptidePath = resolve(root, 'fixtures/mini-peptide.pdb');
 export const ligandPocketPath = resolve(root, 'fixtures/ligand-pocket.pdb');
+const collectCoverage = process.env.MOLHTML_COVERAGE === '1';
+const coverageRawDirectory = resolve(root, 'test-results/coverage-raw');
 
 export const test = base.extend({
   browser: [async ({ playwright, browserName, headless, channel, launchOptions }, use) => {
@@ -23,6 +26,51 @@ export const test = base.extend({
       await Promise.race([closing, new Promise(resolvePromise => setTimeout(resolvePromise, 2_000))]);
     } else await closing;
   }, { scope: 'worker' }],
+  page: async ({ page, browserName }, use, testInfo) => {
+    if (!collectCoverage) {
+      await use(page);
+      return;
+    }
+    if (browserName !== 'chromium') {
+      throw new Error('Playwright JavaScript coverage is supported only by the Chromium project.');
+    }
+    const session = await page.context().newCDPSession(page);
+    const scriptSources = new Map();
+    const sourceRequests = new Set();
+    const onScriptParsed = ({ scriptId }) => {
+      const request = session.send('Debugger.getScriptSource', { scriptId })
+        .then(result => scriptSources.set(scriptId, result.scriptSource || ''))
+        .catch(() => {})
+        .finally(() => sourceRequests.delete(request));
+      sourceRequests.add(request);
+    };
+    session.on('Debugger.scriptParsed', onScriptParsed);
+    await session.send('Debugger.enable');
+    await session.send('Profiler.enable');
+    await session.send('Profiler.startPreciseCoverage', { callCount: true, detailed: true });
+    await use(page);
+    if (page.isClosed()) {
+      await session.detach();
+      return;
+    }
+    const response = await session.send('Profiler.takePreciseCoverage');
+    await Promise.allSettled(sourceRequests);
+    await session.send('Profiler.stopPreciseCoverage');
+    await session.send('Profiler.disable');
+    session.off('Debugger.scriptParsed', onScriptParsed);
+    const entries = response.result.map(entry => ({
+      ...entry,
+      source: scriptSources.get(entry.scriptId) || ''
+    }));
+    await session.detach();
+    if (!entries.length) return;
+    await mkdir(coverageRawDirectory, { recursive: true });
+    const coverageId = createHash('sha256')
+      .update(`${testInfo.project.name}\0${testInfo.testId}\0${testInfo.retry}`)
+      .digest('hex')
+      .slice(0, 20);
+    await writeFile(resolve(coverageRawDirectory, `${coverageId}.json`), JSON.stringify(entries), 'utf8');
+  },
   renderProbe: [async ({ context }, use) => {
     await context.addInitScript(() => {
       const state = { contextLost: false, contextRestored: false };
@@ -34,7 +82,7 @@ export const test = base.extend({
   }, { auto: true }],
   rendererCleanup: [async ({ page }, use) => {
     await use();
-    if (!page.isClosed()) {
+    if (!collectCoverage && !page.isClosed()) {
       await page.goto('about:blank', { waitUntil: 'commit', timeout: 5_000 }).catch(() => {});
     }
   }, { auto: true }]
