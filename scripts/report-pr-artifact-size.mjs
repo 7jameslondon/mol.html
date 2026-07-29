@@ -8,7 +8,7 @@ export const REPORT_MARKER = '<!-- molhtml-build-size-report -->';
 const API_VERSION = '2022-11-28';
 const MEGABYTE = 1_000_000;
 
-const inlineCode = value => `\`${String(value).replaceAll('`', '\u02cb')}\``;
+const inlineCode = value => `\`${String(value).replaceAll('|', '\\|').replaceAll('`', '\u02cb')}\``;
 const shortSha = sha => String(sha).slice(0, 7);
 const bytesLabel = bytes => `${bytes.toLocaleString('en-US')} bytes`;
 const megabytesLabel = bytes => `${(bytes / MEGABYTE).toFixed(6)} MB`;
@@ -47,6 +47,28 @@ export function formatArtifactSizeReport({ pullRequest, baseBytes, headBytes }) 
 | Change vs merge branch | **${deltaMegabytes} (${deltaPercent})** |
 
 <sub>MB uses 1,000,000 bytes. This comment updates automatically when the PR head or its merge branch changes.</sub>`;
+}
+
+export function formatArtifactSizeUnavailableReport({ pullRequest, baseBytes = null, headBytes = null }) {
+  const cell = bytes => bytes === null
+    ? '**Unavailable**'
+    : `**${megabytesLabel(bytes)}** (${bytesLabel(bytes)})`;
+  const baseDescription = `Merge branch ${inlineCode(pullRequest.base.ref)} (${inlineCode(shortSha(pullRequest.base.sha))})`;
+  const headDescription = `PR head ${inlineCode(pullRequest.head.ref)} (${inlineCode(shortSha(pullRequest.head.sha))})`;
+
+  return `${REPORT_MARKER}
+## Build size
+
+> [!WARNING]
+> A current artifact could not be read, so the relative change is unavailable.
+
+| Revision | ${inlineCode(ARTIFACT_PATH)} |
+| --- | ---: |
+| ${baseDescription} | ${cell(baseBytes)} |
+| ${headDescription} | ${cell(headBytes)} |
+| Change vs merge branch | **Unavailable** |
+
+<sub>This report is tied to the revisions above and updates automatically when the PR head or its merge branch changes.</sub>`;
 }
 
 function createGitHubClient(token, apiUrl = 'https://api.github.com') {
@@ -140,14 +162,28 @@ function branchFromRef(ref) {
 }
 
 async function reportPullRequest(request, repository, pullRequest) {
-  if (!pullRequest.base?.repo?.full_name || !pullRequest.head?.repo?.full_name) {
-    throw new Error(`PR #${pullRequest.number} does not have readable base and head repositories.`);
+  const unavailableRepository = label => Promise.reject(
+    new Error(`PR #${pullRequest.number} does not have a readable ${label} repository.`)
+  );
+  const [baseResult, headResult] = await Promise.allSettled([
+    pullRequest.base?.repo?.full_name
+      ? getArtifactSize(request, pullRequest.base.repo.full_name, pullRequest.base.sha)
+      : unavailableRepository('merge-branch'),
+    pullRequest.head?.repo?.full_name
+      ? getArtifactSize(request, pullRequest.head.repo.full_name, pullRequest.head.sha)
+      : unavailableRepository('head')
+  ]);
+  const baseBytes = baseResult.status === 'fulfilled' ? baseResult.value : null;
+  const headBytes = headResult.status === 'fulfilled' ? headResult.value : null;
+  if (baseBytes === null || headBytes === null) {
+    const body = formatArtifactSizeUnavailableReport({ pullRequest, baseBytes, headBytes });
+    await upsertReportComment(request, repository, pullRequest.number, body);
+    const failures = [baseResult, headResult]
+      .filter(result => result.status === 'rejected')
+      .map(result => result.reason.message);
+    throw new Error(failures.join(' '));
   }
 
-  const [baseBytes, headBytes] = await Promise.all([
-    getArtifactSize(request, pullRequest.base.repo.full_name, pullRequest.base.sha),
-    getArtifactSize(request, pullRequest.head.repo.full_name, pullRequest.head.sha)
-  ]);
   const body = formatArtifactSizeReport({ pullRequest, baseBytes, headBytes });
   const result = await upsertReportComment(request, repository, pullRequest.number, body);
   const delta = calculateArtifactSizeDelta(baseBytes, headBytes);
