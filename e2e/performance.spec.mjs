@@ -5,6 +5,10 @@ const PERFORMANCE_BUDGETS = Object.freeze({
   navigatorMs: 5_000,
   representationMs: 8_000,
   serializationMs: 5_000,
+  interactionAnalysisAndRenderMs: 5_000,
+  interactionAnalysisOnlyMs: 5_000,
+  cachedInteractionToggleMs: 1_000,
+  interactionHeapDeltaBytes: 32 * 1024 * 1024,
   jsHeapDeltaBytes: 128 * 1024 * 1024,
   jsHeapUsedBytes: 256 * 1024 * 1024
 });
@@ -40,12 +44,40 @@ test('records deterministic large-document timing observations', async ({ contex
   const pdb = largePdb();
   const timings = await page.evaluate(async text => {
     const heapBefore = performance.memory?.usedJSHeapSize ?? null;
+    let analysisParsed = window.MolhtmlCore.parseStructure(text, 'pdb');
+    const heapBeforeInteractionAnalysis = performance.memory?.usedJSHeapSize ?? null;
+    const interactionAnalysisStarted = performance.now();
+    const directInteractionInventory = window.MolhtmlCore.analyzeInteractions(
+      analysisParsed, 'performance-analysis-only'
+    );
+    const interactionAnalysisFinished = performance.now();
+    const heapAfterInteractionAnalysis = performance.memory?.usedJSHeapSize ?? null;
+    const directInteractionCandidatePairs = directInteractionInventory.search.candidatePairs;
+    analysisParsed = null;
     const started = performance.now();
-    await window.molhtml.importPDB('large-deterministic.pdb', text);
-    const imported = performance.now();
     const next = window.molhtml.document;
-    next.scene.representation = 'sticks';
+    next.title = 'large-deterministic';
+    next.structure = {
+      id: 'large-deterministic-interactions', name: 'large-deterministic.pdb',
+      format: 'pdb', data: text
+    };
+    next.scene.interactions = {
+      enabled: true,
+      types: { hydrogenBonds: true, saltBridges: true },
+      includeWater: false
+    };
     window.molhtml.loadDocument(next, 'performance-test');
+    const imported = performance.now();
+    const interactionInventory = window.molhtml.getInteractions();
+    const heapAfterAnalysis = performance.memory?.usedJSHeapSize ?? null;
+    const interactionToggleStarted = performance.now();
+    window.molhtml.setInteractions({ enabled: false });
+    window.molhtml.setInteractions({ enabled: true });
+    const interactionToggleFinished = performance.now();
+    const heapAfterToggle = performance.memory?.usedJSHeapSize ?? null;
+    const representedDocument = window.molhtml.document;
+    representedDocument.scene.representation = 'sticks';
+    window.molhtml.loadDocument(representedDocument, 'performance-test');
     const represented = performance.now();
     const html = window.molhtml.serialize();
     const serialized = performance.now();
@@ -54,6 +86,18 @@ test('records deterministic large-document timing observations', async ({ contex
       atomCount: window.molhtml.getDataQuality().summary.atomCount,
       artifactBytes: new Blob([html]).size,
       parseToRenderMs: imported - started,
+      interactionAnalysisAndRenderMs: imported - started,
+      interactionAnalysisOnlyMs: interactionAnalysisFinished - interactionAnalysisStarted,
+      cachedInteractionToggleMs: interactionToggleFinished - interactionToggleStarted,
+      retainedInteractionRecords: interactionInventory.interactions.length,
+      renderedInteractionRecords: interactionInventory.summary.rendered,
+      interactionCandidatePairs: interactionInventory.search.candidatePairs,
+      interactionTruncated: interactionInventory.search.truncated,
+      interactionHeapDeltaBytes: heapBeforeInteractionAnalysis == null || heapAfterInteractionAnalysis == null
+        ? null : Math.max(0, heapAfterInteractionAnalysis - heapBeforeInteractionAnalysis),
+      directInteractionCandidatePairs,
+      cachedToggleHeapDeltaBytes: heapAfterAnalysis == null || heapAfterToggle == null
+        ? null : Math.max(0, heapAfterToggle - heapAfterAnalysis),
       representationMs: represented - imported,
       serializationMs: serialized - represented,
       jsHeapDeltaBytes: heapBefore == null || heapAfter == null ? null : Math.max(0, heapAfter - heapBefore),
@@ -67,13 +111,23 @@ test('records deterministic large-document timing observations', async ({ contex
   timings.navigatorMs = navigatorFinished - navigatorStarted;
   expect(timings.atomCount).toBe(5_000);
   expect(timings.artifactBytes).toBeGreaterThan(900_000);
-  for (const key of ['parseToRenderMs', 'navigatorMs', 'representationMs', 'serializationMs']) {
+  for (const key of [
+    'parseToRenderMs', 'navigatorMs', 'representationMs', 'serializationMs',
+    'interactionAnalysisAndRenderMs', 'interactionAnalysisOnlyMs', 'cachedInteractionToggleMs'
+  ]) {
     expect(Number.isFinite(timings[key])).toBe(true);
     expect(timings[key], `${key} stays within its scheduled performance budget`).toBeLessThan(PERFORMANCE_BUDGETS[key]);
   }
   expect(timings.jsHeapDeltaBytes, 'Chromium exposes precise heap observations for the scheduled gate').not.toBeNull();
   expect(timings.jsHeapDeltaBytes).toBeLessThan(PERFORMANCE_BUDGETS.jsHeapDeltaBytes);
   expect(timings.jsHeapUsedBytes).toBeLessThan(PERFORMANCE_BUDGETS.jsHeapUsedBytes);
+  expect(timings.retainedInteractionRecords).toBeLessThanOrEqual(2_000);
+  expect(timings.renderedInteractionRecords).toBeLessThanOrEqual(500);
+  expect(Number.isFinite(timings.interactionCandidatePairs)).toBe(true);
+  expect(timings.directInteractionCandidatePairs).toBe(timings.interactionCandidatePairs);
+  expect(typeof timings.interactionTruncated).toBe('boolean');
+  expect(timings.interactionHeapDeltaBytes).not.toBeNull();
+  expect(timings.interactionHeapDeltaBytes).toBeLessThan(PERFORMANCE_BUDGETS.interactionHeapDeltaBytes);
   await testInfo.attach('performance-observations.json', {
     body: Buffer.from(`${JSON.stringify({ budgets: PERFORMANCE_BUDGETS, observations: timings }, null, 2)}\n`),
     contentType: 'application/json'

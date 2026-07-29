@@ -36,6 +36,22 @@
         "background": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
         "showHydrogens": { "type": "boolean" },
         "showWater": { "type": "boolean" },
+        "interactions": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "types": {
+              "type": "object",
+              "properties": {
+                "hydrogenBonds": { "type": "boolean" },
+                "saltBridges": { "type": "boolean" }
+              },
+              "additionalProperties": true
+            },
+            "includeWater": { "type": "boolean" }
+          },
+          "additionalProperties": true
+        },
         "selection": { "type": ["object", "null"] },
         "customColors": { "type": "array" },
         "measurements": { "type": "array" },

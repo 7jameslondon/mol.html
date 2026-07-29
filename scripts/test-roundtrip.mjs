@@ -42,6 +42,12 @@ doc.scene.ligandAnalysis = {
   showPocket: false, showContacts: true, polarOnly: true,
   futureAnalysisField: 'agent-preserved'
 };
+doc.scene.interactions = {
+  enabled: true,
+  types: { hydrogenBonds: true, saltBridges: false, futureType: 'agent-preserved' },
+  includeWater: true,
+  futureInteractionField: 'agent-preserved'
+};
 
 doc.scene.savedSelections.push({
   id: 'agent-selection-test', name: 'Backbone neighborhood', futureSelectionField: 'preserved',
@@ -62,6 +68,7 @@ doc.scene.savedViews.push({
   snapshot: {
     representation: 'cartoon', colorMode: 'chain', background: '#102030',
     showHydrogens: false, showWater: false,
+    interactions: doc.scene.interactions,
     selection: doc.scene.selection, customColors: doc.scene.customColors,
     camera: { view: [0, 0, 0, 25, 0, 0, 0, 1] }
   }
@@ -85,6 +92,11 @@ if (roundtrip.scene.customColors.at(-1)?.color !== '#ff0000') throw new Error('A
 if (roundtrip.scene.measurements.at(-1)?.note !== 'Agent-authored annotation') throw new Error('Agent measurement did not round-trip.');
 if (roundtrip.scene.savedSelections.at(-1)?.futureSelectionField !== 'preserved') throw new Error('Agent named selection did not round-trip.');
 if (roundtrip.scene.ligandAnalysis?.cutoff !== 5.2 || roundtrip.scene.ligandAnalysis?.futureAnalysisField !== 'agent-preserved') throw new Error('Agent ligand analysis state did not round-trip.');
+if (!roundtrip.scene.interactions?.enabled
+  || roundtrip.scene.interactions?.futureInteractionField !== 'agent-preserved'
+  || roundtrip.scene.interactions?.types?.futureType !== 'agent-preserved') {
+  throw new Error('Agent interaction presentation state did not round-trip.');
+}
 if (roundtrip.structure.metadata.agentReview?.note !== 'Unknown metadata fields must round-trip unchanged.') throw new Error('Agent metadata did not round-trip.');
 if (roundtrip.scene.savedViews.at(-1)?.snapshot?.representation !== 'cartoon') throw new Error('Agent saved view did not round-trip.');
 if (roundtrip.futureHostileText !== doc.futureHostileText) throw new Error('Hostile replacement tokens and Unicode did not round-trip.');

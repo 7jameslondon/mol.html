@@ -43,6 +43,10 @@
     'ligand-select', 'ligand-cutoff', 'ligand-cutoff-value', 'ligand-show-ligand',
     'ligand-show-pocket', 'ligand-show-contacts', 'ligand-polar-only', 'ligand-focus',
     'ligand-analysis-note', 'ligand-analysis-summary', 'empty-pocket', 'ligand-residue-list',
+    'interactions-button', 'interactions-ribbon-value', 'interactions-enabled',
+    'interaction-hydrogen-bonds', 'interaction-salt-bridges', 'interaction-include-water',
+    'interaction-summary', 'interaction-provenance', 'interaction-truncation',
+    'interaction-legend', 'interaction-legend-hydrogen', 'interaction-legend-salt',
     'metadata-button', 'metadata-ribbon-value', 'metadata-source', 'metadata-details',
     'metadata-entities-section', 'metadata-entities', 'metadata-citation-section', 'metadata-citation',
     'quality-stats', 'quality-observations',
@@ -83,6 +87,7 @@
     show: 'Show and hide', inspect: 'Selection inspector', measurements: 'Measurements',
     navigator: 'Structure navigator', 'saved-selections': 'Named selections',
     ligands: 'Ligands and pocket', metadata: 'Metadata and quality',
+    interactions: 'Interactions',
     'saved-views': 'Saved views and story', export: 'Export image'
   };
 
@@ -134,7 +139,7 @@
     doc.title = state.title; doc.structure = state.structure; doc.scene = state.scene;
   }
 
-  function commit(change, { history = true, fit = false, source = 'browser' } = {}) {
+  function commit(change, { history = true, fit = false, source = 'browser', interactionOnly = false } = {}) {
     if (history) {
       undoStack.push(snapshot());
       if (undoStack.length > 60) undoStack.shift();
@@ -142,7 +147,11 @@
     }
     change();
     touchDocument(source, true);
-    refresh({ fit });
+    if (interactionOnly) {
+      renderer.updateInteractions();
+      syncControls();
+      syncInteractions();
+    } else refresh({ fit });
   }
 
   function dispatch(command, options = {}) {
@@ -204,6 +213,7 @@
     syncSavedSelections();
     syncNavigator();
     syncLigandAnalysis();
+    syncInteractions();
     syncMetadata();
     syncSavedViews();
     syncStory();
@@ -819,6 +829,60 @@
       type: 'set-ligand-analysis', ligandAnalysis: normalized
     }), { source });
     return structuredClone(doc.scene.ligandAnalysis);
+  }
+
+  function setInteractions(changes = {}, source = 'browser') {
+    const next = {
+      ...doc.scene.interactions,
+      ...changes,
+      types: {
+        ...doc.scene.interactions.types,
+        ...(changes.types && typeof changes.types === 'object' ? changes.types : {})
+      }
+    };
+    const normalized = Core.normalizeInteractions(next);
+    commit(() => Core.applyDocumentCommand(doc, {
+      type: 'set-interactions', interactions: normalized
+    }), { source, interactionOnly: true });
+    return structuredClone(doc.scene.interactions);
+  }
+
+  function interactionResult() {
+    const analysis = parsed
+      ? Core.analyzeInteractions(parsed, doc.structure.id)
+      : Core.analyzeInteractions(null, doc.structure.id);
+    return { analysis, display: Core.selectInteractions(analysis, doc.scene.interactions) };
+  }
+
+  function syncInteractions() {
+    const state = doc.scene.interactions;
+    elements['interactions-enabled'].checked = state.enabled;
+    elements['interaction-hydrogen-bonds'].checked = state.types.hydrogenBonds;
+    elements['interaction-salt-bridges'].checked = state.types.saltBridges;
+    elements['interaction-include-water'].checked = state.includeWater;
+    elements['interaction-hydrogen-bonds'].disabled = !state.enabled;
+    elements['interaction-salt-bridges'].disabled = !state.enabled;
+    elements['interaction-include-water'].disabled = !state.enabled;
+    const { analysis, display } = interactionResult();
+    elements['interactions-ribbon-value'].textContent = state.enabled
+      ? `${display.total.toLocaleString()} visible` : 'Off';
+    elements['interaction-summary'].textContent = state.enabled
+      ? `${display.total.toLocaleString()} qualifying interaction${display.total === 1 ? '' : 's'} · ${display.rendered.toLocaleString()} drawn`
+      : `${analysis.counts.total.toLocaleString()} available · overlay hidden`;
+    elements['interaction-provenance'].textContent = [
+      `${analysis.counts.hydrogenBonds.toLocaleString()} hydrogen bond${analysis.counts.hydrogenBonds === 1 ? '' : 's'}`,
+      `${analysis.counts.saltBridges.toLocaleString()} salt bridge${analysis.counts.saltBridges === 1 ? '' : 's'}`,
+      `${analysis.counts.explicit.toLocaleString()} explicit`,
+      `${analysis.counts.inferred.toLocaleString()} inferred`
+    ].join(' · ');
+    const notices = [];
+    if (analysis.search.truncated) notices.push('Candidate safety limit reached; counts and displayed results are partial.');
+    if (display.omitted) notices.push(`${display.omitted.toLocaleString()} qualifying interactions are omitted by the 500-line display cap.`);
+    elements['interaction-truncation'].hidden = !notices.length;
+    elements['interaction-truncation'].textContent = notices.join(' ');
+    elements['interaction-legend'].hidden = !state.enabled || !display.rendered;
+    elements['interaction-legend-hydrogen'].hidden = !state.types.hydrogenBonds;
+    elements['interaction-legend-salt'].hidden = !state.types.saltBridges;
   }
 
   function focusLigandAnalysis() {
@@ -2195,6 +2259,10 @@
     try { focusLigandAnalysis(); }
     catch (error) { toast(error.message, 'error'); }
   });
+  elements['interactions-enabled'].addEventListener('change', event => setInteractions({ enabled: event.target.checked }));
+  elements['interaction-hydrogen-bonds'].addEventListener('change', event => setInteractions({ types: { hydrogenBonds: event.target.checked } }));
+  elements['interaction-salt-bridges'].addEventListener('change', event => setInteractions({ types: { saltBridges: event.target.checked } }));
+  elements['interaction-include-water'].addEventListener('change', event => setInteractions({ includeWater: event.target.checked }));
   elements['create-saved-view'].addEventListener('click', () => {
     const view = createSavedView();
     toast(`Captured “${view.title}”`, 'success');
@@ -2327,6 +2395,24 @@
       const result = ligandAnalysisResult();
       return structuredClone({ state: doc.scene.ligandAnalysis, ...serializeLigandAnalysisResult(result) });
     },
+    getInteractions() {
+      const { analysis, display } = interactionResult();
+      return structuredClone({
+        state: doc.scene.interactions,
+        counts: analysis.counts,
+        partitionCounts: analysis.partitionCounts,
+        summary: {
+          total: display.total,
+          rendered: display.rendered,
+          omitted: display.omitted,
+          partial: display.partial
+        },
+        interactions: analysis.interactions,
+        visibleInteractions: display.interactions,
+        search: analysis.search,
+        classifierVersion: analysis.classifierVersion
+      });
+    },
     getMetadata() { return structuredClone(doc.structure.metadata); },
     getDataQuality() { return structuredClone(currentQuality); },
     getStructureSummary() {
@@ -2403,6 +2489,7 @@
       );
       return structuredClone(serializeLigandAnalysisResult(result));
     },
+    setInteractions(changes) { return setInteractions(changes || {}, 'agent'); },
     createSavedView(options) { return createSavedView(options || {}, 'agent'); },
     updateSavedView(id, changes) { return updateSavedView(id, changes || {}, 'agent'); },
     recaptureSavedView(id) { return updateSavedView(id, { recapture: true }, 'agent'); },

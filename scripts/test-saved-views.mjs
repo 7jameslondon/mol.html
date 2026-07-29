@@ -38,6 +38,7 @@ assert.equal(normalizedDocument.scene.camera.futureCameraField, 'kept');
 const scene = {
   representation: 'sticks', colorMode: 'element', background: '#07111f',
   showHydrogens: false, showWater: true,
+  interactions: { enabled: true, types: { hydrogenBonds: true, saltBridges: false }, includeWater: true },
   selection: { kind: 'atom', selector: { structureId: 'structure-test', serial: 1 } },
   customColors: [{ id: 'color-test', color: '#ff0000' }],
   measurements: [{ id: 'measurement-kept' }],
@@ -55,6 +56,7 @@ assert.equal(snapshot.savedViews, undefined);
 assert.equal(snapshot.ligandState, undefined);
 assert.equal(snapshot.camera.view[3], 25);
 assert.equal(snapshot.activeAnalysis.id, 'measurement-kept');
+assert.equal(snapshot.interactions.enabled, true);
 
 const applied = Core.applySavedViewSnapshot(scene, {
   ...snapshot, representation: 'surface', background: '#102030'
@@ -67,6 +69,7 @@ assert.equal(JSON.stringify(applied.ligandState), JSON.stringify(scene.ligandSta
 assert.equal(JSON.stringify(applied.metadata), JSON.stringify(scene.metadata));
 assert.equal(JSON.stringify(applied.futureSceneField), JSON.stringify(scene.futureSceneField));
 assert.equal(JSON.stringify(applied.savedViews), JSON.stringify(scene.savedViews));
+assert.equal(applied.interactions.types.saltBridges, false);
 assert.notStrictEqual(applied.measurements, scene.measurements);
 
 const moved = Core.reorderSavedViews(views, 'view-later', -1);

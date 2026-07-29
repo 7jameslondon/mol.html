@@ -157,6 +157,10 @@ Native file permissions and real-GPU behavior remain release checks; see
   entity, or functional role.
 - Switch between cartoon, ball-and-stick, sticks, spacefill, lines, and a
   molecular surface.
+- Open **Interactions** to show hydrogen bonds and salt bridges independently,
+  optionally include water endpoints, and inspect explicit-versus-inferred
+  counts. Cyan and amber dashed overlays never alter the molecule's covalent
+  topology and their visibility is saved with the document and saved views.
 - Open a PDB or text PDBx/mmCIF file; its original coordinates become embedded
   in the next saved HTML.
 - Fetch a classic four-character PDB ID directly from RCSB, or use the Fetch
@@ -202,6 +206,14 @@ identity concepts separate. The original coordinate text remains canonical and
 the derived model is not serialized. Biological assembly records reference base
 instances and composed operator transforms without copying atom topology. See
 [`docs/adr/0001-normalized-molecular-model.md`](docs/adr/0001-normalized-molecular-model.md).
+
+Non-covalent interactions are derived locally from the embedded coordinates.
+Supported mmCIF `_struct_conn` hydrogen-bond (`hydrog`, `hydbnd`) and salt-bridge
+(`saltbr`, `sltbrg`) annotations retain their provenance; otherwise the viewer
+uses conservative standard-residue, explicit-hydrogen, and formal-charge rules.
+These geometric and atom-typing heuristics are not energy calculations. The MVP
+does not parse legacy PDB `HYDBND`/`SLTBRG` records, expand crystallographic
+symmetry mates, predict protonation, or model solvent energetics.
 
 ## Agent editing
 

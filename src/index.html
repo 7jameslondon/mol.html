@@ -98,6 +98,10 @@ __DOCUMENT__
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5.5 12 3l5 2.5v5L12 13l-5-2.5zM12 13v5.5m-5-8L4 15m13-4.5 3 4.5"/><circle cx="4" cy="17" r="2"/><circle cx="12" cy="20" r="2"/><circle cx="20" cy="17" r="2"/></svg>
             <span>Ligands</span><small id="ligands-ribbon-value">Scanning</small>
           </button>
+          <button id="interactions-button" class="ribbon-button" type="button" data-inspector-target="interactions" aria-controls="inspector" aria-pressed="false">
+            <b class="interaction-glyph" aria-hidden="true"><i></i><i></i><i></i></b>
+            <span>Interactions</span><small id="interactions-ribbon-value">Off</small>
+          </button>
         </div>
         <div class="ribbon-group-label">Analyze</div>
       </div>
@@ -388,6 +392,22 @@ __DOCUMENT__
             </div>
           </section>
 
+          <section id="panel-interactions" class="inspector-panel" data-inspector-panel="interactions" hidden>
+            <p class="panel-intro">Show explicit and conservatively inferred non-covalent interactions without changing molecular topology.</p>
+            <div class="visibility-list interaction-visibility-list">
+              <label class="visibility-option"><span><strong>Show interactions</strong><small>Master overlay visibility</small></span><span class="toggle"><input id="interactions-enabled" type="checkbox"><i></i></span></label>
+              <label class="visibility-option"><span><strong>Hydrogen bonds</strong><small>Cyan dashed lines, 2.5–3.5 Å</small></span><span class="toggle"><input id="interaction-hydrogen-bonds" type="checkbox"><i></i></span></label>
+              <label class="visibility-option"><span><strong>Salt bridges</strong><small>Amber dashed lines, at most 4.0 Å</small></span><span class="toggle"><input id="interaction-salt-bridges" type="checkbox"><i></i></span></label>
+              <label class="visibility-option"><span><strong>Include water</strong><small>Include interactions with a water endpoint</small></span><span class="toggle"><input id="interaction-include-water" type="checkbox"><i></i></span></label>
+            </div>
+            <div class="interaction-results" aria-live="polite">
+              <strong id="interaction-summary">Scanning interactions…</strong>
+              <span id="interaction-provenance"></span>
+            </div>
+            <p id="interaction-truncation" class="interaction-warning" role="status" hidden></p>
+            <p class="panel-note">Explicit mmCIF annotations are identified as source records. Inferred interactions use local geometry and conservative atom-name or formal-charge typing; they are not energy calculations. Legacy PDB HYDBND/SLTBRG records, symmetry mates, protonation prediction, and solvent energetics are not included.</p>
+          </section>
+
           <section id="panel-export" class="inspector-panel" data-inspector-panel="export" hidden>
             <p class="panel-intro">Render the current molecular composition without including editor controls or changing the document.</p>
             <div id="export-controls" aria-busy="false">
@@ -453,6 +473,10 @@ __DOCUMENT__
           <div class="viewer-badges">
             <div id="structure-chip" class="structure-chip">STARTER · PDB</div>
           </div>
+        </div>
+        <div id="interaction-legend" class="interaction-legend" role="group" aria-label="Interaction line legend" hidden>
+          <span id="interaction-legend-hydrogen"><i class="hydrogen-bond"></i>Hydrogen bond</span>
+          <span id="interaction-legend-salt"><i class="salt-bridge"></i>Salt bridge</span>
         </div>
         <div id="external-banner" class="external-banner" hidden>
           <span><strong>File changed on disk.</strong> Reload to use the agent's changes.</span>
