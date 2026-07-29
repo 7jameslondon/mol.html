@@ -35,6 +35,10 @@
     return { atomIndices: [left, right], order, provenance, connectionType };
   }
 
+  function alternateLocationsCompatible(left, right) {
+    return !left?.altLoc || !right?.altLoc || left.altLoc === right.altLoc;
+  }
+
   function normalizeStructureFormat(value) {
     const format = String(value || '').trim().toLowerCase().replace(/^\./, '');
     if (['pdb', 'ent'].includes(format)) return 'pdb';
@@ -105,13 +109,14 @@
         const resn = line.slice(17, 20).trim() || 'UNK';
         const resi = Number.parseInt(line.slice(22, 26), 10) || 0;
         const icode = line.slice(26, 27).trim();
+        const alternateLocation = line.slice(16, 17).trim();
         const modification = modifiedResidues.get(pdbModifiedResidueKey(chain, resi, icode, resn));
         const fallbackParent = MODIFIED_RESIDUE_PARENTS.get(resn);
         const atom = {
           index: atoms.length,
           serial,
           name: rawName.trim() || 'X',
-          altLoc: line.slice(16, 17).trim(),
+          altLoc: alternateLocation,
           resn,
           chain,
           resi,
@@ -131,11 +136,12 @@
           labelSeqId: null,
           labelCompId: resn,
           labelAtomId: rawName.trim() || 'X',
-          labelAltId: line.slice(16, 17).trim(),
+          labelAltId: alternateLocation,
           authAsymId: chain,
           authSeqId: resi,
           authCompId: resn,
           authAtomId: rawName.trim() || 'X',
+          authAltId: alternateLocation,
           parentCompId: modification?.parentCompId || fallbackParent || null,
           modificationProvenance: modification ? 'pdb-modres' : (fallbackParent ? 'modified-residue-map' : null),
           identityProvenance: 'pdb-source'
@@ -173,7 +179,14 @@
       for (const modelNumber of modelNumbers) {
         const a = serialMap.get(`${modelNumber}|${left}`);
         const b = serialMap.get(`${modelNumber}|${right}`);
-        if (a != null && b != null) bonds.push(bondRecord(a, b, order, 'pdb-conect', 'covalent'));
+        if (a == null || b == null) continue;
+        if (!alternateLocationsCompatible(atoms[a], atoms[b])) {
+          if (diagnostics.parserWarnings.length < 50) {
+            diagnostics.parserWarnings.push(`CONECT ${left}:${right} connects incompatible alternate locations in model ${modelNumber}.`);
+          }
+          continue;
+        }
+        bonds.push(bondRecord(a, b, order, 'pdb-conect', 'covalent'));
       }
     }
     inferBonds(atoms, bonds);
@@ -492,7 +505,9 @@
       const serialValue = cifValue(row.id);
       const numericSerial = Number(serialValue);
       const legacyResidueNumber = cifNumber(authSeqId, cifNumber(labelSeqId, 0)) || 0;
-      const alternateLocation = cifValue(row.label_alt_id) || cifValue(row.auth_alt_id) || '';
+      const labelAltId = cifValue(row.label_alt_id);
+      const authAltId = cifValue(row.pdbx_auth_alt_id) || cifValue(row.auth_alt_id);
+      const alternateLocation = labelAltId || authAltId || '';
       const atom = {
         index: atoms.length,
         serial: Number.isFinite(numericSerial) ? numericSerial : atoms.length + 1,
@@ -515,11 +530,12 @@
         labelSeqId,
         labelCompId,
         labelAtomId,
-        labelAltId: alternateLocation,
+        labelAltId,
         authAsymId,
         authSeqId,
         authCompId: cifValue(row.auth_comp_id),
         authAtomId: cifValue(row.auth_atom_id),
+        authAltId,
         parentCompId: modifiedParent || null,
         modificationProvenance: modifiedResidueParents.has(normalizedCompId)
           ? 'mmcif-chem-comp' : (modifiedParent ? 'modified-residue-map' : null),
@@ -843,7 +859,7 @@
   }
 
   function authorIdentityKey(atom) {
-    return [atom.model, atom.authAsymId, atom.authSeqId, atom.icode || '', atom.authCompId, atom.authAtomId, atom.altLoc || ''].join('|');
+    return [atom.model, atom.authAsymId, atom.authSeqId, atom.icode || '', atom.authCompId, atom.authAtomId, atom.authAltId || ''].join('|');
   }
 
   function connectedComponents(atoms, bonds) {
@@ -881,6 +897,12 @@
     const modelNumbers = [...new Set(atoms.map(atom => atom.model))];
     for (const row of categories.struct_conn || []) {
       if (!isTopologyConnectionType(row.conn_type_id)) continue;
+      if (!isBaseStructConnSymmetry(row.ptnr1_symmetry) || !isBaseStructConnSymmetry(row.ptnr2_symmetry)) {
+        if (diagnostics?.parserWarnings?.length < 50) {
+          diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} references a crystallographic symmetry mate and was excluded from base topology.`);
+        }
+        continue;
+      }
       const leftAtoms = findStructConnAtoms(atoms, row, 'ptnr1');
       const rightAtoms = findStructConnAtoms(atoms, row, 'ptnr2');
       for (const modelNumber of modelNumbers) {
@@ -895,6 +917,12 @@
         const left = leftMatches[0];
         const right = rightMatches[0];
         if (left.index === right.index) continue;
+        if (!alternateLocationsCompatible(left, right)) {
+          if (diagnostics?.parserWarnings?.length < 50) {
+            diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} connects incompatible alternate locations in model ${modelNumber}.`);
+          }
+          continue;
+        }
         const key = left.index < right.index ? `${left.index}:${right.index}` : `${right.index}:${left.index}`;
         if (!existing.has(key)) {
           existing.add(key);
@@ -913,6 +941,11 @@
     return type.startsWith('covale') || ['disulf', 'modres', 'metalc'].includes(type);
   }
 
+  function isBaseStructConnSymmetry(value) {
+    const symmetry = String(cifValue(value) || '').trim().toLowerCase();
+    return !symmetry || symmetry === '1' || symmetry === '1_555';
+  }
+
   function mmcifBondOrder(value) {
     return { sing: 1, doub: 2, trip: 3, quad: 4, arom: 1.5, delo: 1.5 }[
       String(cifValue(value) || '').trim().toLowerCase()
@@ -928,7 +961,8 @@
     const authSeqId = cifValue(row[`${prefix}_auth_seq_id`]);
     const authCompId = cifValue(row[`${prefix}_auth_comp_id`]);
     const authAtomId = cifValue(row[`${prefix}_auth_atom_id`]);
-    const labelAltId = cifValue(row[`pdbx_${prefix}_label_alt_id`] ?? row[`${prefix}_label_alt_id`]);
+    const labelAltId = cifValue(row[`pdbx_${prefix}_label_alt_id`]) || cifValue(row[`${prefix}_label_alt_id`]);
+    const authAltId = cifValue(row[`pdbx_${prefix}_auth_alt_id`]);
     const insertionCode = cifValue(row[`pdbx_${prefix}_pdb_ins_code`]);
     return atoms.filter(atom =>
       (labelAsymId == null || atom.labelAsymId === labelAsymId)
@@ -940,6 +974,7 @@
       && (authCompId == null || atom.authCompId === authCompId)
       && (authAtomId == null || atom.authAtomId === authAtomId)
       && (labelAltId == null || atom.labelAltId === labelAltId)
+      && (authAltId == null || atom.authAltId === authAltId)
       && (insertionCode == null || atom.icode === insertionCode)
     );
   }
@@ -1105,6 +1140,7 @@
           if (otherIndex <= atom.index) continue;
           const other = atoms[otherIndex];
           if (atom.model !== other.model) continue;
+          if (!alternateLocationsCompatible(atom, other)) continue;
           if (atom.labelAsymId && other.labelAsymId && atom.labelAsymId !== other.labelAsymId) continue;
           if (atom.sourceFormat === 'pdb' && other.sourceFormat === 'pdb'
             && atom.authAsymId && other.authAsymId && atom.authAsymId !== other.authAsymId) continue;

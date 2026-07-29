@@ -6,6 +6,7 @@ import {
 
 const mmcif = await readFile(resolve('fixtures/7ril-identity.cif'), 'utf8');
 const multiModelMmcif = await readFile(resolve('fixtures/multi-model.cif'), 'utf8');
+const authorStructConnMmcif = await readFile(resolve('fixtures/author-struct-conn.cif'), 'utf8');
 
 test('imports, renders, selects, colors, and serializes an identity-aware mmCIF document', async ({ context, page }) => {
   await guardUnexpectedNetwork(context);
@@ -75,6 +76,39 @@ test('renders and addresses multiple mmCIF coordinate models independently', asy
   const match = await page.evaluate(id => window.molhtml.getSavedSelectionMatch(id), saved.id);
   expect(match).toMatchObject({ valid: true, atomCount: 1 });
   expect(match.atoms[0]).toMatchObject({ model: 2, serial: 3 });
+  await expectHealthyRender(page);
+  assertNoRuntimeErrors();
+});
+
+test('does not act on an ambiguous current atom selector loaded from a document', async ({ context, page }) => {
+  await guardUnexpectedNetwork(context);
+  const assertNoRuntimeErrors = observeRuntime(page);
+  await openArtifact(page);
+  await page.evaluate(text => window.molhtml.importStructure('author-struct-conn.cif', text), authorStructConnMmcif);
+
+  const result = await page.evaluate(() => {
+    const next = window.molhtml.document;
+    next.scene.selection = {
+      kind: 'atom',
+      selector: {
+        structureId: next.structure.id,
+        sourceIdentity: { modelNumber: 1, authAsymId: 'A' }
+      }
+    };
+    window.molhtml.loadDocument(next, 'browser-test');
+    let saveError = '';
+    try { window.molhtml.saveCurrentSelection('Must not bind arbitrarily'); }
+    catch (error) { saveError = error.message; }
+    return { selection: window.molhtml.getSelection(), saveError };
+  });
+
+  expect(result.selection.selector.sourceIdentity).toEqual({ modelNumber: 1, authAsymId: 'A' });
+  expect(result.saveError).toMatch(/select an atom first/i);
+  await expect(page.locator('#selection-details')).toBeHidden();
+  await expect(page.locator('#empty-selection')).toContainText('Selection unavailable');
+  await expect(page.locator('#empty-selection')).toContainText(/ambiguous/i);
+  await expect(page.locator('#create-current-selection')).toBeDisabled();
+  await expect(page.locator('#clear-selection-panel')).toBeEnabled();
   await expectHealthyRender(page);
   assertNoRuntimeErrors();
 });

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
-const [structureSource, modelSource, mmcif, pdb, sharedChainPdb, multiModelPdb, multiModelCif, authorStructConnCif, modifiedResiduePdb, conformanceCif, equivalentCif, malformedCif, pdbAssemblyText] = await Promise.all([
+const [structureSource, modelSource, mmcif, pdb, sharedChainPdb, multiModelPdb, multiModelCif, authorStructConnCif, modifiedResiduePdb, alternateConformerPdb, alternateConformerCif, conformanceCif, equivalentCif, malformedCif, pdbAssemblyText] = await Promise.all([
   readFile(new URL('../src/structure.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/model.js', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/7ril-identity.cif', import.meta.url), 'utf8'),
@@ -12,6 +12,8 @@ const [structureSource, modelSource, mmcif, pdb, sharedChainPdb, multiModelPdb, 
   readFile(new URL('../fixtures/multi-model.cif', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/author-struct-conn.cif', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/modified-residue.pdb', import.meta.url), 'utf8'),
+  readFile(new URL('../fixtures/alternate-conformers.pdb', import.meta.url), 'utf8'),
+  readFile(new URL('../fixtures/alternate-conformers.cif', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/identity-conformance.cif', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/mini-peptide.cif', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/malformed.cif', import.meta.url), 'utf8'),
@@ -241,14 +243,48 @@ for (const connectionType of ['hydrog', 'saltbr', 'mismat']) {
 
 const authorStructConn = Core.parseStructure(authorStructConnCif, 'mmcif');
 assertNormalizedInvariants(authorStructConn);
+assert.deepEqual(Array.from(authorStructConn.atoms, atom => atom.authAltId), ['A', 'B', 'A', 'B'],
+  'author alternate-location identity is preserved separately');
+assert.ok(authorStructConn.atoms.every(atom => atom.labelAltId == null),
+  'missing label alternate-location identity remains missing');
 assert.deepEqual(JSON.parse(JSON.stringify(authorStructConn.bonds)), [{
   atomIndices: [0, 2], order: 2, provenance: 'mmcif-struct-conn', connectionType: 'covale'
-}], 'author-only struct_conn identity resolves exactly the named atom pair and preserves order');
+}], 'author-only struct_conn identity resolves exactly the named conformer pair and preserves order');
+const authorAltSelector = Core.selectorForAtom(authorStructConn.atoms[0], 'atom', 'author-alt');
+delete authorAltSelector.sourceIdentity.atomSiteId;
+const authorAltResolution = Core.resolveUniqueAtomSelector(authorAltSelector, authorStructConn.atoms, 'author-alt');
+assert.equal(authorAltResolution.valid, true, 'author alternate identity disambiguates label-identical conformers');
+assert.equal(authorAltResolution.atom.index, 0);
 const ambiguousStructConn = Core.parseStructure(authorStructConnCif
   .replaceAll('_struct_conn.ptnr1_auth_atom_id', '_struct_conn.ptnr1_ignored_atom_id')
-  .replaceAll('_struct_conn.ptnr2_auth_atom_id', '_struct_conn.ptnr2_ignored_atom_id'), 'mmcif');
+  .replaceAll('_struct_conn.ptnr2_auth_atom_id', '_struct_conn.ptnr2_ignored_atom_id')
+  .replaceAll('_struct_conn.pdbx_ptnr1_auth_alt_id', '_struct_conn.pdbx_ptnr1_ignored_alt_id')
+  .replaceAll('_struct_conn.pdbx_ptnr2_auth_alt_id', '_struct_conn.pdbx_ptnr2_ignored_alt_id'), 'mmcif');
 assert.equal(ambiguousStructConn.bonds.length, 0, 'ambiguous struct_conn identities never create Cartesian-product bonds');
 assert.ok(ambiguousStructConn.diagnostics.parserWarnings.some(warning => /ambiguous or unresolved/i.test(warning)));
+const symmetryStructConn = Core.parseStructure(
+  authorStructConnCif.replace('1_555 1_555 doub', '1_555 2_555 doub'), 'mmcif'
+);
+assert.equal(symmetryStructConn.bonds.length, 0, 'symmetry-mate connections are excluded from base topology');
+assert.equal(symmetryStructConn.topology.connectedComponents.length, 4,
+  'symmetry-mate connections do not merge asymmetric-unit connected components');
+assert.ok(symmetryStructConn.diagnostics.parserWarnings.some(warning => /symmetry mate/i.test(warning)),
+  'unsupported symmetry-mate connections produce a parser diagnostic');
+
+for (const [format, source] of [['pdb', alternateConformerPdb], ['mmcif', alternateConformerCif]]) {
+  const alternateConformers = Core.parseStructure(source, format);
+  assertNormalizedInvariants(alternateConformers);
+  assert.deepEqual(JSON.parse(JSON.stringify(alternateConformers.bonds.map(bond => bond.atomIndices))), [[0, 1], [2, 3]],
+    `${format} distance inference bonds within, but never across, alternate conformers`);
+  assert.equal(alternateConformers.topology.connectedComponents.length, 2,
+    `${format} alternate conformers remain separate connected components`);
+}
+const crossConformerConect = Core.parseStructure(
+  alternateConformerPdb.replace('END', 'CONECT    1    4\nEND'), 'pdb'
+);
+assert.deepEqual(JSON.parse(JSON.stringify(crossConformerConect.bonds.map(bond => bond.atomIndices))), [[0, 1], [2, 3]],
+  'PDB CONECT cannot override alternate-conformer compatibility');
+assert.ok(crossConformerConect.diagnostics.parserWarnings.some(warning => /incompatible alternate locations/i.test(warning)));
 
 const modifiedResidue = Core.parseStructure(modifiedResiduePdb, 'pdb');
 assertNormalizedInvariants(modifiedResidue);

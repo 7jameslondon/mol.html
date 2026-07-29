@@ -145,10 +145,11 @@
     applySelectionHighlight() {
       const selector = this.doc.scene.selection?.selector;
       if (!selector) return;
-      const atom = this.parsed.atoms.find(candidate => Core.atomMatchesSelector(candidate, selector, this.doc.structure.id));
-      if (!atom) return;
+      const resolution = Core.resolveUniqueAtomSelector(selector, this.parsed.atoms, this.doc.structure.id);
+      if (!resolution.valid) return;
+      const atom = resolution.atom;
 
-      const selection = this.to3DSelection(selector);
+      const selection = this.selectionForAtoms([atom]);
       this.viewer.addStyle(selection, {
         stick: { radius: .28, color: '#ffe66d' },
         sphere: { scale: .5, color: '#ffe66d' }
@@ -554,17 +555,17 @@
       'group_PDB', 'id', 'type_symbol', 'label_atom_id', 'label_alt_id', 'label_comp_id',
       'label_asym_id', 'label_entity_id', 'label_seq_id', 'Cartn_x', 'Cartn_y', 'Cartn_z',
       'occupancy', 'B_iso_or_equiv', 'auth_seq_id', 'auth_comp_id', 'auth_asym_id',
-      'auth_atom_id', 'pdbx_PDB_ins_code', 'pdbx_PDB_model_num'
+      'auth_atom_id', 'pdbx_auth_alt_id', 'pdbx_PDB_ins_code', 'pdbx_PDB_model_num'
     ];
     const lines = [`data_molhtml_model_${modelNumber}`, 'loop_', ...columns.map(name => `_atom_site.${name}`)];
     for (const atom of atoms) {
       lines.push([
         atom.het ? 'HETATM' : 'ATOM', atom.atomSiteId ?? atom.serial, atom.element,
-        atom.labelAtomId || atom.name, atom.labelAltId || '.', atom.labelCompId || atom.resn,
+        atom.labelAtomId || atom.name, atom.labelAltId || atom.authAltId || '.', atom.labelCompId || atom.resn,
         atom.labelAsymId || atom.chain, atom.labelEntityId || '.', atom.labelSeqId ?? '.',
         atom.x, atom.y, atom.z, atom.occupancy, atom.bfactor, atom.authSeqId ?? atom.resi,
         atom.authCompId || atom.resn, atom.authAsymId || atom.chain, atom.authAtomId || atom.name,
-        atom.icode || '?', modelNumber
+        atom.authAltId || '.', atom.icode || '?', modelNumber
       ].map(cifToken).join(' '));
     }
     lines.push('#');

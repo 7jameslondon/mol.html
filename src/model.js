@@ -622,7 +622,7 @@
     const identity = { ...value };
     for (const key of [
       'atomSiteId', 'labelEntityId', 'labelAsymId', 'labelSeqId', 'labelCompId', 'labelAtomId', 'labelAltId',
-      'authAsymId', 'authSeqId', 'authCompId', 'authAtomId', 'insertionCode', 'pdbSerial'
+      'authAsymId', 'authSeqId', 'authCompId', 'authAtomId', 'authAltId', 'insertionCode', 'pdbSerial'
     ]) {
       if (key in value && value[key] != null) identity[key] = String(value[key]);
     }
@@ -1092,6 +1092,7 @@
       labelAtomId: atom.labelAtomId,
       labelAltId: atom.labelAltId,
       authAtomId: atom.authAtomId,
+      authAltId: atom.authAltId,
       pdbSerial: atom.sourceFormat === 'pdb' ? atom.serial : null
     });
     return compactSourceIdentity(identity);
@@ -1138,11 +1139,14 @@
       ['labelCompId', 'labelCompId'], ['labelAtomId', 'labelAtomId'], ['labelAltId', 'labelAltId']
     ];
     const hasLabelIdentity = labelFields.some(([key]) => identity[key] != null);
-    if (hasLabelIdentity && labelFields.every(([key, atomKey]) =>
-      identity[key] == null || String(atom[atomKey] ?? '') === String(identity[key]))) return true;
+    const matchesLabelIdentity = labelFields.every(([key, atomKey]) =>
+      identity[key] == null || String(atom[atomKey] ?? '') === String(identity[key]));
+    const matchesAuthorAltFallback = identity.labelAltId != null || identity.authAltId == null
+      || String(atom.authAltId ?? '') === String(identity.authAltId);
+    if (hasLabelIdentity && matchesLabelIdentity && matchesAuthorAltFallback) return true;
     const authorFields = [
       ['authAsymId', 'authAsymId'], ['authSeqId', 'authSeqId'], ['authCompId', 'authCompId'],
-      ['authAtomId', 'authAtomId'], ['insertionCode', 'icode']
+      ['authAtomId', 'authAtomId'], ['authAltId', 'authAltId'], ['insertionCode', 'icode']
     ];
     const hasAuthorIdentity = authorFields.some(([key]) => identity[key] != null);
     if (hasAuthorIdentity && authorFields.every(([key, atomKey]) =>

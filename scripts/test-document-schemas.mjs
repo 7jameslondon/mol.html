@@ -57,7 +57,7 @@ assert.equal(v2.properties.format.const, 'molhtml/document');
 assert.equal(v2.properties.version.const, 2);
 assert.deepEqual(v2.properties.structure.properties.format.enum, ['pdb', 'mmcif']);
 assert.equal(v2.additionalProperties, true, 'v2 preserves unknown document fields');
-for (const field of ['atomSiteId', 'labelEntityId', 'labelAsymId', 'authAsymId', 'authSeqId']) {
+for (const field of ['atomSiteId', 'labelEntityId', 'labelAsymId', 'authAsymId', 'authSeqId', 'authAltId']) {
   assert.ok(v2.$defs.sourceIdentity.properties[field], `v2 source identity declares ${field}`);
 }
 for (const kind of ['atom', 'residue', 'chain', 'instance', 'entity', 'role', 'connected-component', 'within']) {

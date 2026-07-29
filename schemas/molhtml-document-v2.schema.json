@@ -43,6 +43,7 @@
         "authSeqId": { "type": "string" },
         "authCompId": { "type": "string" },
         "authAtomId": { "type": "string" },
+        "authAltId": { "type": "string" },
         "insertionCode": { "type": "string" },
         "pdbSerial": { "type": "string" }
       },

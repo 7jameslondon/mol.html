@@ -17,6 +17,7 @@ The project must also remain a deterministic, offline, self-contained HTML artif
 Use a custom, format-neutral runtime model whose terminology and source identity follow PDBx/mmCIF:
 
 - Preserve `_atom_site.id`, `label_*`, and `auth_*` fields independently.
+- Preserve label and author alternate-location identifiers independently and use them when resolving atom identity.
 - Represent atoms, residues, asymmetric-unit instances, entities, bonds, coordinate sets, connected components, and assembly operators explicitly.
 - Represent each normalized bond as atom indexes plus bond order, connection type, and provenance so rendering and analysis consume the same topology.
 - Use dense numeric indexes only at runtime.
@@ -26,7 +27,9 @@ Use a custom, format-neutral runtime model whose terminology and source identity
 
 PDB input is normalized into the same model. Missing entity and instance identities are generated deterministically and marked `pdb-inferred`. Classification carries provenance such as `mmcif-entity`, `pdb-record`, `name-fallback`, or `unknown`.
 
-Modified polymer residues retain their source component name but derive polymer classification from explicit parent-component metadata (`MODRES` for PDB and Chemical Component data for mmCIF) when available. A small documented parent map is used only as a fallback.
+Modified polymer residues retain their source component name but derive polymer classification from explicit parent-component metadata (`MODRES` for PDB and Chemical Component data for mmCIF) when available. A small documented parent map is used only as a fallback. Distance-inferred bonds may connect a shared blank alternate location to a named conformer, but never two different named conformers.
+
+`struct_conn` records that reference crystallographic symmetry mates are preserved in the canonical mmCIF source but excluded from base asymmetric-unit topology until the runtime model supports symmetry-qualified atom endpoints. The parser emits a diagnostic rather than installing a bond between incorrect base coordinates.
 
 ## Parser decision
 
@@ -96,12 +99,12 @@ The accepted implementation was measured on the feature branch after the determi
 release build:
 
 - Branch-start artifact: 862,392 bytes.
-- Final artifact: 941,575 bytes.
-- First-party increase: 79,183 bytes.
+- Final artifact: 944,541 bytes.
+- First-party increase: 82,149 bytes.
 - Bundled 3Dmol payload: unchanged at 537,792 bytes.
-- Remaining headroom under the 950,000-byte ceiling: 8,425 bytes.
+- Remaining headroom under the 950,000-byte ceiling: 5,459 bytes.
 - Model/schema and artifact verification: passed, including 67 artifact invariants.
-- Browser regression suite: 27 tests passed in Chromium.
+- Browser regression suite: 29 tests passed in Chromium.
 - Scheduled performance observation: the deterministic 5,000-atom case passed.
 
 The measurements did not justify an inline worker or columnar storage in this iteration.

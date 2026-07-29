@@ -35,10 +35,13 @@ inference, and requires model-qualified atom references whenever a serial is amb
 final review pass additionally requires atom and residue selectors to resolve uniquely,
 matches author-only mmCIF connections with complete residue and atom identity, classifies PDB
 modified residues from `MODRES` or a parent-component fallback, and preserves normalized bond
-order, connection type, and provenance through the renderer boundary.
+order, connection type, and provenance through the renderer boundary. Follow-up hardening
+preserves author alternate-location identity, prevents cross-conformer inferred bonds, excludes
+unsupported crystallographic symmetry-mate connections from base topology with diagnostics,
+and prevents ambiguous current scene selectors from driving the inspector or renderer.
 
-The final deterministic artifact is 941,575 bytes, leaving 8,425 bytes under the existing
-950,000-byte ceiling. Model/schema checks, 67 artifact invariants, all 28 Chromium regression
+The final deterministic artifact is 944,541 bytes, leaving 5,459 bytes under the existing
+950,000-byte ceiling. Model/schema checks, 67 artifact invariants, all 29 Chromium regression
 tests, and the scheduled 5,000-atom performance case pass. Publication is performed from the
 dedicated branch through a review-ready pull request; merging is intentionally outside this
 plan's implementation step.
@@ -140,6 +143,7 @@ Use mmCIF identity as the common vocabulary even when the source is PDB. Each at
   authSeqId,
   authCompId,
   authAtomId,
+  authAltId,
 
   insertionCode,
   pdbSerial

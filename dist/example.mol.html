@@ -1532,6 +1532,10 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     return { atomIndices: [left, right], order, provenance, connectionType };
   }
 
+  function alternateLocationsCompatible(left, right) {
+    return !left?.altLoc || !right?.altLoc || left.altLoc === right.altLoc;
+  }
+
   function normalizeStructureFormat(value) {
     const format = String(value || '').trim().toLowerCase().replace(/^\./, '');
     if (['pdb', 'ent'].includes(format)) return 'pdb';
@@ -1602,13 +1606,14 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         const resn = line.slice(17, 20).trim() || 'UNK';
         const resi = Number.parseInt(line.slice(22, 26), 10) || 0;
         const icode = line.slice(26, 27).trim();
+        const alternateLocation = line.slice(16, 17).trim();
         const modification = modifiedResidues.get(pdbModifiedResidueKey(chain, resi, icode, resn));
         const fallbackParent = MODIFIED_RESIDUE_PARENTS.get(resn);
         const atom = {
           index: atoms.length,
           serial,
           name: rawName.trim() || 'X',
-          altLoc: line.slice(16, 17).trim(),
+          altLoc: alternateLocation,
           resn,
           chain,
           resi,
@@ -1628,11 +1633,12 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
           labelSeqId: null,
           labelCompId: resn,
           labelAtomId: rawName.trim() || 'X',
-          labelAltId: line.slice(16, 17).trim(),
+          labelAltId: alternateLocation,
           authAsymId: chain,
           authSeqId: resi,
           authCompId: resn,
           authAtomId: rawName.trim() || 'X',
+          authAltId: alternateLocation,
           parentCompId: modification?.parentCompId || fallbackParent || null,
           modificationProvenance: modification ? 'pdb-modres' : (fallbackParent ? 'modified-residue-map' : null),
           identityProvenance: 'pdb-source'
@@ -1670,7 +1676,14 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       for (const modelNumber of modelNumbers) {
         const a = serialMap.get(`${modelNumber}|${left}`);
         const b = serialMap.get(`${modelNumber}|${right}`);
-        if (a != null && b != null) bonds.push(bondRecord(a, b, order, 'pdb-conect', 'covalent'));
+        if (a == null || b == null) continue;
+        if (!alternateLocationsCompatible(atoms[a], atoms[b])) {
+          if (diagnostics.parserWarnings.length < 50) {
+            diagnostics.parserWarnings.push(`CONECT ${left}:${right} connects incompatible alternate locations in model ${modelNumber}.`);
+          }
+          continue;
+        }
+        bonds.push(bondRecord(a, b, order, 'pdb-conect', 'covalent'));
       }
     }
     inferBonds(atoms, bonds);
@@ -1989,7 +2002,9 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       const serialValue = cifValue(row.id);
       const numericSerial = Number(serialValue);
       const legacyResidueNumber = cifNumber(authSeqId, cifNumber(labelSeqId, 0)) || 0;
-      const alternateLocation = cifValue(row.label_alt_id) || cifValue(row.auth_alt_id) || '';
+      const labelAltId = cifValue(row.label_alt_id);
+      const authAltId = cifValue(row.pdbx_auth_alt_id) || cifValue(row.auth_alt_id);
+      const alternateLocation = labelAltId || authAltId || '';
       const atom = {
         index: atoms.length,
         serial: Number.isFinite(numericSerial) ? numericSerial : atoms.length + 1,
@@ -2012,11 +2027,12 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         labelSeqId,
         labelCompId,
         labelAtomId,
-        labelAltId: alternateLocation,
+        labelAltId,
         authAsymId,
         authSeqId,
         authCompId: cifValue(row.auth_comp_id),
         authAtomId: cifValue(row.auth_atom_id),
+        authAltId,
         parentCompId: modifiedParent || null,
         modificationProvenance: modifiedResidueParents.has(normalizedCompId)
           ? 'mmcif-chem-comp' : (modifiedParent ? 'modified-residue-map' : null),
@@ -2340,7 +2356,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   }
 
   function authorIdentityKey(atom) {
-    return [atom.model, atom.authAsymId, atom.authSeqId, atom.icode || '', atom.authCompId, atom.authAtomId, atom.altLoc || ''].join('|');
+    return [atom.model, atom.authAsymId, atom.authSeqId, atom.icode || '', atom.authCompId, atom.authAtomId, atom.authAltId || ''].join('|');
   }
 
   function connectedComponents(atoms, bonds) {
@@ -2378,6 +2394,12 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     const modelNumbers = [...new Set(atoms.map(atom => atom.model))];
     for (const row of categories.struct_conn || []) {
       if (!isTopologyConnectionType(row.conn_type_id)) continue;
+      if (!isBaseStructConnSymmetry(row.ptnr1_symmetry) || !isBaseStructConnSymmetry(row.ptnr2_symmetry)) {
+        if (diagnostics?.parserWarnings?.length < 50) {
+          diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} references a crystallographic symmetry mate and was excluded from base topology.`);
+        }
+        continue;
+      }
       const leftAtoms = findStructConnAtoms(atoms, row, 'ptnr1');
       const rightAtoms = findStructConnAtoms(atoms, row, 'ptnr2');
       for (const modelNumber of modelNumbers) {
@@ -2392,6 +2414,12 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         const left = leftMatches[0];
         const right = rightMatches[0];
         if (left.index === right.index) continue;
+        if (!alternateLocationsCompatible(left, right)) {
+          if (diagnostics?.parserWarnings?.length < 50) {
+            diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} connects incompatible alternate locations in model ${modelNumber}.`);
+          }
+          continue;
+        }
         const key = left.index < right.index ? `${left.index}:${right.index}` : `${right.index}:${left.index}`;
         if (!existing.has(key)) {
           existing.add(key);
@@ -2410,6 +2438,11 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     return type.startsWith('covale') || ['disulf', 'modres', 'metalc'].includes(type);
   }
 
+  function isBaseStructConnSymmetry(value) {
+    const symmetry = String(cifValue(value) || '').trim().toLowerCase();
+    return !symmetry || symmetry === '1' || symmetry === '1_555';
+  }
+
   function mmcifBondOrder(value) {
     return { sing: 1, doub: 2, trip: 3, quad: 4, arom: 1.5, delo: 1.5 }[
       String(cifValue(value) || '').trim().toLowerCase()
@@ -2425,7 +2458,8 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     const authSeqId = cifValue(row[`${prefix}_auth_seq_id`]);
     const authCompId = cifValue(row[`${prefix}_auth_comp_id`]);
     const authAtomId = cifValue(row[`${prefix}_auth_atom_id`]);
-    const labelAltId = cifValue(row[`pdbx_${prefix}_label_alt_id`] ?? row[`${prefix}_label_alt_id`]);
+    const labelAltId = cifValue(row[`pdbx_${prefix}_label_alt_id`]) || cifValue(row[`${prefix}_label_alt_id`]);
+    const authAltId = cifValue(row[`pdbx_${prefix}_auth_alt_id`]);
     const insertionCode = cifValue(row[`pdbx_${prefix}_pdb_ins_code`]);
     return atoms.filter(atom =>
       (labelAsymId == null || atom.labelAsymId === labelAsymId)
@@ -2437,6 +2471,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       && (authCompId == null || atom.authCompId === authCompId)
       && (authAtomId == null || atom.authAtomId === authAtomId)
       && (labelAltId == null || atom.labelAltId === labelAltId)
+      && (authAltId == null || atom.authAltId === authAltId)
       && (insertionCode == null || atom.icode === insertionCode)
     );
   }
@@ -2602,6 +2637,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
           if (otherIndex <= atom.index) continue;
           const other = atoms[otherIndex];
           if (atom.model !== other.model) continue;
+          if (!alternateLocationsCompatible(atom, other)) continue;
           if (atom.labelAsymId && other.labelAsymId && atom.labelAsymId !== other.labelAsymId) continue;
           if (atom.sourceFormat === 'pdb' && other.sourceFormat === 'pdb'
             && atom.authAsymId && other.authAsymId && atom.authAsymId !== other.authAsymId) continue;
@@ -3290,7 +3326,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     const identity = { ...value };
     for (const key of [
       'atomSiteId', 'labelEntityId', 'labelAsymId', 'labelSeqId', 'labelCompId', 'labelAtomId', 'labelAltId',
-      'authAsymId', 'authSeqId', 'authCompId', 'authAtomId', 'insertionCode', 'pdbSerial'
+      'authAsymId', 'authSeqId', 'authCompId', 'authAtomId', 'authAltId', 'insertionCode', 'pdbSerial'
     ]) {
       if (key in value && value[key] != null) identity[key] = String(value[key]);
     }
@@ -3760,6 +3796,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       labelAtomId: atom.labelAtomId,
       labelAltId: atom.labelAltId,
       authAtomId: atom.authAtomId,
+      authAltId: atom.authAltId,
       pdbSerial: atom.sourceFormat === 'pdb' ? atom.serial : null
     });
     return compactSourceIdentity(identity);
@@ -3806,11 +3843,14 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       ['labelCompId', 'labelCompId'], ['labelAtomId', 'labelAtomId'], ['labelAltId', 'labelAltId']
     ];
     const hasLabelIdentity = labelFields.some(([key]) => identity[key] != null);
-    if (hasLabelIdentity && labelFields.every(([key, atomKey]) =>
-      identity[key] == null || String(atom[atomKey] ?? '') === String(identity[key]))) return true;
+    const matchesLabelIdentity = labelFields.every(([key, atomKey]) =>
+      identity[key] == null || String(atom[atomKey] ?? '') === String(identity[key]));
+    const matchesAuthorAltFallback = identity.labelAltId != null || identity.authAltId == null
+      || String(atom.authAltId ?? '') === String(identity.authAltId);
+    if (hasLabelIdentity && matchesLabelIdentity && matchesAuthorAltFallback) return true;
     const authorFields = [
       ['authAsymId', 'authAsymId'], ['authSeqId', 'authSeqId'], ['authCompId', 'authCompId'],
-      ['authAtomId', 'authAtomId'], ['insertionCode', 'icode']
+      ['authAtomId', 'authAtomId'], ['authAltId', 'authAltId'], ['insertionCode', 'icode']
     ];
     const hasAuthorIdentity = authorFields.some(([key]) => identity[key] != null);
     if (hasAuthorIdentity && authorFields.every(([key, atomKey]) =>
@@ -4079,10 +4119,11 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     applySelectionHighlight() {
       const selector = this.doc.scene.selection?.selector;
       if (!selector) return;
-      const atom = this.parsed.atoms.find(candidate => Core.atomMatchesSelector(candidate, selector, this.doc.structure.id));
-      if (!atom) return;
+      const resolution = Core.resolveUniqueAtomSelector(selector, this.parsed.atoms, this.doc.structure.id);
+      if (!resolution.valid) return;
+      const atom = resolution.atom;
 
-      const selection = this.to3DSelection(selector);
+      const selection = this.selectionForAtoms([atom]);
       this.viewer.addStyle(selection, {
         stick: { radius: .28, color: '#ffe66d' },
         sphere: { scale: .5, color: '#ffe66d' }
@@ -4488,17 +4529,17 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       'group_PDB', 'id', 'type_symbol', 'label_atom_id', 'label_alt_id', 'label_comp_id',
       'label_asym_id', 'label_entity_id', 'label_seq_id', 'Cartn_x', 'Cartn_y', 'Cartn_z',
       'occupancy', 'B_iso_or_equiv', 'auth_seq_id', 'auth_comp_id', 'auth_asym_id',
-      'auth_atom_id', 'pdbx_PDB_ins_code', 'pdbx_PDB_model_num'
+      'auth_atom_id', 'pdbx_auth_alt_id', 'pdbx_PDB_ins_code', 'pdbx_PDB_model_num'
     ];
     const lines = [`data_molhtml_model_${modelNumber}`, 'loop_', ...columns.map(name => `_atom_site.${name}`)];
     for (const atom of atoms) {
       lines.push([
         atom.het ? 'HETATM' : 'ATOM', atom.atomSiteId ?? atom.serial, atom.element,
-        atom.labelAtomId || atom.name, atom.labelAltId || '.', atom.labelCompId || atom.resn,
+        atom.labelAtomId || atom.name, atom.labelAltId || atom.authAltId || '.', atom.labelCompId || atom.resn,
         atom.labelAsymId || atom.chain, atom.labelEntityId || '.', atom.labelSeqId ?? '.',
         atom.x, atom.y, atom.z, atom.occupancy, atom.bfactor, atom.authSeqId ?? atom.resi,
         atom.authCompId || atom.resn, atom.authAsymId || atom.chain, atom.authAtomId || atom.name,
-        atom.icode || '?', modelNumber
+        atom.authAltId || '.', atom.icode || '?', modelNumber
       ].map(cifToken).join(' '));
     }
     lines.push('#');
@@ -5103,24 +5144,38 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       : observations.length ? `${observations.length} observation${observations.length === 1 ? '' : 's'}` : 'No flags';
   }
 
-  function selectedAtom() {
+  function selectedAtomResolution() {
     const selector = doc.scene.selection?.selector;
-    return selector && parsed ? parsed.atoms.find(atom => Core.atomMatchesSelector(atom, selector, doc.structure.id)) : null;
+    if (!selector || !parsed) return { valid: false, error: 'Select an atom first.', atom: null };
+    return Core.resolveUniqueAtomSelector(selector, parsed.atoms, doc.structure.id);
+  }
+
+  function selectedAtom() {
+    const resolution = selectedAtomResolution();
+    return resolution.valid ? resolution.atom : null;
   }
 
   function syncSelection() {
-    const atom = selectedAtom();
+    const resolution = selectedAtomResolution();
+    const atom = resolution.valid ? resolution.atom : null;
+    const hasSelection = Boolean(doc.scene.selection?.selector);
     elements['empty-selection'].hidden = Boolean(atom);
     elements['selection-details'].hidden = !atom;
-    elements['clear-selection'].disabled = !atom;
-    elements['clear-selection-panel'].disabled = !atom;
+    elements['clear-selection'].disabled = !hasSelection;
+    elements['clear-selection-panel'].disabled = !hasSelection;
     elements['inspect-button'].disabled = !atom;
     elements['create-current-selection'].disabled = !atom;
     const proximityNeedsCurrent = elements['saved-proximity-target'].value !== 'ligands';
     elements['create-proximity-selection'].disabled = proximityNeedsCurrent && !atom;
     elements['saved-selection-current-status'].textContent = atom
       ? `Current atom: ${Core.atomLabel(atom)}`
-      : 'Select an atom first.';
+      : hasSelection ? resolution.error : 'Select an atom first.';
+    const emptyTitle = elements['empty-selection'].querySelector('strong');
+    const emptyDetail = elements['empty-selection'].querySelector('span');
+    if (emptyTitle) emptyTitle.textContent = hasSelection ? 'Selection unavailable' : 'Click an atom';
+    if (emptyDetail) emptyDetail.textContent = hasSelection
+      ? resolution.error
+      : 'Its exact molecular identity will be written into this HTML file.';
     if (!atom) return;
     elements['selected-element'].textContent = atom.element;
     elements['selected-element'].style.background = Core.ELEMENT_COLORS[atom.element] || '#8795a7';

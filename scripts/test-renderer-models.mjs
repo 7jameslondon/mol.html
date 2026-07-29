@@ -13,6 +13,8 @@ const [structureSource, modelSource, rendererSource, multiModelCif, multiModelPd
 
 let Core;
 const renderedModels = [];
+const addedStyles = [];
+const addedLabels = [];
 function addRenderedModel(domainAtoms) {
   const id = renderedModels.length;
   const atoms = domainAtoms.map((atom, index) => ({
@@ -39,7 +41,9 @@ const viewer = {
   },
   removeAllModels() { renderedModels.length = 0; },
   removeAllSurfaces() {}, removeAllLabels() {}, removeAllShapes() {},
-  setViewChangeCallback() {}, setBackgroundColor() {}, setStyle() {}, addStyle() {},
+  setViewChangeCallback() {}, setBackgroundColor() {}, setStyle() {},
+  addStyle(selection, style) { addedStyles.push({ selection, style }); },
+  addLabel(text, style) { addedLabels.push({ text, style }); },
   setClickable() {}, zoomTo() {}, render() {}, setView() {},
   getView() { return [0, 0, 0, 1, 0, 0, 0, 1]; }
 };
@@ -112,4 +116,47 @@ assert.deepEqual(Array.from(renderedModels[0].atoms, atom => Array.from(atom.bon
   'single-model explicit mmCIF bond order remains double in the renderer');
 assert.equal(authorRenderer.domainAtomForRenderer(renderedModels[0].atoms[2]).serial, 3);
 
-console.log('Normalized PDB/mmCIF renderer bond order and mapping tests passed.');
+addedStyles.length = 0;
+addedLabels.length = 0;
+const ambiguousSelectionDoc = Core.normalizeDocument({
+  ...authorDoc,
+  documentId: 'renderer-ambiguous-selection',
+  scene: {
+    ...authorDoc.scene,
+    selection: {
+      kind: 'atom',
+      selector: { structureId: 'author-bond', sourceIdentity: { modelNumber: 1, authAsymId: 'A' } }
+    }
+  }
+});
+const ambiguousSelectionRenderer = new context.window.MoleculeRenderer({}, {});
+ambiguousSelectionRenderer.setDocument(ambiguousSelectionDoc, { fit: true });
+assert.equal(addedStyles.length, 0, 'an ambiguous current atom selector creates no renderer highlight');
+assert.equal(addedLabels.length, 0, 'an ambiguous current atom selector creates no renderer label');
+
+addedStyles.length = 0;
+addedLabels.length = 0;
+const exactSelectionDoc = Core.normalizeDocument({
+  ...authorDoc,
+  documentId: 'renderer-exact-selection',
+  scene: {
+    ...authorDoc.scene,
+    selection: {
+      kind: 'atom',
+      selector: {
+        structureId: 'author-bond',
+        sourceIdentity: {
+          modelNumber: 1, authAsymId: 'A', authSeqId: '1', authCompId: 'LIG', authAtomId: 'C1', authAltId: 'A'
+        }
+      }
+    }
+  }
+});
+const exactSelectionRenderer = new context.window.MoleculeRenderer({}, {});
+exactSelectionRenderer.setDocument(exactSelectionDoc, { fit: true });
+assert.equal(addedStyles.length, 1, 'a uniquely resolved current atom creates one renderer highlight');
+assert.deepEqual(JSON.parse(JSON.stringify(addedStyles[0].selection)), { model: 0, index: [0] },
+  'current atom highlighting targets the exact normalized-to-renderer mapping');
+assert.equal(addedLabels.length, 1, 'a uniquely resolved current atom creates one renderer label');
+
+console.log('Normalized PDB/mmCIF renderer bond, mapping, and strict selection tests passed.');

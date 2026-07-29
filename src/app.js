@@ -343,24 +343,38 @@
       : observations.length ? `${observations.length} observation${observations.length === 1 ? '' : 's'}` : 'No flags';
   }
 
-  function selectedAtom() {
+  function selectedAtomResolution() {
     const selector = doc.scene.selection?.selector;
-    return selector && parsed ? parsed.atoms.find(atom => Core.atomMatchesSelector(atom, selector, doc.structure.id)) : null;
+    if (!selector || !parsed) return { valid: false, error: 'Select an atom first.', atom: null };
+    return Core.resolveUniqueAtomSelector(selector, parsed.atoms, doc.structure.id);
+  }
+
+  function selectedAtom() {
+    const resolution = selectedAtomResolution();
+    return resolution.valid ? resolution.atom : null;
   }
 
   function syncSelection() {
-    const atom = selectedAtom();
+    const resolution = selectedAtomResolution();
+    const atom = resolution.valid ? resolution.atom : null;
+    const hasSelection = Boolean(doc.scene.selection?.selector);
     elements['empty-selection'].hidden = Boolean(atom);
     elements['selection-details'].hidden = !atom;
-    elements['clear-selection'].disabled = !atom;
-    elements['clear-selection-panel'].disabled = !atom;
+    elements['clear-selection'].disabled = !hasSelection;
+    elements['clear-selection-panel'].disabled = !hasSelection;
     elements['inspect-button'].disabled = !atom;
     elements['create-current-selection'].disabled = !atom;
     const proximityNeedsCurrent = elements['saved-proximity-target'].value !== 'ligands';
     elements['create-proximity-selection'].disabled = proximityNeedsCurrent && !atom;
     elements['saved-selection-current-status'].textContent = atom
       ? `Current atom: ${Core.atomLabel(atom)}`
-      : 'Select an atom first.';
+      : hasSelection ? resolution.error : 'Select an atom first.';
+    const emptyTitle = elements['empty-selection'].querySelector('strong');
+    const emptyDetail = elements['empty-selection'].querySelector('span');
+    if (emptyTitle) emptyTitle.textContent = hasSelection ? 'Selection unavailable' : 'Click an atom';
+    if (emptyDetail) emptyDetail.textContent = hasSelection
+      ? resolution.error
+      : 'Its exact molecular identity will be written into this HTML file.';
     if (!atom) return;
     elements['selected-element'].textContent = atom.element;
     elements['selected-element'].style.background = Core.ELEMENT_COLORS[atom.element] || '#8795a7';
