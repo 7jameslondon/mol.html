@@ -569,19 +569,15 @@
   function requiresDocumentV2(doc) {
     if (doc?.structure?.format === 'mmcif') return true;
     if (['author-chain', 'instance', 'entity', 'role'].includes(doc?.scene?.colorMode)) return true;
-    const selectorRequiresV2 = selector => {
-      if (!selector || typeof selector !== 'object') return false;
-      if (selector.sourceIdentity || ['instance', 'entity', 'role', 'connected-component'].includes(selector.kind)) return true;
-      return selectorRequiresV2(selector.target);
-    };
-    if (selectorRequiresV2(doc?.scene?.selection?.selector)) return true;
-    if ((doc?.scene?.customColors || []).some(rule => selectorRequiresV2(rule?.selector))) return true;
-    if ((doc?.scene?.measurements || []).some(record => (record?.atoms || []).some(selectorRequiresV2))) return true;
-    if ((doc?.scene?.savedSelections || []).some(record => selectorRequiresV2(record?.selector))) return true;
-    if (selectorRequiresV2(doc?.scene?.ligandAnalysis?.selectedLigand)) return true;
-    return (doc?.scene?.savedViews || []).some(view =>
-      selectorRequiresV2(view?.snapshot?.selection?.selector)
-      || (view?.snapshot?.customColors || []).some(rule => selectorRequiresV2(rule?.selector)));
+    const values = [doc?.scene];
+    for (const value of values) {
+      if (!value || typeof value !== 'object') continue;
+      if (value.sourceIdentity || value.instanceId != null || value.entityId != null || value.role != null
+        || value.connectedComponentId != null
+        || ['instance', 'entity', 'role', 'connected-component'].includes(value.kind || value.scope)) return true;
+      values.push(...Object.values(value));
+    }
+    return false;
   }
 
   function normalizeMeasurements(value) {
@@ -967,13 +963,13 @@
     const residueMap = new Map();
     for (const contact of contacts) {
       const atom = contact.targetAtom;
-      const key = `${atom.model}|${atom.chain}|${atom.resi}|${atom.icode}|${atom.resn}`;
+      const key = atom.residueIndex ?? `${atom.model}|${atom.chain}|${atom.resi}|${atom.icode}|${atom.resn}`;
       let residue = residueMap.get(key);
       if (!residue) {
         const descriptor = residueDescriptor(atom.resn);
         residue = {
           key, model: atom.model, chain: atom.chain, resi: atom.resi, icode: atom.icode,
-          resn: atom.resn, kind: descriptor.kind, atoms: [], contacts: [],
+          resn: atom.resn, kind: descriptor.kind, selector: selectorForAtom(atom, 'residue', structureId), atoms: [], contacts: [],
           minimumDistance: contact.distance, hasClose: false, hasPolar: false
         };
         residueMap.set(key, residue);
@@ -1304,10 +1300,9 @@
     }
     if (doc.scene.colorMode === 'role') return ROLE_COLORS[atom.role] || ROLE_COLORS.unknown;
     if (doc.scene.colorMode === 'residue') {
-      const residueIndex = Number.isInteger(atom.residueIndex)
-        ? atom.residueIndex
-        : Math.abs((atom.resi * 31 + String(atom.chain || '_').charCodeAt(0)) | 0);
-      return CHAIN_COLORS[residueIndex % CHAIN_COLORS.length];
+      const key = `${atom.instanceId}|${atom.sourceFormat === 'mmcif' && atom.labelSeqId || atom.authSeqId || atom.resi}|${atom.icode}`;
+      const index = [...key].reduce((hash, character) => (hash * 31 + character.charCodeAt()) | 0, 0);
+      return CHAIN_COLORS[Math.abs(index) % CHAIN_COLORS.length];
     }
     if (doc.scene.colorMode === 'uniform') return '#7db7ff';
     return ELEMENT_COLORS[atom.element] || '#d5d9e0';

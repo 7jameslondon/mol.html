@@ -2397,7 +2397,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
 
   function mmcifExplicitBonds(categories, atoms, diagnostics) {
     const bonds = [];
-    const deniedInferencePairs = new Set();
+    const deniedInferencePairs = [];
     const existing = new Set();
     const modelNumbers = [...new Set(atoms.map(atom => atom.model))];
     for (const row of categories.struct_conn || []) {
@@ -2412,10 +2412,9 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         const leftMatches = leftAtoms.filter(atom => atom.model === modelNumber);
         const rightMatches = rightAtoms.filter(atom => atom.model === modelNumber);
         if (!baseCoordinates) {
-          for (const left of leftMatches) for (const right of rightMatches) {
-            if (left.index !== right.index) deniedInferencePairs.add(left.index < right.index
-              ? `${left.index}:${right.index}` : `${right.index}:${left.index}`);
-          }
+          if (leftMatches.length && rightMatches.length) deniedInferencePairs.push([
+            new Set(leftMatches.map(atom => atom.index)), new Set(rightMatches.map(atom => atom.index))
+          ]);
           continue;
         }
         if (leftMatches.length !== 1 || rightMatches.length !== 1) {
@@ -2542,8 +2541,10 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     for (const match of expression.matchAll(/\(([^()]*)\)/g)) groups.push(expandOperatorGroup(match[1]));
     if (!groups.length) groups.push(expandOperatorGroup(expression));
     if (groups.some(group => !group.length)) return [];
-    return groups.reduce((combinations, group) =>
-      combinations.flatMap(sequence => group.map(operatorId => [...sequence, operatorId])), [[]]);
+    return groups.reduce((combinations, group) => {
+      if (combinations.length * group.length > 10_000) throw new Error('Assembly operator limit exceeded.');
+      return combinations.flatMap(sequence => group.map(operatorId => [...sequence, operatorId]));
+    }, [[]]);
   }
 
   function expandOperatorGroup(value) {
@@ -2554,6 +2555,8 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       if (range) {
         const start = Number(range[1]);
         const end = Number(range[2]);
+        if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end)
+          || Math.abs(end - start) >= 10_000) throw new Error('Assembly operator limit exceeded.');
         const step = start <= end ? 1 : -1;
         for (let number = start; number !== end + step; number += step) ids.push(String(number));
       } else if (part) ids.push(part);
@@ -2620,7 +2623,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     });
   }
 
-  function inferBonds(atoms, bonds, deniedPairs = new Set()) {
+  function inferBonds(atoms, bonds, deniedPairs = []) {
     const existing = new Set(bonds.map(bond => {
       const [left, right] = bond.atomIndices;
       return left < right ? `${left}:${right}` : `${right}:${left}`;
@@ -2655,7 +2658,9 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
           const maximum = (COVALENT_RADII[atom.element] || .77) + (COVALENT_RADII[other.element] || .77) + .46;
           if (distanceSquared < .16 || distanceSquared > maximum * maximum) continue;
           const key = atom.index < otherIndex ? `${atom.index}:${otherIndex}` : `${otherIndex}:${atom.index}`;
-          if (!existing.has(key) && !deniedPairs.has(key)) {
+          const denied = deniedPairs.some(pair => (pair[0].has(atom.index) && pair[1].has(otherIndex))
+            || (pair[0].has(otherIndex) && pair[1].has(atom.index)));
+          if (!existing.has(key) && !denied) {
             existing.add(key);
             bonds.push(bondRecord(atom.index, otherIndex));
           }
@@ -3280,19 +3285,15 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   function requiresDocumentV2(doc) {
     if (doc?.structure?.format === 'mmcif') return true;
     if (['author-chain', 'instance', 'entity', 'role'].includes(doc?.scene?.colorMode)) return true;
-    const selectorRequiresV2 = selector => {
-      if (!selector || typeof selector !== 'object') return false;
-      if (selector.sourceIdentity || ['instance', 'entity', 'role', 'connected-component'].includes(selector.kind)) return true;
-      return selectorRequiresV2(selector.target);
-    };
-    if (selectorRequiresV2(doc?.scene?.selection?.selector)) return true;
-    if ((doc?.scene?.customColors || []).some(rule => selectorRequiresV2(rule?.selector))) return true;
-    if ((doc?.scene?.measurements || []).some(record => (record?.atoms || []).some(selectorRequiresV2))) return true;
-    if ((doc?.scene?.savedSelections || []).some(record => selectorRequiresV2(record?.selector))) return true;
-    if (selectorRequiresV2(doc?.scene?.ligandAnalysis?.selectedLigand)) return true;
-    return (doc?.scene?.savedViews || []).some(view =>
-      selectorRequiresV2(view?.snapshot?.selection?.selector)
-      || (view?.snapshot?.customColors || []).some(rule => selectorRequiresV2(rule?.selector)));
+    const values = [doc?.scene];
+    for (const value of values) {
+      if (!value || typeof value !== 'object') continue;
+      if (value.sourceIdentity || value.instanceId != null || value.entityId != null || value.role != null
+        || value.connectedComponentId != null
+        || ['instance', 'entity', 'role', 'connected-component'].includes(value.kind || value.scope)) return true;
+      values.push(...Object.values(value));
+    }
+    return false;
   }
 
   function normalizeMeasurements(value) {
@@ -3678,13 +3679,13 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     const residueMap = new Map();
     for (const contact of contacts) {
       const atom = contact.targetAtom;
-      const key = `${atom.model}|${atom.chain}|${atom.resi}|${atom.icode}|${atom.resn}`;
+      const key = atom.residueIndex ?? `${atom.model}|${atom.chain}|${atom.resi}|${atom.icode}|${atom.resn}`;
       let residue = residueMap.get(key);
       if (!residue) {
         const descriptor = residueDescriptor(atom.resn);
         residue = {
           key, model: atom.model, chain: atom.chain, resi: atom.resi, icode: atom.icode,
-          resn: atom.resn, kind: descriptor.kind, atoms: [], contacts: [],
+          resn: atom.resn, kind: descriptor.kind, selector: selectorForAtom(atom, 'residue', structureId), atoms: [], contacts: [],
           minimumDistance: contact.distance, hasClose: false, hasPolar: false
         };
         residueMap.set(key, residue);
@@ -4015,10 +4016,9 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     }
     if (doc.scene.colorMode === 'role') return ROLE_COLORS[atom.role] || ROLE_COLORS.unknown;
     if (doc.scene.colorMode === 'residue') {
-      const residueIndex = Number.isInteger(atom.residueIndex)
-        ? atom.residueIndex
-        : Math.abs((atom.resi * 31 + String(atom.chain || '_').charCodeAt(0)) | 0);
-      return CHAIN_COLORS[residueIndex % CHAIN_COLORS.length];
+      const key = `${atom.instanceId}|${atom.sourceFormat === 'mmcif' && atom.labelSeqId || atom.authSeqId || atom.resi}|${atom.icode}`;
+      const index = [...key].reduce((hash, character) => (hash * 31 + character.charCodeAt()) | 0, 0);
+      return CHAIN_COLORS[Math.abs(index) % CHAIN_COLORS.length];
     }
     if (doc.scene.colorMode === 'uniform') return '#7db7ff';
     return ELEMENT_COLORS[atom.element] || '#d5d9e0';
@@ -4257,7 +4257,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       }
       if (state.showPocket) {
         for (const residue of result.residues) {
-          this.viewer.addStyle(this.to3DSelection(residue), {
+          this.viewer.addStyle(this.selectionForAtoms(residue.atoms), {
             stick: { radius: .22, color: residue.hasPolar ? '#71ddf8' : '#7ee2a8' },
             sphere: { scale: .25, color: residue.hasPolar ? '#71ddf8' : '#7ee2a8' }
           });
@@ -4379,6 +4379,10 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         if (match.valid) return this.selectionForAtoms(match.atoms);
       }
       const selection = {};
+      if (selector.model != null) {
+        const atom = this.parsed?.atoms.find(candidate => candidate.model == selector.model);
+        if (atom) selection.model = this.rendererLocationByDomainIndex.get(atom.index).model;
+      }
       if (selector.chain != null) selection.chain = selector.chain === '_' ? '' : selector.chain;
       if (selector.resi != null) selection.resi = Number(selector.resi);
       if (selector.icode != null) selection.icode = selector.icode;
@@ -5683,7 +5687,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   function focusLigandAnalysis() {
     const result = ligandAnalysisResult();
     if (!result.ligand) throw new Error('Choose a ligand first.');
-    renderer.focusSelectors([result.ligand.selector, ...result.residues]);
+    renderer.focusSelectors([result.ligand.selector, ...result.residues.map(residue => residue.selector)]);
     return { ligand: structuredClone(result.ligand.selector), residueCount: result.residues.length };
   }
 
@@ -5695,10 +5699,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         atomCount: result.ligand.atomCount, heavyAtomCount: result.ligand.heavyAtomCount
       } : null,
       residues: result.residues.map(residue => ({
-        selector: {
-          structureId: doc.structure.id, model: residue.model, chain: residue.chain,
-          resi: residue.resi, icode: residue.icode, resn: residue.resn
-        },
+        selector: residue.selector,
         label: `${residue.resn} ${residue.resi}${residue.icode || ''}`,
         kind: residue.kind, minimumDistance: residue.minimumDistance,
         contactCount: residue.contacts.length, hasClose: residue.hasClose, hasPolar: residue.hasPolar

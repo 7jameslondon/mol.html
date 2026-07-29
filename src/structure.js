@@ -900,7 +900,7 @@
 
   function mmcifExplicitBonds(categories, atoms, diagnostics) {
     const bonds = [];
-    const deniedInferencePairs = new Set();
+    const deniedInferencePairs = [];
     const existing = new Set();
     const modelNumbers = [...new Set(atoms.map(atom => atom.model))];
     for (const row of categories.struct_conn || []) {
@@ -915,10 +915,9 @@
         const leftMatches = leftAtoms.filter(atom => atom.model === modelNumber);
         const rightMatches = rightAtoms.filter(atom => atom.model === modelNumber);
         if (!baseCoordinates) {
-          for (const left of leftMatches) for (const right of rightMatches) {
-            if (left.index !== right.index) deniedInferencePairs.add(left.index < right.index
-              ? `${left.index}:${right.index}` : `${right.index}:${left.index}`);
-          }
+          if (leftMatches.length && rightMatches.length) deniedInferencePairs.push([
+            new Set(leftMatches.map(atom => atom.index)), new Set(rightMatches.map(atom => atom.index))
+          ]);
           continue;
         }
         if (leftMatches.length !== 1 || rightMatches.length !== 1) {
@@ -1045,8 +1044,10 @@
     for (const match of expression.matchAll(/\(([^()]*)\)/g)) groups.push(expandOperatorGroup(match[1]));
     if (!groups.length) groups.push(expandOperatorGroup(expression));
     if (groups.some(group => !group.length)) return [];
-    return groups.reduce((combinations, group) =>
-      combinations.flatMap(sequence => group.map(operatorId => [...sequence, operatorId])), [[]]);
+    return groups.reduce((combinations, group) => {
+      if (combinations.length * group.length > 10_000) throw new Error('Assembly operator limit exceeded.');
+      return combinations.flatMap(sequence => group.map(operatorId => [...sequence, operatorId]));
+    }, [[]]);
   }
 
   function expandOperatorGroup(value) {
@@ -1057,6 +1058,8 @@
       if (range) {
         const start = Number(range[1]);
         const end = Number(range[2]);
+        if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end)
+          || Math.abs(end - start) >= 10_000) throw new Error('Assembly operator limit exceeded.');
         const step = start <= end ? 1 : -1;
         for (let number = start; number !== end + step; number += step) ids.push(String(number));
       } else if (part) ids.push(part);
@@ -1123,7 +1126,7 @@
     });
   }
 
-  function inferBonds(atoms, bonds, deniedPairs = new Set()) {
+  function inferBonds(atoms, bonds, deniedPairs = []) {
     const existing = new Set(bonds.map(bond => {
       const [left, right] = bond.atomIndices;
       return left < right ? `${left}:${right}` : `${right}:${left}`;
@@ -1158,7 +1161,9 @@
           const maximum = (COVALENT_RADII[atom.element] || .77) + (COVALENT_RADII[other.element] || .77) + .46;
           if (distanceSquared < .16 || distanceSquared > maximum * maximum) continue;
           const key = atom.index < otherIndex ? `${atom.index}:${otherIndex}` : `${otherIndex}:${atom.index}`;
-          if (!existing.has(key) && !deniedPairs.has(key)) {
+          const denied = deniedPairs.some(pair => (pair[0].has(atom.index) && pair[1].has(otherIndex))
+            || (pair[0].has(otherIndex) && pair[1].has(atom.index)));
+          if (!existing.has(key) && !denied) {
             existing.add(key);
             bonds.push(bondRecord(atom.index, otherIndex));
           }

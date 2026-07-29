@@ -80,6 +80,8 @@ assert.deepEqual(Array.from(renderedModels[1].atoms, atom => Array.from(atom.bon
   'mmCIF double-bond order is installed in the second renderer model');
 assert.equal(renderer.domainAtomForRenderer(renderedModels[0].atoms[0]).model, 1);
 assert.equal(renderer.domainAtomForRenderer(renderedModels[1].atoms[0]).model, 2);
+assert.equal(renderer.to3DSelection({ model: 2, chain: 'A', resi: 1 }).model, 1,
+  'fallback selections translate coordinate model numbers to exact renderer model indexes');
 
 const pdbDoc = Core.normalizeDocument({
   format: 'molhtml/document', version: 1, documentId: 'renderer-pdb-models', revision: 1,

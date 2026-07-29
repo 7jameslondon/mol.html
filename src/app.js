@@ -799,7 +799,7 @@
   function focusLigandAnalysis() {
     const result = ligandAnalysisResult();
     if (!result.ligand) throw new Error('Choose a ligand first.');
-    renderer.focusSelectors([result.ligand.selector, ...result.residues]);
+    renderer.focusSelectors([result.ligand.selector, ...result.residues.map(residue => residue.selector)]);
     return { ligand: structuredClone(result.ligand.selector), residueCount: result.residues.length };
   }
 
@@ -811,10 +811,7 @@
         atomCount: result.ligand.atomCount, heavyAtomCount: result.ligand.heavyAtomCount
       } : null,
       residues: result.residues.map(residue => ({
-        selector: {
-          structureId: doc.structure.id, model: residue.model, chain: residue.chain,
-          resi: residue.resi, icode: residue.icode, resn: residue.resn
-        },
+        selector: residue.selector,
         label: `${residue.resn} ${residue.resi}${residue.icode || ''}`,
         kind: residue.kind, minimumDistance: residue.minimumDistance,
         contactCount: residue.contacts.length, hasClose: residue.hasClose, hasPolar: residue.hasPolar

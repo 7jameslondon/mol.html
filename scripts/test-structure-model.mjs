@@ -280,6 +280,10 @@ assert.equal(multiModel.topology.instances.length, 1, 'coordinate models share o
 assert.deepEqual(JSON.parse(JSON.stringify(multiModel.bonds.map(bond => [bond.atomIndices, bond.order, bond.provenance]))),
   [[[0, 1], 1, 'pdb-conect'], [[2, 3], 1, 'pdb-conect']],
   'PDB CONECT records are resolved independently in every coordinate model');
+const pdbResidueColorDocument = { structure: { id: 'multi-model-pdb' }, scene: { colorMode: 'residue', customColors: [] } };
+assert.equal(Core.colorForAtom(multiModel.atoms[0], pdbResidueColorDocument, multiModel),
+  Core.colorForAtom(multiModel.atoms[2], pdbResidueColorDocument, multiModel),
+  'PDB residues also keep their colors across coordinate models');
 const orderedPdbBonds = Core.parseStructure(multiModelPdb.replace('CONECT    1    2', 'CONECT    1    2    2'), 'pdb');
 assert.deepEqual(Array.from(orderedPdbBonds.bonds, bond => bond.order), [2, 2],
   'repeated PDB CONECT targets preserve explicit bond order');
@@ -290,6 +294,10 @@ assert.deepEqual(Array.from(multiModelMmcif.coordinateSets, set => set.modelNumb
 assert.deepEqual(JSON.parse(JSON.stringify(multiModelMmcif.bonds.map(bond => [bond.atomIndices, bond.order, bond.provenance]))),
   [[[0, 1], 2, 'mmcif-struct-conn'], [[2, 3], 2, 'mmcif-struct-conn']],
   'mmCIF struct_conn bond order is retained in every coordinate model');
+const residueColorDocument = { structure: { id: 'multi-model' }, scene: { colorMode: 'residue', customColors: [] } };
+assert.equal(Core.colorForAtom(multiModelMmcif.atoms[0], residueColorDocument, multiModelMmcif),
+  Core.colorForAtom(multiModelMmcif.atoms[2], residueColorDocument, multiModelMmcif),
+  'the same normalized residue keeps its color across coordinate models');
 for (const connectionType of ['disulf', 'modres', 'metalc']) {
   const connected = Core.parseStructure(multiModelCif.replace('covale', connectionType), 'mmcif');
   assert.deepEqual(JSON.parse(JSON.stringify(connected.bonds.map(bond => bond.atomIndices))), [[0, 1], [2, 3]],
@@ -501,6 +509,20 @@ const translated = conformance.assemblyInstances.find(instance =>
   instance.baseInstanceId === 'A' && instance.operatorIds.join(',') === '2,3');
 assert.deepEqual(JSON.parse(JSON.stringify(translated.transform)).map(row => row[3]), [0, 10, 0, 1],
   'operator products compose right-to-left into an explicit assembly-instance transform');
+assert.throws(() => Core.parseStructure(conformanceCif.replace('(1-2)(3)', '(1-10001)(3)'), 'mmcif'),
+  /operator limit exceeded/i, 'assembly operator ranges have a materialization safety limit');
+assert.throws(() => Core.parseStructure(conformanceCif.replace('(1-2)(3)', '(1-101)(1-101)'), 'mmcif'),
+  /operator limit exceeded/i, 'assembly operator Cartesian products have a safety limit');
+const sharedAuthorPocket = Core.parseStructure(conformanceCif
+  .replaceAll('10 GLY B ', '10 GLY A ')
+  .replace('20.0  5.0 0.0', '2.0  2.5 0.0')
+  .replace('21.3  5.0 0.0', '3.3  2.5 0.0'), 'mmcif');
+const sharedAuthorLigandSelector = Core.groupLigands(sharedAuthorPocket, 'shared-author-pocket')[0].selector;
+const sharedAuthorResidues = Core.analyzeLigandPocket(
+  sharedAuthorPocket, sharedAuthorLigandSelector, 4, 'shared-author-pocket'
+).residues.filter(residue => ['A', 'B'].includes(residue.selector.sourceIdentity?.labelAsymId));
+assert.equal(sharedAuthorResidues.map(residue => residue.selector.sourceIdentity.labelAsymId).sort().join(','), 'A,B',
+  'ligand pockets preserve distinct normalized residues that share an author residue tuple');
 
 const equivalentPdb = Core.parseStructure(pdb, 'pdb');
 const equivalentMmcif = Core.parseStructure(equivalentCif, 'mmcif');
@@ -523,6 +545,13 @@ assert.equal(v1.version, 1, 'an untouched PDB v1 document remains v1');
 assert.equal(v1.futureDocumentField.preserved, true);
 assert.equal(v1.structure.futureStructureField, 42);
 assert.equal(v1.scene.futureSceneField, true);
+const semanticColorV1 = Core.normalizeDocument({
+  ...v1, version: 1,
+  scene: { ...v1.scene, colorMode: 'chain', customColors: [{
+    scope: 'role', color: '#ffffff', selector: { structureId: 'pdb', role: 'ligand' }
+  }] }
+});
+assert.equal(semanticColorV1.version, 2, 'semantic custom-color scopes upgrade PDB documents to v2');
 
 const migratedV1Bindings = Core.normalizeDocument({
   format: 'molhtml/document', version: 1, documentId: 'legacy-bindings', revision: 1,

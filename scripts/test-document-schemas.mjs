@@ -217,6 +217,19 @@ invalidWithinTarget.scene.savedSelections[0].selector = {
 };
 assert.ok(schemaErrors(v2, v2, invalidWithinTarget).length,
   'within targets are limited to atom, residue, and ligand selectors');
+for (const cutoff of [2.4, 8.1]) {
+  const invalidLigandCutoff = structuredClone(validV2);
+  invalidLigandCutoff.scene.ligandAnalysis.cutoff = cutoff;
+  assert.ok(schemaErrors(v2, v2, invalidLigandCutoff).length,
+    'ligand-analysis cutoff matches the runtime 2.5–8 Å range');
+}
+const invalidRangeEndpoint = structuredClone(validV2);
+invalidRangeEndpoint.scene.savedSelections[0].selector = {
+  kind: 'residue-range', structureId: 'structure-2', model: 1, chain: 'A',
+  start: { resi: 'bad' }, end: { resi: 3, icode: '' }
+};
+assert.ok(schemaErrors(v2, v2, invalidRangeEndpoint).length,
+  'residue-range endpoints require numeric residue numbers');
 for (const selector of [
   { kind: 'atom', structureId: 'structure-2' },
   { kind: 'residue', structureId: 'structure-2', model: 1, chain: 'A' },

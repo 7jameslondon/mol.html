@@ -200,7 +200,7 @@
       }
       if (state.showPocket) {
         for (const residue of result.residues) {
-          this.viewer.addStyle(this.to3DSelection(residue), {
+          this.viewer.addStyle(this.selectionForAtoms(residue.atoms), {
             stick: { radius: .22, color: residue.hasPolar ? '#71ddf8' : '#7ee2a8' },
             sphere: { scale: .25, color: residue.hasPolar ? '#71ddf8' : '#7ee2a8' }
           });
@@ -322,6 +322,10 @@
         if (match.valid) return this.selectionForAtoms(match.atoms);
       }
       const selection = {};
+      if (selector.model != null) {
+        const atom = this.parsed?.atoms.find(candidate => candidate.model == selector.model);
+        if (atom) selection.model = this.rendererLocationByDomainIndex.get(atom.index).model;
+      }
       if (selector.chain != null) selection.chain = selector.chain === '_' ? '' : selector.chain;
       if (selector.resi != null) selection.resi = Number(selector.resi);
       if (selector.icode != null) selection.icode = selector.icode;

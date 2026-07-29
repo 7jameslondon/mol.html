@@ -71,9 +71,18 @@
         "connectedComponentId": { "type": "string", "minLength": 1 },
         "sourceIdentity": { "$ref": "#/$defs/sourceIdentity" },
         "cutoff": { "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
-        "start": { "type": "object" },
-        "end": { "type": "object" },
+        "start": { "$ref": "#/$defs/residueRangeEndpoint" },
+        "end": { "$ref": "#/$defs/residueRangeEndpoint" },
         "target": { "$ref": "#/$defs/selector" }
+      },
+      "additionalProperties": true
+    },
+    "residueRangeEndpoint": {
+      "type": "object",
+      "required": ["resi"],
+      "properties": {
+        "resi": { "type": "number" },
+        "icode": { "type": "string" }
       },
       "additionalProperties": true
     },
@@ -258,9 +267,7 @@
             { "$ref": "#/$defs/selectorReference" },
             {
               "properties": {
-                "kind": { "const": "residue-range" },
-                "start": { "required": ["resi"] },
-                "end": { "required": ["resi"] }
+                "kind": { "const": "residue-range" }
               },
               "required": ["kind", "model", "chain", "start", "end"]
             }
@@ -453,7 +460,7 @@
             { "$ref": "#/$defs/residueReference" }
           ]
         },
-        "cutoff": { "type": "number", "minimum": 0 },
+        "cutoff": { "type": "number", "minimum": 2.5, "maximum": 8 },
         "showLigand": { "type": "boolean" },
         "showPocket": { "type": "boolean" },
         "showContacts": { "type": "boolean" },
