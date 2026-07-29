@@ -6,6 +6,7 @@ import { parse } from 'yaml';
 const workflowDirectory = resolve('.github/workflows');
 const workflow = await readFile(resolve(workflowDirectory, 'ci.yml'), 'utf8');
 const pagesWorkflow = await readFile(resolve(workflowDirectory, 'pages.yml'), 'utf8');
+const buildSizeWorkflow = await readFile(resolve(workflowDirectory, 'build-size.yml'), 'utf8');
 const extractActionUses = (source, name = 'workflow') => {
   const actionUses = [];
   const visit = value => {
@@ -68,6 +69,34 @@ assert.doesNotMatch(
   workflow,
   /^\s*(?:run:.*\b(?:publish|release|deploy)\b|-\s*name:.*\b(?:publish|release|deploy)\b)/im,
   'CI contains no release or publishing step'
+);
+
+const buildSizePolicy = parse(buildSizeWorkflow);
+assert.deepEqual(
+  buildSizePolicy.permissions,
+  { contents: 'read', 'pull-requests': 'write' },
+  'Build-size reporting grants only the permissions needed to read artifacts and update PR comments'
+);
+assert.ok(buildSizePolicy.on.pull_request_target, 'Build-size reporting refreshes for PR-head changes');
+assert.deepEqual(
+  buildSizePolicy.on.push.branches,
+  ['main'],
+  'Build-size reporting refreshes open PRs after merge-branch changes'
+);
+assert.match(
+  buildSizeWorkflow,
+  /pull_request_target deliberately checks out only the trusted merge branch/,
+  'The privileged PR trigger documents its trust boundary'
+);
+assert.match(
+  buildSizeWorkflow,
+  /node scripts\/report-pr-artifact-size\.mjs/,
+  'Build-size reporting runs the trusted metadata-only reporter'
+);
+assert.doesNotMatch(
+  buildSizeWorkflow,
+  /pnpm|npm|github\.event\.pull_request\.head\.sha/,
+  'Build-size reporting never installs dependencies, builds, or checks out PR code'
 );
 
 const pagesPolicy = parse(pagesWorkflow);

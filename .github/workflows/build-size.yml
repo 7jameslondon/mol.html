@@ -1,0 +1,37 @@
+name: Report build size
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, edited]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.event_name == 'pull_request_target' && format('build-size-pr-{0}', github.event.pull_request.number) || format('build-size-{0}-{1}', github.ref, github.sha) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
+
+jobs:
+  report:
+    name: update PR build-size report
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # pull_request_target deliberately checks out only the trusted merge branch.
+      # The reporter reads PR artifact metadata through the API and never executes PR code.
+      - name: Check out trusted reporting code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Update build-size report comments
+        run: node scripts/report-pr-artifact-size.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
