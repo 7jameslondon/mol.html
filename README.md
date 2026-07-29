@@ -1,6 +1,7 @@
 # mol.html
 
 [![Validate](https://github.com/7jameslondon/mol.html/actions/workflows/ci.yml/badge.svg)](https://github.com/7jameslondon/mol.html/actions/workflows/ci.yml)
+[![Deploy Pages](https://github.com/7jameslondon/mol.html/actions/workflows/pages.yml/badge.svg)](https://github.com/7jameslondon/mol.html/actions/workflows/pages.yml)
 [![Node coverage](https://github.com/7jameslondon/mol.html/actions/workflows/node-coverage.yml/badge.svg)](https://github.com/7jameslondon/mol.html/actions/workflows/node-coverage.yml)
 [![Playwright coverage](https://github.com/7jameslondon/mol.html/actions/workflows/playwright-coverage.yml/badge.svg)](https://github.com/7jameslondon/mol.html/actions/workflows/playwright-coverage.yml)
 
