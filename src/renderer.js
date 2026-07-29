@@ -65,7 +65,7 @@
           this.model = this.models[0] || null;
           if (multipleMmcifModels) this.buildCoordinateSetAtomMapping();
           else this.buildAtomMapping();
-          if (this.parsed.coordinateSets.length > 1) this.applyNormalizedBonds();
+          this.applyNormalizedBonds();
           fit = true;
         }
 
@@ -425,7 +425,8 @@
         atom.bondOrder = [];
         renderedByKey.set(`${Number(atom.model)}|${Number(atom.index)}`, atom);
       }
-      for (const [leftIndex, rightIndex] of this.parsed?.bonds || []) {
+      for (const bond of this.parsed?.bonds || []) {
+        const [leftIndex, rightIndex] = bond.atomIndices;
         const leftLocation = this.rendererLocationByDomainIndex.get(leftIndex);
         const rightLocation = this.rendererLocationByDomainIndex.get(rightIndex);
         if (!leftLocation || !rightLocation || leftLocation.model !== rightLocation.model) continue;
@@ -433,9 +434,9 @@
         const right = renderedByKey.get(`${rightLocation.model}|${rightLocation.index}`);
         if (!left || !right) continue;
         left.bonds.push(right.index);
-        left.bondOrder.push(1);
+        left.bondOrder.push(Number(bond.order) || 1);
         right.bonds.push(left.index);
-        right.bondOrder.push(1);
+        right.bondOrder.push(Number(bond.order) || 1);
       }
     }
 

@@ -48,12 +48,18 @@ assert.throws(
 );
 
 const atoms = [
-  { ...point(0, 0, 0), model: 1, chain: 'A', resi: 1, icode: '', resn: 'ALA', name: 'CA', altLoc: '', serial: 1 },
-  { ...point(1, 0, 0), model: 1, chain: 'A', resi: 2, icode: '', resn: 'GLY', name: 'N', altLoc: '', serial: 2 }
+  { ...point(0, 0, 0), model: 1, chain: 'A', resi: 1, icode: '', resn: 'ALA', name: 'CA', altLoc: '', serial: 1, labelAsymId: 'A' },
+  { ...point(1, 0, 0), model: 1, chain: 'A', resi: 2, icode: '', resn: 'GLY', name: 'N', altLoc: '', serial: 2, labelAsymId: 'A' }
 ];
 const resolved = Core.measurementAtoms(normalized.scene.measurements[0], atoms, 'structure-test');
 assert.equal(resolved?.length, 2);
 assert.equal(Core.measurementValue('distance', resolved), 1);
 assert.equal(Core.measurementAtoms(normalized.scene.measurements[0], atoms, 'different-structure'), null);
+assert.equal(Core.measurementAtoms({
+  type: 'distance', atoms: [
+    { structureId: 'structure-test', sourceIdentity: { modelNumber: 1, labelAsymId: 'A' } },
+    selectorB
+  ]
+}, atoms, 'structure-test'), null, 'ambiguous measurement selectors never choose the first atom');
 
 console.log('Measurement geometry, normalization, and selector resolution tests passed.');

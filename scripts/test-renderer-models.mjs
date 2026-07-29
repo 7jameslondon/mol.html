@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
-const [structureSource, modelSource, rendererSource, multiModelCif, multiModelPdb] = await Promise.all([
+const [structureSource, modelSource, rendererSource, multiModelCif, multiModelPdb, authorStructConnCif] = await Promise.all([
   readFile(new URL('../src/structure.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/model.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/renderer.js', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/multi-model.cif', import.meta.url), 'utf8'),
-  readFile(new URL('../fixtures/multi-model.pdb', import.meta.url), 'utf8')
+  readFile(new URL('../fixtures/multi-model.pdb', import.meta.url), 'utf8'),
+  readFile(new URL('../fixtures/author-struct-conn.cif', import.meta.url), 'utf8')
 ]);
 
 let Core;
@@ -69,6 +70,10 @@ assert.deepEqual(Array.from(renderedModels[0].atoms, atom => Array.from(atom.bon
   'normalized explicit bonds are installed in the first renderer model');
 assert.deepEqual(Array.from(renderedModels[1].atoms, atom => Array.from(atom.bonds)), [[1], [0]],
   'normalized explicit bonds are installed in the second renderer model');
+assert.deepEqual(Array.from(renderedModels[0].atoms, atom => Array.from(atom.bondOrder)), [[2], [2]],
+  'mmCIF double-bond order is installed in the first renderer model');
+assert.deepEqual(Array.from(renderedModels[1].atoms, atom => Array.from(atom.bondOrder)), [[2], [2]],
+  'mmCIF double-bond order is installed in the second renderer model');
 assert.equal(renderer.domainAtomForRenderer(renderedModels[0].atoms[0]).model, 1);
 assert.equal(renderer.domainAtomForRenderer(renderedModels[1].atoms[0]).model, 2);
 
@@ -85,7 +90,26 @@ assert.deepEqual(Array.from(renderedModels[0].atoms, atom => Array.from(atom.bon
   'normalized trailing CONECT bonds are installed in the first PDB renderer model');
 assert.deepEqual(Array.from(renderedModels[1].atoms, atom => Array.from(atom.bonds)), [[1], [0]],
   'normalized trailing CONECT bonds are installed in the second PDB renderer model');
+assert.deepEqual(Array.from(renderedModels[0].atoms, atom => Array.from(atom.bondOrder)), [[1], [1]],
+  'PDB bond order is installed in the first renderer model');
+assert.deepEqual(Array.from(renderedModels[1].atoms, atom => Array.from(atom.bondOrder)), [[1], [1]],
+  'PDB bond order is installed in the second renderer model');
 assert.equal(pdbRenderer.domainAtomForRenderer(renderedModels[0].atoms[0]).model, 1);
 assert.equal(pdbRenderer.domainAtomForRenderer(renderedModels[1].atoms[0]).model, 2);
 
-console.log('Multi-model PDB/mmCIF renderer bond separation and mapping tests passed.');
+const authorDoc = Core.normalizeDocument({
+  format: 'molhtml/document', version: 2, documentId: 'renderer-author-bond', revision: 1,
+  structure: { id: 'author-bond', name: 'author-struct-conn.cif', format: 'mmcif', data: authorStructConnCif },
+  scene: {}
+});
+const authorRenderer = new context.window.MoleculeRenderer({}, {});
+authorRenderer.setDocument(authorDoc, { fit: true });
+
+assert.equal(renderedModels.length, 1);
+assert.deepEqual(Array.from(renderedModels[0].atoms, atom => Array.from(atom.bonds)), [[2], [], [0], []],
+  'single-model author-only struct_conn installs exactly the named renderer bond');
+assert.deepEqual(Array.from(renderedModels[0].atoms, atom => Array.from(atom.bondOrder)), [[2], [], [2], []],
+  'single-model explicit mmCIF bond order remains double in the renderer');
+assert.equal(authorRenderer.domainAtomForRenderer(renderedModels[0].atoms[2]).serial, 3);
+
+console.log('Normalized PDB/mmCIF renderer bond order and mapping tests passed.');

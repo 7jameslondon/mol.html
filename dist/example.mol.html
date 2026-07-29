@@ -1508,6 +1508,9 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     'A', 'C', 'G', 'I', 'T', 'U', 'DA', 'DC', 'DG', 'DI', 'DT', 'DU',
     'ADE', 'CYT', 'GUA', 'THY', 'URI'
   ]);
+  const MODIFIED_RESIDUE_PARENTS = new Map(Object.entries({
+    MSE: 'MET', SEP: 'SER', TPO: 'THR', PTR: 'TYR', HYP: 'PRO'
+  }));
   const ION_NAMES = new Set([
     'AL', 'BA', 'BR', 'CA', 'CD', 'CL', 'CO', 'CS', 'CU', 'FE', 'HG', 'I',
     'K', 'LI', 'MG', 'MN', 'NA', 'NI', 'PB', 'RB', 'SR', 'ZN'
@@ -1524,6 +1527,10 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   ).split(' '));
   const MAX_ATOMS = 2_000_000;
   const spatialIndexCache = new WeakMap();
+
+  function bondRecord(left, right, order = 1, provenance = 'inferred-distance', connectionType = 'covalent') {
+    return { atomIndices: [left, right], order, provenance, connectionType };
+  }
 
   function normalizeStructureFormat(value) {
     const format = String(value || '').trim().toLowerCase().replace(/^\./, '');
@@ -1566,10 +1573,11 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   function parsePDBCoordinates(value) {
     const text = String(value || '');
     const atoms = [];
-    const explicitBondSerials = new Set();
+    const explicitBondOrders = new Map();
     const serialMap = new Map();
     let model = 1;
     const lines = text.replace(/\r/g, '').split('\n');
+    const modifiedResidues = parsePdbModifiedResidues(lines);
     const diagnostics = {
       coordinateLines: 0,
       skippedCoordinateLines: 0,
@@ -1593,6 +1601,9 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         const chain = line.slice(21, 22).trim() || '_';
         const resn = line.slice(17, 20).trim() || 'UNK';
         const resi = Number.parseInt(line.slice(22, 26), 10) || 0;
+        const icode = line.slice(26, 27).trim();
+        const modification = modifiedResidues.get(pdbModifiedResidueKey(chain, resi, icode, resn));
+        const fallbackParent = MODIFIED_RESIDUE_PARENTS.get(resn);
         const atom = {
           index: atoms.length,
           serial,
@@ -1601,7 +1612,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
           resn,
           chain,
           resi,
-          icode: line.slice(26, 27).trim(),
+          icode,
           x: Number.parseFloat(line.slice(30, 38)),
           y: Number.parseFloat(line.slice(38, 46)),
           z: Number.parseFloat(line.slice(46, 54)),
@@ -1622,6 +1633,8 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
           authSeqId: resi,
           authCompId: resn,
           authAtomId: rawName.trim() || 'X',
+          parentCompId: modification?.parentCompId || fallbackParent || null,
+          modificationProvenance: modification ? 'pdb-modres' : (fallbackParent ? 'modified-residue-map' : null),
           identityProvenance: 'pdb-source'
         };
         if ([atom.x, atom.y, atom.z].every(Number.isFinite)) {
@@ -1638,9 +1651,13 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       if (record === 'CONECT') {
         const values = line.slice(6).match(/.{1,5}/g)?.map(part => Number.parseInt(part, 10)).filter(Number.isFinite) || [];
         const source = values.shift();
-        for (const target of values) {
+        if (!Number.isFinite(source)) continue;
+        const counts = new Map();
+        for (const target of values) counts.set(target, (counts.get(target) || 0) + 1);
+        for (const [target, count] of counts) {
           if (source === target) continue;
-          explicitBondSerials.add(source < target ? `${source}:${target}` : `${target}:${source}`);
+          const key = source < target ? `${source}:${target}` : `${target}:${source}`;
+          explicitBondOrders.set(key, Math.max(explicitBondOrders.get(key) || 0, Math.min(count, 4)));
         }
       }
     }
@@ -1648,12 +1665,12 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     if (!atoms.length) throw new Error('No ATOM or HETATM coordinates were found in this PDB file.');
     const bonds = [];
     const modelNumbers = [...new Set(atoms.map(atom => atom.model))];
-    for (const key of explicitBondSerials) {
+    for (const [key, order] of explicitBondOrders) {
       const [left, right] = key.split(':').map(Number);
       for (const modelNumber of modelNumbers) {
         const a = serialMap.get(`${modelNumber}|${left}`);
         const b = serialMap.get(`${modelNumber}|${right}`);
-        if (a != null && b != null) bonds.push([a, b]);
+        if (a != null && b != null) bonds.push(bondRecord(a, b, order, 'pdb-conect', 'covalent'));
       }
     }
     inferBonds(atoms, bonds);
@@ -1661,6 +1678,25 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       format: 'pdb', atoms, bonds, assemblies: parsePdbAssemblies(lines), diagnostics,
       entityDefinitions: new Map(), instanceDefinitions: new Map()
     });
+  }
+
+  function pdbModifiedResidueKey(chain, resi, icode, resn) {
+    return `${chain || '_'}|${Number(resi) || 0}|${icode || ''}|${String(resn || '').toUpperCase()}`;
+  }
+
+  function parsePdbModifiedResidues(lines) {
+    const modifications = new Map();
+    for (const line of lines) {
+      if (line.slice(0, 6).trim().toUpperCase() !== 'MODRES') continue;
+      const resn = line.slice(12, 15).trim().toUpperCase();
+      const chain = line.slice(16, 17).trim() || '_';
+      const resi = Number.parseInt(line.slice(18, 22), 10);
+      const icode = line.slice(22, 23).trim();
+      const parentCompId = line.slice(24, 27).trim().toUpperCase();
+      if (!resn || !Number.isFinite(resi) || !parentCompId) continue;
+      modifications.set(pdbModifiedResidueKey(chain, resi, icode, resn), { parentCompId });
+    }
+    return modifications;
   }
 
   function parsePdbAssemblies(lines) {
@@ -1922,6 +1958,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     if (!block) throw new Error('The mmCIF input does not contain a data block.');
     const atomRows = block.categories.atom_site || [];
     const atoms = [];
+    const modifiedResidueParents = mmcifModifiedResidueParents(block.categories);
     const diagnostics = {
       coordinateLines: atomRows.length,
       skippedCoordinateLines: 0,
@@ -1942,6 +1979,8 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       }
       const labelAtomId = cifValue(row.label_atom_id) || cifValue(row.auth_atom_id) || 'X';
       const labelCompId = cifValue(row.label_comp_id) || cifValue(row.auth_comp_id) || 'UNK';
+      const normalizedCompId = labelCompId.toUpperCase();
+      const modifiedParent = modifiedResidueParents.get(normalizedCompId) || MODIFIED_RESIDUE_PARENTS.get(normalizedCompId);
       const labelAsymId = cifValue(row.label_asym_id);
       const authAsymId = cifValue(row.auth_asym_id);
       const labelSeqId = cifValue(row.label_seq_id);
@@ -1978,6 +2017,9 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         authSeqId,
         authCompId: cifValue(row.auth_comp_id),
         authAtomId: cifValue(row.auth_atom_id),
+        parentCompId: modifiedParent || null,
+        modificationProvenance: modifiedResidueParents.has(normalizedCompId)
+          ? 'mmcif-chem-comp' : (modifiedParent ? 'modified-residue-map' : null),
         identityProvenance: 'mmcif-atom-site'
       };
       if (atoms.length >= MAX_ATOMS) throw new Error(`The structure exceeds the ${MAX_ATOMS.toLocaleString()} atom safety limit.`);
@@ -1987,7 +2029,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
 
     const entityDefinitions = mmcifEntityDefinitions(block.categories);
     const instanceDefinitions = mmcifInstanceDefinitions(block.categories);
-    const bonds = mmcifExplicitBonds(block.categories, atoms);
+    const bonds = mmcifExplicitBonds(block.categories, atoms, diagnostics);
     inferBonds(atoms, bonds);
     return finalizeStructure({
       format: 'mmcif', atoms, bonds,
@@ -1996,6 +2038,16 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       dataBlock: block.name,
       cifCategories: block.categories
     });
+  }
+
+  function mmcifModifiedResidueParents(categories) {
+    const parents = new Map();
+    for (const row of categories.chem_comp || []) {
+      const id = cifValue(row.id)?.toUpperCase();
+      const parent = cifValue(row.mon_nstd_parent_comp_id)?.split(',')[0]?.trim().toUpperCase();
+      if (id && parent) parents.set(id, parent);
+    }
+    return parents;
   }
 
   function mmcifEntityDefinitions(categories) {
@@ -2069,6 +2121,16 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       return { role: definition.role, subtype: definition.subtype || 'other', provenance: definition.provenance };
     }
     if (WATER_NAMES.has(name)) return { role: 'solvent', subtype: 'water', provenance: first?.sourceFormat === 'pdb' ? 'pdb-record' : 'name-fallback' };
+    const parent = String(first?.parentCompId || '').toUpperCase();
+    if (AMINO_ACIDS.has(parent)) {
+      return { role: 'polymer', subtype: 'protein', provenance: first.modificationProvenance || 'modified-residue-map' };
+    }
+    if (NUCLEOTIDES.has(parent)) {
+      return {
+        role: 'polymer', subtype: parent.startsWith('D') || parent === 'T' || parent === 'THY' ? 'dna' : 'rna',
+        provenance: first.modificationProvenance || 'modified-residue-map'
+      };
+    }
     if (AMINO_ACIDS.has(name)) return { role: 'polymer', subtype: 'protein', provenance: first?.sourceFormat === 'pdb' ? 'pdb-record' : 'name-fallback' };
     if (NUCLEOTIDES.has(name)) {
       return { role: 'polymer', subtype: name.startsWith('D') || name === 'T' || name === 'THY' ? 'dna' : 'rna', provenance: first?.sourceFormat === 'pdb' ? 'pdb-record' : 'name-fallback' };
@@ -2098,6 +2160,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
           authAsymId: atom.authAsymId,
           authSeqId: atom.authSeqId,
           authCompId: atom.authCompId,
+          parentCompId: atom.parentCompId,
           insertionCode: atom.icode,
           atomIndices: []
         };
@@ -2295,7 +2358,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       const b = find(right);
       if (a !== b) parent[b] = a;
     };
-    for (const [left, right] of bonds) join(left, right);
+    for (const bond of bonds) join(...bond.atomIndices);
     const groups = new Map();
     for (const atom of atoms) {
       const root = find(atom.index);
@@ -2309,20 +2372,33 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     return components;
   }
 
-  function mmcifExplicitBonds(categories, atoms) {
+  function mmcifExplicitBonds(categories, atoms, diagnostics) {
     const bonds = [];
     const existing = new Set();
+    const modelNumbers = [...new Set(atoms.map(atom => atom.model))];
     for (const row of categories.struct_conn || []) {
       if (!isTopologyConnectionType(row.conn_type_id)) continue;
       const leftAtoms = findStructConnAtoms(atoms, row, 'ptnr1');
       const rightAtoms = findStructConnAtoms(atoms, row, 'ptnr2');
-      for (const left of leftAtoms) for (const right of rightAtoms) {
-        if (left.model !== right.model || left.index === right.index) continue;
-        if (left.altLoc && right.altLoc && left.altLoc !== right.altLoc) continue;
+      for (const modelNumber of modelNumbers) {
+        const leftMatches = leftAtoms.filter(atom => atom.model === modelNumber);
+        const rightMatches = rightAtoms.filter(atom => atom.model === modelNumber);
+        if (leftMatches.length !== 1 || rightMatches.length !== 1) {
+          if (diagnostics?.parserWarnings?.length < 50) {
+            diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} is ambiguous or unresolved in model ${modelNumber}.`);
+          }
+          continue;
+        }
+        const left = leftMatches[0];
+        const right = rightMatches[0];
+        if (left.index === right.index) continue;
         const key = left.index < right.index ? `${left.index}:${right.index}` : `${right.index}:${left.index}`;
         if (!existing.has(key)) {
           existing.add(key);
-          bonds.push([left.index, right.index]);
+          bonds.push(bondRecord(
+            left.index, right.index, mmcifBondOrder(row.pdbx_value_order),
+            'mmcif-struct-conn', String(cifValue(row.conn_type_id) || '').toLowerCase()
+          ));
         }
       }
     }
@@ -2334,6 +2410,12 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     return type.startsWith('covale') || ['disulf', 'modres', 'metalc'].includes(type);
   }
 
+  function mmcifBondOrder(value) {
+    return { sing: 1, doub: 2, trip: 3, quad: 4, arom: 1.5, delo: 1.5 }[
+      String(cifValue(value) || '').trim().toLowerCase()
+    ] || 1;
+  }
+
   function findStructConnAtoms(atoms, row, prefix) {
     const labelAsymId = cifValue(row[`${prefix}_label_asym_id`]);
     const labelSeqId = cifValue(row[`${prefix}_label_seq_id`]);
@@ -2341,6 +2423,8 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     const labelAtomId = cifValue(row[`${prefix}_label_atom_id`]);
     const authAsymId = cifValue(row[`${prefix}_auth_asym_id`]);
     const authSeqId = cifValue(row[`${prefix}_auth_seq_id`]);
+    const authCompId = cifValue(row[`${prefix}_auth_comp_id`]);
+    const authAtomId = cifValue(row[`${prefix}_auth_atom_id`]);
     const labelAltId = cifValue(row[`pdbx_${prefix}_label_alt_id`] ?? row[`${prefix}_label_alt_id`]);
     const insertionCode = cifValue(row[`pdbx_${prefix}_pdb_ins_code`]);
     return atoms.filter(atom =>
@@ -2350,6 +2434,8 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       && (labelAtomId == null || atom.labelAtomId === labelAtomId)
       && (authAsymId == null || atom.authAsymId === authAsymId)
       && (authSeqId == null || atom.authSeqId === authSeqId)
+      && (authCompId == null || atom.authCompId === authCompId)
+      && (authAtomId == null || atom.authAtomId === authAtomId)
       && (labelAltId == null || atom.labelAltId === labelAltId)
       && (insertionCode == null || atom.icode === insertionCode)
     );
@@ -2493,7 +2579,10 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   }
 
   function inferBonds(atoms, bonds) {
-    const existing = new Set(bonds.map(([left, right]) => left < right ? `${left}:${right}` : `${right}:${left}`));
+    const existing = new Set(bonds.map(bond => {
+      const [left, right] = bond.atomIndices;
+      return left < right ? `${left}:${right}` : `${right}:${left}`;
+    }));
     const cellSize = 2.6;
     const cells = new Map();
     const cellKey = (x, y, z) => `${x}|${y}|${z}`;
@@ -2525,7 +2614,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
           const key = atom.index < otherIndex ? `${atom.index}:${otherIndex}` : `${otherIndex}:${atom.index}`;
           if (!existing.has(key)) {
             existing.add(key);
-            bonds.push([atom.index, otherIndex]);
+            bonds.push(bondRecord(atom.index, otherIndex));
           }
         }
       }
@@ -2929,7 +3018,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         bFactorMax = Math.max(bFactorMax, value);
       }
       if (isWater(atom)) waters.add(residueKey);
-      else if (atom.het) ligands.add(residueKey);
+      else if (isLigandLike(atom)) ligands.add(residueKey);
     }
     const bFactor = bFactorCount ? {
       min: bFactorMin, max: bFactorMax,
@@ -3229,7 +3318,9 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       if (!selector.sourceIdentity && !validRequiredSelectorFields(selector, ['model', 'chain', 'resi', 'atom'])) {
         return selectionMatchError('Atom selector is missing model, chain, residue, or atom name.');
       }
-      matched = candidates.filter(atom => atomMatchesSelector(atom, selector, structureId));
+      const resolution = resolveUniqueAtomSelector(selector, candidates, structureId);
+      if (!resolution.valid) return selectionMatchError(resolution.error);
+      matched = [resolution.atom];
     } else if (kind === 'residue') {
       if (selector.sourceIdentity) {
         matched = candidates.filter(atom => atomMatchesSelector(atom, selector, structureId));
@@ -3297,7 +3388,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         return selectionMatchError('Ligand selector model must be a number.');
       }
       matched = candidates.filter(atom =>
-        atom.het && !isWater(atom)
+        isLigandLike(atom) && !isWater(atom)
         && (selector.model == null || atom.model === Number(selector.model))
       );
     } else if (kind === 'within') {
@@ -3317,6 +3408,9 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     }
 
     if (!matched.length) return selectionMatchError('Selector did not resolve to any atoms.');
+    if (kind === 'residue' && countMatchedResidues(matched) !== 1) {
+      return selectionMatchError('Residue selector is ambiguous across multiple residues.');
+    }
 
     return {
       valid: true,
@@ -3431,7 +3525,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     const ligands = [];
     const byKey = new Map();
     for (const atom of atoms) {
-      if ((!atom.het && !['ligand', 'ion'].includes(atom.role)) || isWater(atom)) continue;
+      if (!isLigandLike(atom) || isWater(atom)) continue;
       const selector = ligandSelector(atom, structureId);
       const key = ligandKey(selector);
       let ligand = byKey.get(key);
@@ -3695,6 +3789,14 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     return true;
   }
 
+  function resolveUniqueAtomSelector(selector, atoms, structureId) {
+    const matches = (Array.isArray(atoms) ? atoms : [])
+      .filter(atom => atomMatchesSelector(atom, selector, structureId));
+    if (!matches.length) return { valid: false, error: 'Atom selector did not resolve to any atoms.', atom: null };
+    if (matches.length > 1) return { valid: false, error: 'Atom selector is ambiguous across multiple atoms.', atom: null };
+    return { valid: true, error: null, atom: matches[0] };
+  }
+
   function atomMatchesSourceIdentity(atom, value) {
     const identity = normalizeSourceIdentity(value);
     if (identity.modelNumber != null && Number(identity.modelNumber) !== atom.model) return false;
@@ -3731,8 +3833,8 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   function measurementAtoms(measurement, atoms, structureId) {
     const expected = MEASUREMENT_ATOM_COUNTS[measurement?.type];
     if (!expected || !Array.isArray(measurement.atoms) || measurement.atoms.length !== expected) return null;
-    const resolved = measurement.atoms.map(selector => atoms.find(atom => atomMatchesSelector(atom, selector, structureId)));
-    return resolved.every(Boolean) ? resolved : null;
+    const resolved = measurement.atoms.map(selector => resolveUniqueAtomSelector(selector, atoms, structureId));
+    return resolved.every(match => match.valid) ? resolved.map(match => match.atom) : null;
   }
 
   function measurementValue(type, atoms) {
@@ -3809,6 +3911,9 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   }
 
   function isWater(atom) { return WATER_NAMES.has(atom.resn); }
+  function isLigandLike(atom) {
+    return atom.role && atom.role !== 'unknown' ? ['ligand', 'ion'].includes(atom.role) : Boolean(atom.het);
+  }
   function vdwRadius(element) { return VDW_RADII[element] || 1.7; }
 
   window.MolhtmlCore = {
@@ -3818,7 +3923,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     atomMatchesSelector, atomIdentity, atomLabel, colorForAtom, isWater, vdwRadius, uid,
     MEASUREMENT_ATOM_COUNTS, normalizeMeasurements, measurementAtoms, measurementValue,
     formatMeasurementValue,
-    normalizeSavedSelections, normalizeCompoundSelector, matchSavedSelection, describeSavedSelector,
+    normalizeSavedSelections, normalizeCompoundSelector, matchSavedSelection, resolveUniqueAtomSelector, describeSavedSelector,
     residueDescriptor, buildStructureHierarchy, representativeAtom,
     LIGAND_ANALYSIS_DEFAULTS, normalizeLigandAnalysis, ligandSelector, ligandKey, ligandLabel,
     groupLigands, findLigand, analyzeLigandPocket,
@@ -3894,7 +3999,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
           this.model = this.models[0] || null;
           if (multipleMmcifModels) this.buildCoordinateSetAtomMapping();
           else this.buildAtomMapping();
-          if (this.parsed.coordinateSets.length > 1) this.applyNormalizedBonds();
+          this.applyNormalizedBonds();
           fit = true;
         }
 
@@ -4254,7 +4359,8 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         atom.bondOrder = [];
         renderedByKey.set(`${Number(atom.model)}|${Number(atom.index)}`, atom);
       }
-      for (const [leftIndex, rightIndex] of this.parsed?.bonds || []) {
+      for (const bond of this.parsed?.bonds || []) {
+        const [leftIndex, rightIndex] = bond.atomIndices;
         const leftLocation = this.rendererLocationByDomainIndex.get(leftIndex);
         const rightLocation = this.rendererLocationByDomainIndex.get(rightIndex);
         if (!leftLocation || !rightLocation || leftLocation.model !== rightLocation.model) continue;
@@ -4262,9 +4368,9 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         const right = renderedByKey.get(`${rightLocation.model}|${rightLocation.index}`);
         if (!left || !right) continue;
         left.bonds.push(right.index);
-        left.bondOrder.push(1);
+        left.bondOrder.push(Number(bond.order) || 1);
         right.bonds.push(left.index);
-        right.bondOrder.push(1);
+        right.bondOrder.push(Number(bond.order) || 1);
       }
     }
 
@@ -5594,13 +5700,9 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       throw new Error('The atom reference belongs to a different structure.');
     }
     const scoped = { ...selector, structureId: selector.structureId || doc.structure.id };
-    const matches = parsed?.atoms.filter(atom => Core.atomMatchesSelector(atom, scoped, doc.structure.id)) || [];
-    if (!matches.length) throw new Error('The atom reference was not found.');
-    if (matches.length > 1) {
-      const subject = scoped.serial == null ? 'The atom reference' : `Atom serial ${scoped.serial}`;
-      throw new Error(`${subject} is ambiguous across coordinate models; provide { model, serial }.`);
-    }
-    return matches[0];
+    const resolution = Core.resolveUniqueAtomSelector(scoped, parsed?.atoms || [], doc.structure.id);
+    if (!resolution.valid) throw new Error(resolution.error);
+    return resolution.atom;
   }
 
   function addMeasurement(type, atomReferences, options = {}, source = 'agent') {

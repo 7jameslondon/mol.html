@@ -350,7 +350,7 @@
         bFactorMax = Math.max(bFactorMax, value);
       }
       if (isWater(atom)) waters.add(residueKey);
-      else if (atom.het) ligands.add(residueKey);
+      else if (isLigandLike(atom)) ligands.add(residueKey);
     }
     const bFactor = bFactorCount ? {
       min: bFactorMin, max: bFactorMax,
@@ -650,7 +650,9 @@
       if (!selector.sourceIdentity && !validRequiredSelectorFields(selector, ['model', 'chain', 'resi', 'atom'])) {
         return selectionMatchError('Atom selector is missing model, chain, residue, or atom name.');
       }
-      matched = candidates.filter(atom => atomMatchesSelector(atom, selector, structureId));
+      const resolution = resolveUniqueAtomSelector(selector, candidates, structureId);
+      if (!resolution.valid) return selectionMatchError(resolution.error);
+      matched = [resolution.atom];
     } else if (kind === 'residue') {
       if (selector.sourceIdentity) {
         matched = candidates.filter(atom => atomMatchesSelector(atom, selector, structureId));
@@ -718,7 +720,7 @@
         return selectionMatchError('Ligand selector model must be a number.');
       }
       matched = candidates.filter(atom =>
-        atom.het && !isWater(atom)
+        isLigandLike(atom) && !isWater(atom)
         && (selector.model == null || atom.model === Number(selector.model))
       );
     } else if (kind === 'within') {
@@ -738,6 +740,9 @@
     }
 
     if (!matched.length) return selectionMatchError('Selector did not resolve to any atoms.');
+    if (kind === 'residue' && countMatchedResidues(matched) !== 1) {
+      return selectionMatchError('Residue selector is ambiguous across multiple residues.');
+    }
 
     return {
       valid: true,
@@ -852,7 +857,7 @@
     const ligands = [];
     const byKey = new Map();
     for (const atom of atoms) {
-      if ((!atom.het && !['ligand', 'ion'].includes(atom.role)) || isWater(atom)) continue;
+      if (!isLigandLike(atom) || isWater(atom)) continue;
       const selector = ligandSelector(atom, structureId);
       const key = ligandKey(selector);
       let ligand = byKey.get(key);
@@ -1116,6 +1121,14 @@
     return true;
   }
 
+  function resolveUniqueAtomSelector(selector, atoms, structureId) {
+    const matches = (Array.isArray(atoms) ? atoms : [])
+      .filter(atom => atomMatchesSelector(atom, selector, structureId));
+    if (!matches.length) return { valid: false, error: 'Atom selector did not resolve to any atoms.', atom: null };
+    if (matches.length > 1) return { valid: false, error: 'Atom selector is ambiguous across multiple atoms.', atom: null };
+    return { valid: true, error: null, atom: matches[0] };
+  }
+
   function atomMatchesSourceIdentity(atom, value) {
     const identity = normalizeSourceIdentity(value);
     if (identity.modelNumber != null && Number(identity.modelNumber) !== atom.model) return false;
@@ -1152,8 +1165,8 @@
   function measurementAtoms(measurement, atoms, structureId) {
     const expected = MEASUREMENT_ATOM_COUNTS[measurement?.type];
     if (!expected || !Array.isArray(measurement.atoms) || measurement.atoms.length !== expected) return null;
-    const resolved = measurement.atoms.map(selector => atoms.find(atom => atomMatchesSelector(atom, selector, structureId)));
-    return resolved.every(Boolean) ? resolved : null;
+    const resolved = measurement.atoms.map(selector => resolveUniqueAtomSelector(selector, atoms, structureId));
+    return resolved.every(match => match.valid) ? resolved.map(match => match.atom) : null;
   }
 
   function measurementValue(type, atoms) {
@@ -1230,6 +1243,9 @@
   }
 
   function isWater(atom) { return WATER_NAMES.has(atom.resn); }
+  function isLigandLike(atom) {
+    return atom.role && atom.role !== 'unknown' ? ['ligand', 'ion'].includes(atom.role) : Boolean(atom.het);
+  }
   function vdwRadius(element) { return VDW_RADII[element] || 1.7; }
 
   window.MolhtmlCore = {
@@ -1239,7 +1255,7 @@
     atomMatchesSelector, atomIdentity, atomLabel, colorForAtom, isWater, vdwRadius, uid,
     MEASUREMENT_ATOM_COUNTS, normalizeMeasurements, measurementAtoms, measurementValue,
     formatMeasurementValue,
-    normalizeSavedSelections, normalizeCompoundSelector, matchSavedSelection, describeSavedSelector,
+    normalizeSavedSelections, normalizeCompoundSelector, matchSavedSelection, resolveUniqueAtomSelector, describeSavedSelector,
     residueDescriptor, buildStructureHierarchy, representativeAtom,
     LIGAND_ANALYSIS_DEFAULTS, normalizeLigandAnalysis, ligandSelector, ligandKey, ligandLabel,
     groupLigands, findLigand, analyzeLigandPocket,

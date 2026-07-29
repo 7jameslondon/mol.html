@@ -940,13 +940,9 @@
       throw new Error('The atom reference belongs to a different structure.');
     }
     const scoped = { ...selector, structureId: selector.structureId || doc.structure.id };
-    const matches = parsed?.atoms.filter(atom => Core.atomMatchesSelector(atom, scoped, doc.structure.id)) || [];
-    if (!matches.length) throw new Error('The atom reference was not found.');
-    if (matches.length > 1) {
-      const subject = scoped.serial == null ? 'The atom reference' : `Atom serial ${scoped.serial}`;
-      throw new Error(`${subject} is ambiguous across coordinate models; provide { model, serial }.`);
-    }
-    return matches[0];
+    const resolution = Core.resolveUniqueAtomSelector(scoped, parsed?.atoms || [], doc.structure.id);
+    if (!resolution.valid) throw new Error(resolution.error);
+    return resolution.atom;
   }
 
   function addMeasurement(type, atomReferences, options = {}, source = 'agent') {

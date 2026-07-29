@@ -18,12 +18,15 @@ Use a custom, format-neutral runtime model whose terminology and source identity
 
 - Preserve `_atom_site.id`, `label_*`, and `auth_*` fields independently.
 - Represent atoms, residues, asymmetric-unit instances, entities, bonds, coordinate sets, connected components, and assembly operators explicitly.
+- Represent each normalized bond as atom indexes plus bond order, connection type, and provenance so rendering and analysis consume the same topology.
 - Use dense numeric indexes only at runtime.
 - Preserve the original PDB or mmCIF text as the canonical embedded source.
 - Serialize stable source identity and scene intent, not runtime topology or indexes.
 - Keep 3Dmol behind a renderer adapter and verify a mapping from normalized atoms to renderer atom indexes.
 
 PDB input is normalized into the same model. Missing entity and instance identities are generated deterministically and marked `pdb-inferred`. Classification carries provenance such as `mmcif-entity`, `pdb-record`, `name-fallback`, or `unknown`.
+
+Modified polymer residues retain their source component name but derive polymer classification from explicit parent-component metadata (`MODRES` for PDB and Chemical Component data for mmCIF) when available. A small documented parent map is used only as a fallback.
 
 ## Parser decision
 
@@ -41,7 +44,7 @@ BinaryCIF is deferred. It is an encoding optimization rather than the runtime mo
 - Label identifiers are the preferred machine identity.
 - `_atom_site.id` plus model number is the highest-priority atom identity when present.
 - Saved selectors fall back from atom-site identity to label identity, author identity, and finally legacy PDB serial identity.
-- A failed resolution is explicit; it must not silently select a different atom.
+- Atom selectors must resolve to exactly one atom, and residue selectors to exactly one residue. Missing or ambiguous resolution is explicit; it must not silently select a different atom or residue.
 
 ## Related viewer patterns
 
@@ -93,10 +96,10 @@ The accepted implementation was measured on the feature branch after the determi
 release build:
 
 - Branch-start artifact: 862,392 bytes.
-- Final artifact: 928,869 bytes.
-- First-party increase: 66,477 bytes.
+- Final artifact: 941,575 bytes.
+- First-party increase: 79,183 bytes.
 - Bundled 3Dmol payload: unchanged at 537,792 bytes.
-- Remaining headroom under the 950,000-byte ceiling: 21,131 bytes.
+- Remaining headroom under the 950,000-byte ceiling: 8,425 bytes.
 - Model/schema and artifact verification: passed, including 67 artifact invariants.
 - Browser regression suite: 27 tests passed in Chromium.
 - Scheduled performance observation: the deterministic 5,000-atom case passed.

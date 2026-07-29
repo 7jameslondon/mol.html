@@ -31,9 +31,13 @@ PR review hardening now also preserves column-aware PDB element inference, resol
 bonds independently for every coordinate model, renders multi-model text mmCIF as separate
 3Dmol models, synchronizes multi-model PDB bonds into the renderer, distinguishes chemical
 mmCIF connections from noncovalent interactions, handles hydrogen isotope and atom-name
-inference, and requires model-qualified atom references whenever a serial is ambiguous.
+inference, and requires model-qualified atom references whenever a serial is ambiguous. The
+final review pass additionally requires atom and residue selectors to resolve uniquely,
+matches author-only mmCIF connections with complete residue and atom identity, classifies PDB
+modified residues from `MODRES` or a parent-component fallback, and preserves normalized bond
+order, connection type, and provenance through the renderer boundary.
 
-The final deterministic artifact is 936,370 bytes, leaving 13,630 bytes under the existing
+The final deterministic artifact is 941,575 bytes, leaving 8,425 bytes under the existing
 950,000-byte ceiling. Model/schema checks, 67 artifact invariants, all 28 Chromium regression
 tests, and the scheduled 5,000-atom performance case pass. Publication is performed from the
 dedicated branch through a review-ready pull request; merging is intentionally outside this
@@ -218,6 +222,10 @@ At runtime, a selector resolves to a compact set of dense atom or residue indexe
 3. `auth_*` identity combined with atom, residue, and model information.
 4. PDB serial or migrated legacy identity.
 5. An explicit unresolved result rather than silently selecting the wrong atom.
+
+After applying the available identity fields, an atom selector is valid only when exactly one
+atom remains. A residue selector is valid only when its matched atoms belong to exactly one
+residue. Ambiguous partial identities are reported instead of accepting the first match.
 
 Provide distinct selector concepts for:
 

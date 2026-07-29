@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
-const [structureSource, modelSource, mmcif, pdb, sharedChainPdb, multiModelPdb, multiModelCif, conformanceCif, equivalentCif, malformedCif, pdbAssemblyText] = await Promise.all([
+const [structureSource, modelSource, mmcif, pdb, sharedChainPdb, multiModelPdb, multiModelCif, authorStructConnCif, modifiedResiduePdb, conformanceCif, equivalentCif, malformedCif, pdbAssemblyText] = await Promise.all([
   readFile(new URL('../src/structure.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/model.js', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/7ril-identity.cif', import.meta.url), 'utf8'),
@@ -10,6 +10,8 @@ const [structureSource, modelSource, mmcif, pdb, sharedChainPdb, multiModelPdb, 
   readFile(new URL('../fixtures/7ril-author-chain.pdb', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/multi-model.pdb', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/multi-model.cif', import.meta.url), 'utf8'),
+  readFile(new URL('../fixtures/author-struct-conn.cif', import.meta.url), 'utf8'),
+  readFile(new URL('../fixtures/modified-residue.pdb', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/identity-conformance.cif', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/mini-peptide.cif', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/malformed.cif', import.meta.url), 'utf8'),
@@ -49,10 +51,14 @@ function assertNormalizedInvariants(structure) {
     for (const residueIndex of entity.residueIndices) assert.equal(residues[residueIndex].entityIndex, index);
     for (const instanceIndex of entity.instanceIndices) assert.equal(instances[instanceIndex].entityIndex, index);
   }
-  for (const [left, right] of bonds) {
+  for (const bond of bonds) {
+    const [left, right] = bond.atomIndices;
     assert.ok(atoms[left]);
     assert.ok(atoms[right]);
     assert.notEqual(left, right);
+    assert.ok(Number.isFinite(bond.order) && bond.order > 0);
+    assert.ok(bond.provenance);
+    assert.ok(bond.connectionType);
   }
   for (const [index, component] of connectedComponents.entries()) {
     assert.equal(component.index, index);
@@ -208,17 +214,22 @@ assert.equal(multiModel.coordinateSets.length, 2);
 assert.deepEqual(Array.from(multiModel.coordinateSets, set => set.modelNumber), [1, 2]);
 assert.equal(multiModel.atoms.length, 4);
 assert.equal(multiModel.topology.instances.length, 1, 'coordinate models share one inferred molecular instance');
-assert.deepEqual(JSON.parse(JSON.stringify(multiModel.bonds)), [[0, 1], [2, 3]],
+assert.deepEqual(JSON.parse(JSON.stringify(multiModel.bonds.map(bond => [bond.atomIndices, bond.order, bond.provenance]))),
+  [[[0, 1], 1, 'pdb-conect'], [[2, 3], 1, 'pdb-conect']],
   'PDB CONECT records are resolved independently in every coordinate model');
+const orderedPdbBonds = Core.parseStructure(multiModelPdb.replace('CONECT    1    2', 'CONECT    1    2    2'), 'pdb');
+assert.deepEqual(Array.from(orderedPdbBonds.bonds, bond => bond.order), [2, 2],
+  'repeated PDB CONECT targets preserve explicit bond order');
 
 const multiModelMmcif = Core.parseStructure(multiModelCif, 'mmcif');
 assertNormalizedInvariants(multiModelMmcif);
 assert.deepEqual(Array.from(multiModelMmcif.coordinateSets, set => set.modelNumber), [1, 2]);
-assert.deepEqual(JSON.parse(JSON.stringify(multiModelMmcif.bonds)), [[0, 1], [2, 3]],
-  'mmCIF struct_conn records are resolved independently in every coordinate model');
+assert.deepEqual(JSON.parse(JSON.stringify(multiModelMmcif.bonds.map(bond => [bond.atomIndices, bond.order, bond.provenance]))),
+  [[[0, 1], 2, 'mmcif-struct-conn'], [[2, 3], 2, 'mmcif-struct-conn']],
+  'mmCIF struct_conn bond order is retained in every coordinate model');
 for (const connectionType of ['disulf', 'modres', 'metalc']) {
   const connected = Core.parseStructure(multiModelCif.replace('covale', connectionType), 'mmcif');
-  assert.deepEqual(JSON.parse(JSON.stringify(connected.bonds)), [[0, 1], [2, 3]],
+  assert.deepEqual(JSON.parse(JSON.stringify(connected.bonds.map(bond => bond.atomIndices))), [[0, 1], [2, 3]],
     `mmCIF ${connectionType} connections contribute to chemical topology`);
 }
 for (const connectionType of ['hydrog', 'saltbr', 'mismat']) {
@@ -227,6 +238,36 @@ for (const connectionType of ['hydrog', 'saltbr', 'mismat']) {
   assert.equal(interactionOnly.topology.connectedComponents.length, 4,
     `mmCIF ${connectionType} interactions do not merge connected components`);
 }
+
+const authorStructConn = Core.parseStructure(authorStructConnCif, 'mmcif');
+assertNormalizedInvariants(authorStructConn);
+assert.deepEqual(JSON.parse(JSON.stringify(authorStructConn.bonds)), [{
+  atomIndices: [0, 2], order: 2, provenance: 'mmcif-struct-conn', connectionType: 'covale'
+}], 'author-only struct_conn identity resolves exactly the named atom pair and preserves order');
+const ambiguousStructConn = Core.parseStructure(authorStructConnCif
+  .replaceAll('_struct_conn.ptnr1_auth_atom_id', '_struct_conn.ptnr1_ignored_atom_id')
+  .replaceAll('_struct_conn.ptnr2_auth_atom_id', '_struct_conn.ptnr2_ignored_atom_id'), 'mmcif');
+assert.equal(ambiguousStructConn.bonds.length, 0, 'ambiguous struct_conn identities never create Cartesian-product bonds');
+assert.ok(ambiguousStructConn.diagnostics.parserWarnings.some(warning => /ambiguous or unresolved/i.test(warning)));
+
+const modifiedResidue = Core.parseStructure(modifiedResiduePdb, 'pdb');
+assertNormalizedInvariants(modifiedResidue);
+const mseAtoms = modifiedResidue.atoms.filter(atom => atom.resn === 'MSE');
+assert.ok(mseAtoms.length > 0);
+assert.ok(mseAtoms.every(atom => atom.role === 'polymer' && atom.subtype === 'protein'));
+assert.ok(mseAtoms.every(atom => atom.parentCompId === 'MET' && atom.classificationProvenance === 'pdb-modres'));
+assert.equal(new Set(modifiedResidue.atoms.map(atom => atom.instanceIndex)).size, 1,
+  'MODRES polymer residues remain in the surrounding polymer instance');
+assert.equal(new Set(modifiedResidue.atoms.map(atom => atom.entityIndex)).size, 1,
+  'MODRES polymer residues remain in the surrounding polymer entity');
+assert.equal(Core.groupLigands(modifiedResidue.atoms, 'modified-residue').length, 0,
+  'modified polymer residues are excluded from ligand analysis');
+assert.equal(Core.matchSavedSelection({ kind: 'ligands', structureId: 'modified-residue' },
+  modifiedResidue.atoms, 'modified-residue').valid, false, 'modified polymer residues do not match ligand selectors');
+const fallbackModifiedResidue = Core.parseStructure(modifiedResiduePdb.replace(/^MODRES.*\n/m, ''), 'pdb');
+assert.ok(fallbackModifiedResidue.atoms.filter(atom => atom.resn === 'MSE')
+  .every(atom => atom.role === 'polymer' && atom.classificationProvenance === 'modified-residue-map'),
+  'common modified residues retain a tested parent fallback when MODRES is absent');
 
 const pdbAssembly = Core.parseStructure(pdbAssemblyText, 'pdb');
 assertNormalizedInvariants(pdbAssembly);
@@ -262,10 +303,12 @@ assert.ok(conformance.atoms.some(atom => atom.labelAltId === 'B'));
 assert.equal(protein.icode, 'A', 'insertion codes survive normalization');
 const ligandC = conformance.atoms.find(atom => atom.labelAsymId === 'E' && atom.labelAtomId === 'C1');
 const ligandN = conformance.atoms.find(atom => atom.labelAsymId === 'E' && atom.labelAtomId === 'N1');
-assert.ok(conformance.bonds.some(([left, right]) => new Set([left, right]).has(ligandC.index)
-  && new Set([left, right]).has(ligandN.index)), 'explicit struct_conn bonds are retained');
-assert.ok(conformance.bonds.some(([left, right]) => left === protein.index || right === protein.index),
+assert.ok(conformance.bonds.some(bond => new Set(bond.atomIndices).has(ligandC.index)
+  && new Set(bond.atomIndices).has(ligandN.index)), 'explicit struct_conn bonds are retained');
+assert.ok(conformance.bonds.some(bond => bond.atomIndices.includes(protein.index)),
   'covalent bonds absent from struct_conn are inferred');
+assert.ok(conformance.bonds.some(bond => bond.provenance === 'inferred-distance' && bond.order === 1),
+  'distance-inferred bonds retain explicit provenance and single order');
 const productGenerator = conformance.assemblies[0].generators[0];
 assert.deepEqual(JSON.parse(JSON.stringify(productGenerator.operatorSequences)), [['1', '3'], ['2', '3']]);
 assert.equal(conformance.assemblies[0].instances.length, 9);
