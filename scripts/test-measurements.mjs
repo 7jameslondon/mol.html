@@ -57,6 +57,12 @@ assert.equal(Core.measurementValue('distance', resolved), 1);
 assert.equal(Core.measurementAtoms(normalized.scene.measurements[0], atoms, 'different-structure'), null);
 assert.equal(Core.measurementAtoms({
   type: 'distance', atoms: [
+    { model: 1, chain: 'A', resi: 1, atom: 'CA', serial: 1 },
+    selectorB
+  ]
+}, atoms, 'structure-test'), null, 'measurements never attach an unbound persisted selector to the active structure');
+assert.equal(Core.measurementAtoms({
+  type: 'distance', atoms: [
     { structureId: 'structure-test', sourceIdentity: { modelNumber: 1, labelAsymId: 'A' } },
     selectorB
   ]

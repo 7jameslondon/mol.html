@@ -143,6 +143,7 @@
           authAtomId: rawName.trim() || 'X',
           authAltId: alternateLocation,
           parentCompId: modification?.parentCompId || fallbackParent || null,
+          parentCompIds: modification?.parentCompId ? [modification.parentCompId] : (fallbackParent ? [fallbackParent] : []),
           modificationProvenance: modification ? 'pdb-modres' : (fallbackParent ? 'modified-residue-map' : null),
           identityProvenance: 'pdb-source'
         };
@@ -179,14 +180,7 @@
       for (const modelNumber of modelNumbers) {
         const a = serialMap.get(`${modelNumber}|${left}`);
         const b = serialMap.get(`${modelNumber}|${right}`);
-        if (a == null || b == null) continue;
-        if (!alternateLocationsCompatible(atoms[a], atoms[b])) {
-          if (diagnostics.parserWarnings.length < 50) {
-            diagnostics.parserWarnings.push(`CONECT ${left}:${right} connects incompatible alternate locations in model ${modelNumber}.`);
-          }
-          continue;
-        }
-        bonds.push(bondRecord(a, b, order, 'pdb-conect', 'covalent'));
+        if (a != null && b != null) bonds.push(bondRecord(a, b, order, 'pdb-conect', 'covalent'));
       }
     }
     inferBonds(atoms, bonds);
@@ -496,7 +490,9 @@
       const labelAtomId = cifValue(row.label_atom_id) || cifValue(row.auth_atom_id) || 'X';
       const labelCompId = cifValue(row.label_comp_id) || cifValue(row.auth_comp_id) || 'UNK';
       const normalizedCompId = labelCompId.toUpperCase();
-      const modifiedParent = modifiedResidueParents.get(normalizedCompId) || MODIFIED_RESIDUE_PARENTS.get(normalizedCompId);
+      const dictionaryParents = modifiedResidueParents.get(normalizedCompId) || [];
+      const fallbackParent = MODIFIED_RESIDUE_PARENTS.get(normalizedCompId);
+      const parentCompIds = dictionaryParents.length ? dictionaryParents : (fallbackParent ? [fallbackParent] : []);
       const labelAsymId = cifValue(row.label_asym_id);
       const authAsymId = cifValue(row.auth_asym_id);
       const labelSeqId = cifValue(row.label_seq_id);
@@ -536,9 +532,10 @@
         authCompId: cifValue(row.auth_comp_id),
         authAtomId: cifValue(row.auth_atom_id),
         authAltId,
-        parentCompId: modifiedParent || null,
-        modificationProvenance: modifiedResidueParents.has(normalizedCompId)
-          ? 'mmcif-chem-comp' : (modifiedParent ? 'modified-residue-map' : null),
+        parentCompId: parentCompIds[0] || null,
+        parentCompIds,
+        modificationProvenance: dictionaryParents.length
+          ? 'mmcif-chem-comp' : (fallbackParent ? 'modified-residue-map' : null),
         identityProvenance: 'mmcif-atom-site'
       };
       if (atoms.length >= MAX_ATOMS) throw new Error(`The structure exceeds the ${MAX_ATOMS.toLocaleString()} atom safety limit.`);
@@ -548,8 +545,9 @@
 
     const entityDefinitions = mmcifEntityDefinitions(block.categories);
     const instanceDefinitions = mmcifInstanceDefinitions(block.categories);
-    const bonds = mmcifExplicitBonds(block.categories, atoms, diagnostics);
-    inferBonds(atoms, bonds);
+    const explicitTopology = mmcifExplicitBonds(block.categories, atoms, diagnostics);
+    const bonds = explicitTopology.bonds;
+    inferBonds(atoms, bonds, explicitTopology.deniedInferencePairs);
     return finalizeStructure({
       format: 'mmcif', atoms, bonds,
       assemblies: mmcifAssemblies(block.categories),
@@ -563,8 +561,9 @@
     const parents = new Map();
     for (const row of categories.chem_comp || []) {
       const id = cifValue(row.id)?.toUpperCase();
-      const parent = cifValue(row.mon_nstd_parent_comp_id)?.split(',')[0]?.trim().toUpperCase();
-      if (id && parent) parents.set(id, parent);
+      const values = String(cifValue(row.mon_nstd_parent_comp_id) || '')
+        .split(',').map(value => value.trim().toUpperCase()).filter(Boolean);
+      if (id && values.length) parents.set(id, [...new Set(values)]);
     }
     return parents;
   }
@@ -640,15 +639,21 @@
       return { role: definition.role, subtype: definition.subtype || 'other', provenance: definition.provenance };
     }
     if (WATER_NAMES.has(name)) return { role: 'solvent', subtype: 'water', provenance: first?.sourceFormat === 'pdb' ? 'pdb-record' : 'name-fallback' };
-    const parent = String(first?.parentCompId || '').toUpperCase();
-    if (AMINO_ACIDS.has(parent)) {
-      return { role: 'polymer', subtype: 'protein', provenance: first.modificationProvenance || 'modified-residue-map' };
-    }
-    if (NUCLEOTIDES.has(parent)) {
+    const parentCompIds = (Array.isArray(first?.parentCompIds) ? first.parentCompIds : [first?.parentCompId])
+      .map(parent => String(parent || '').toUpperCase()).filter(Boolean);
+    const parentFamilies = new Set(parentCompIds.flatMap(parent => {
+      if (AMINO_ACIDS.has(parent)) return ['protein'];
+      if (!NUCLEOTIDES.has(parent)) return [];
+      return [parent.startsWith('D') || parent === 'T' || parent === 'THY' ? 'dna' : 'rna'];
+    }));
+    if (parentFamilies.size === 1) {
       return {
-        role: 'polymer', subtype: parent.startsWith('D') || parent === 'T' || parent === 'THY' ? 'dna' : 'rna',
+        role: 'polymer', subtype: [...parentFamilies][0],
         provenance: first.modificationProvenance || 'modified-residue-map'
       };
+    }
+    if (parentFamilies.size > 1) {
+      return { role: 'unknown', subtype: 'other', provenance: 'ambiguous-modified-residue-parent' };
     }
     if (AMINO_ACIDS.has(name)) return { role: 'polymer', subtype: 'protein', provenance: first?.sourceFormat === 'pdb' ? 'pdb-record' : 'name-fallback' };
     if (NUCLEOTIDES.has(name)) {
@@ -680,6 +685,7 @@
           authSeqId: atom.authSeqId,
           authCompId: atom.authCompId,
           parentCompId: atom.parentCompId,
+          parentCompIds: [...(atom.parentCompIds || [])],
           insertionCode: atom.icode,
           atomIndices: []
         };
@@ -893,18 +899,15 @@
 
   function mmcifExplicitBonds(categories, atoms, diagnostics) {
     const bonds = [];
+    const deniedInferencePairs = new Set();
     const existing = new Set();
     const modelNumbers = [...new Set(atoms.map(atom => atom.model))];
     for (const row of categories.struct_conn || []) {
       if (!isTopologyConnectionType(row.conn_type_id)) continue;
-      if (!isBaseStructConnSymmetry(row.ptnr1_symmetry) || !isBaseStructConnSymmetry(row.ptnr2_symmetry)) {
-        if (diagnostics?.parserWarnings?.length < 50) {
-          diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} references a crystallographic symmetry mate and was excluded from base topology.`);
-        }
-        continue;
-      }
+      const baseCoordinates = isBaseStructConnSymmetry(row.ptnr1_symmetry) && isBaseStructConnSymmetry(row.ptnr2_symmetry);
       const leftAtoms = findStructConnAtoms(atoms, row, 'ptnr1');
       const rightAtoms = findStructConnAtoms(atoms, row, 'ptnr2');
+      let reportedSymmetryExclusion = false;
       for (const modelNumber of modelNumbers) {
         const leftMatches = leftAtoms.filter(atom => atom.model === modelNumber);
         const rightMatches = rightAtoms.filter(atom => atom.model === modelNumber);
@@ -917,13 +920,17 @@
         const left = leftMatches[0];
         const right = rightMatches[0];
         if (left.index === right.index) continue;
-        if (!alternateLocationsCompatible(left, right)) {
+        const key = left.index < right.index ? `${left.index}:${right.index}` : `${right.index}:${left.index}`;
+        if (!baseCoordinates) {
+          deniedInferencePairs.add(key);
           if (diagnostics?.parserWarnings?.length < 50) {
-            diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} connects incompatible alternate locations in model ${modelNumber}.`);
+            if (!reportedSymmetryExclusion) {
+              diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} references a crystallographic symmetry mate and was excluded from base topology.`);
+              reportedSymmetryExclusion = true;
+            }
           }
           continue;
         }
-        const key = left.index < right.index ? `${left.index}:${right.index}` : `${right.index}:${left.index}`;
         if (!existing.has(key)) {
           existing.add(key);
           bonds.push(bondRecord(
@@ -933,7 +940,7 @@
         }
       }
     }
-    return bonds;
+    return { bonds, deniedInferencePairs };
   }
 
   function isTopologyConnectionType(value) {
@@ -1116,7 +1123,7 @@
     });
   }
 
-  function inferBonds(atoms, bonds) {
+  function inferBonds(atoms, bonds, deniedPairs = new Set()) {
     const existing = new Set(bonds.map(bond => {
       const [left, right] = bond.atomIndices;
       return left < right ? `${left}:${right}` : `${right}:${left}`;
@@ -1151,7 +1158,7 @@
           const maximum = (COVALENT_RADII[atom.element] || .77) + (COVALENT_RADII[other.element] || .77) + .46;
           if (distanceSquared < .16 || distanceSquared > maximum * maximum) continue;
           const key = atom.index < otherIndex ? `${atom.index}:${otherIndex}` : `${otherIndex}:${atom.index}`;
-          if (!existing.has(key)) {
+          if (!existing.has(key) && !deniedPairs.has(key)) {
             existing.add(key);
             bonds.push(bondRecord(atom.index, otherIndex));
           }

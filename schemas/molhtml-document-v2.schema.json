@@ -49,9 +49,9 @@
       },
       "additionalProperties": true
     },
-    "selector": {
+    "selectorReference": {
       "type": "object",
-      "required": ["kind", "structureId"],
+      "required": ["structureId"],
       "properties": {
         "kind": {
           "enum": ["atom", "residue", "chain", "instance", "entity", "role", "connected-component", "residue-range", "ligands", "within"]
@@ -59,12 +59,139 @@
         "structureId": { "type": "string", "minLength": 1 },
         "model": { "type": "number" },
         "chain": { "type": "string" },
+        "resi": { "type": "number" },
+        "icode": { "type": "string" },
+        "resn": { "type": "string" },
+        "atom": { "type": "string" },
+        "altLoc": { "type": "string" },
+        "serial": { "type": "number" },
         "instanceId": { "type": "string" },
         "entityId": { "type": "string" },
         "role": { "enum": ["polymer", "ligand", "ion", "solvent", "unknown"] },
         "connectedComponentId": { "type": "string" },
         "sourceIdentity": { "$ref": "#/$defs/sourceIdentity" },
+        "cutoff": { "type": "number", "minimum": 0 },
+        "start": { "type": "object" },
+        "end": { "type": "object" },
         "target": { "$ref": "#/$defs/selector" }
+      },
+      "additionalProperties": true
+    },
+    "atomReference": { "$ref": "#/$defs/selectorReference" },
+    "selector": {
+      "allOf": [
+        { "$ref": "#/$defs/selectorReference" },
+        { "type": "object", "required": ["kind"] }
+      ]
+    },
+    "currentSelection": {
+      "type": "object",
+      "required": ["kind", "selector"],
+      "properties": {
+        "kind": { "const": "atom" },
+        "selector": { "$ref": "#/$defs/atomReference" },
+        "identity": { "type": "object" }
+      },
+      "additionalProperties": true
+    },
+    "customColorRule": {
+      "type": "object",
+      "required": ["color", "selector"],
+      "properties": {
+        "id": { "type": "string" },
+        "scope": { "enum": ["atom", "residue", "chain", "instance", "entity", "role", "connected-component"] },
+        "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "selector": { "$ref": "#/$defs/selectorReference" },
+        "label": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "measurement": {
+      "type": "object",
+      "required": ["id", "type", "atoms"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "enum": ["distance", "angle", "dihedral"] },
+        "atoms": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 4,
+          "items": { "$ref": "#/$defs/atomReference" }
+        },
+        "label": { "type": "string" },
+        "note": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "camera": {
+      "type": "object",
+      "properties": {
+        "view": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "array", "minItems": 8, "maxItems": 8, "items": { "type": "number" } }
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "savedViewSnapshot": {
+      "type": "object",
+      "properties": {
+        "representation": { "enum": ["cartoon", "ball-and-stick", "sticks", "spacefill", "lines", "surface"] },
+        "colorMode": { "enum": ["element", "chain", "author-chain", "instance", "entity", "role", "residue", "uniform"] },
+        "background": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "showHydrogens": { "type": "boolean" },
+        "showWater": { "type": "boolean" },
+        "selection": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/currentSelection" }
+          ]
+        },
+        "customColors": { "type": "array", "items": { "$ref": "#/$defs/customColorRule" } },
+        "camera": { "$ref": "#/$defs/camera" },
+        "activeAnalysis": { "type": ["object", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "savedView": {
+      "type": "object",
+      "required": ["id", "title", "order", "structureId", "snapshot"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string" },
+        "narrative": { "type": "string" },
+        "order": { "type": "number" },
+        "structureId": { "type": "string", "minLength": 1 },
+        "snapshot": { "$ref": "#/$defs/savedViewSnapshot" }
+      },
+      "additionalProperties": true
+    },
+    "savedSelection": {
+      "type": "object",
+      "required": ["id", "name", "selector"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "selector": { "$ref": "#/$defs/selector" }
+      },
+      "additionalProperties": true
+    },
+    "ligandAnalysis": {
+      "type": "object",
+      "properties": {
+        "selectedLigand": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/selectorReference" }
+          ]
+        },
+        "cutoff": { "type": "number", "minimum": 0 },
+        "showLigand": { "type": "boolean" },
+        "showPocket": { "type": "boolean" },
+        "showContacts": { "type": "boolean" },
+        "polarOnly": { "type": "boolean" }
       },
       "additionalProperties": true
     },
@@ -76,25 +203,21 @@
         "background": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
         "showHydrogens": { "type": "boolean" },
         "showWater": { "type": "boolean" },
-        "selection": { "type": ["object", "null"] },
-        "customColors": { "type": "array" },
-        "measurements": { "type": "array" },
+        "selection": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/currentSelection" }
+          ]
+        },
+        "customColors": { "type": "array", "items": { "$ref": "#/$defs/customColorRule" } },
+        "measurements": { "type": "array", "items": { "$ref": "#/$defs/measurement" } },
         "savedSelections": {
           "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["id", "name", "selector"],
-            "properties": {
-              "id": { "type": "string" },
-              "name": { "type": "string" },
-              "selector": { "$ref": "#/$defs/selector" }
-            },
-            "additionalProperties": true
-          }
+          "items": { "$ref": "#/$defs/savedSelection" }
         },
-        "savedViews": { "type": "array" },
-        "ligandAnalysis": { "type": "object" },
-        "camera": { "type": "object" }
+        "savedViews": { "type": "array", "items": { "$ref": "#/$defs/savedView" } },
+        "ligandAnalysis": { "$ref": "#/$defs/ligandAnalysis" },
+        "camera": { "$ref": "#/$defs/camera" }
       },
       "additionalProperties": true
     }

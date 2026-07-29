@@ -778,7 +778,10 @@
     if (value == null || value === '') return null;
     const ligand = typeof value === 'string'
       ? ligands.find(candidate => candidate.key === value)
-      : Core.findLigand(ligands, value, doc.structure.id);
+      : Core.findLigand(ligands, {
+        ...value,
+        structureId: value.structureId || doc.structure.id
+      }, doc.structure.id);
     if (!ligand) throw new Error('The requested ligand instance was not found in this structure.');
     return ligand;
   }
@@ -1376,11 +1379,16 @@
   function applySavedView(id, source = 'browser') {
     const view = savedViewById(id);
     if (!view) throw new Error(`Saved view ${id} was not found.`);
-    const snapshotStructureIds = [
-      view.structureId,
-      view.snapshot?.selection?.selector?.structureId,
-      ...(view.snapshot?.customColors || []).map(rule => rule?.selector?.structureId)
-    ].filter(Boolean);
+    const snapshotStructureIds = [view.structureId];
+    if (view.snapshot?.selection?.selector) {
+      snapshotStructureIds.push(view.snapshot.selection.selector.structureId);
+    }
+    for (const rule of view.snapshot?.customColors || []) {
+      if (rule?.selector) snapshotStructureIds.push(rule.selector.structureId);
+    }
+    if (snapshotStructureIds.some(structureId => !structureId)) {
+      throw new Error('This saved view contains a selector without structureId.');
+    }
     if (snapshotStructureIds.some(structureId => structureId !== doc.structure.id)) {
       throw new Error('This saved view belongs to a different structure.');
     }

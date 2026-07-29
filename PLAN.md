@@ -40,7 +40,15 @@ preserves author alternate-location identity, prevents cross-conformer inferred 
 unsupported crystallographic symmetry-mate connections from base topology with diagnostics,
 and prevents ambiguous current scene selectors from driving the inspector or renderer.
 
-The final deterministic artifact is 944,541 bytes, leaving 5,459 bytes under the existing
+The latest review hardening resolves source-identity tiers globally in priority order without
+letting stale lower-priority fields veto a match, requires explicit structure bindings for v2
+persisted selectors while retaining a scoped v1 migration, and validates every selector-bearing
+v2 scene record. Explicit PDB and mmCIF topology may connect named alternate conformers, while
+distance inference remains conformer-compatible and cannot recreate a symmetry-qualified pair
+excluded from base topology. Modified mmCIF components now preserve and classify all declared
+parents, including an explicit unknown result when recognized parent families conflict.
+
+The final deterministic artifact is 949,278 bytes, leaving 722 bytes under the existing
 950,000-byte ceiling. Model/schema checks, 67 artifact invariants, all 29 Chromium regression
 tests, and the scheduled 5,000-atom performance case pass. Publication is performed from the
 dedicated branch through a review-ready pull request; merging is intentionally outside this

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
-const [structureSource, modelSource, mmcif, pdb, sharedChainPdb, multiModelPdb, multiModelCif, authorStructConnCif, modifiedResiduePdb, alternateConformerPdb, alternateConformerCif, conformanceCif, equivalentCif, malformedCif, pdbAssemblyText] = await Promise.all([
+const [structureSource, modelSource, mmcif, pdb, sharedChainPdb, multiModelPdb, multiModelCif, authorStructConnCif, modifiedResiduePdb, multiParentModifiedCif, alternateConformerPdb, alternateConformerCif, conformanceCif, equivalentCif, malformedCif, pdbAssemblyText] = await Promise.all([
   readFile(new URL('../src/structure.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/model.js', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/7ril-identity.cif', import.meta.url), 'utf8'),
@@ -12,6 +12,7 @@ const [structureSource, modelSource, mmcif, pdb, sharedChainPdb, multiModelPdb, 
   readFile(new URL('../fixtures/multi-model.cif', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/author-struct-conn.cif', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/modified-residue.pdb', import.meta.url), 'utf8'),
+  readFile(new URL('../fixtures/multi-parent-modified.cif', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/alternate-conformers.pdb', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/alternate-conformers.cif', import.meta.url), 'utf8'),
   readFile(new URL('../fixtures/identity-conformance.cif', import.meta.url), 'utf8'),
@@ -174,8 +175,53 @@ const preferredAtomSite = Core.matchSavedSelection({
 assert.equal(preferredAtomSite.valid, true);
 assert.equal(preferredAtomSite.atoms[0].atomSiteId, ligand.atomSiteId,
   'an exact atom-site id takes priority over lower identity tiers');
+const staleLegacyIdentity = Core.matchSavedSelection({
+  ...atomSelector,
+  chain: 'missing-chain', resi: -1, atom: 'missing-atom', serial: -1
+}, parsed.atoms, structureId);
+assert.equal(staleLegacyIdentity.valid, true);
+assert.equal(staleLegacyIdentity.atoms[0].atomSiteId, ligand.atomSiteId,
+  'an exact source identity is not vetoed by stale redundant legacy fields');
+const conflictingLowerTier = Core.matchSavedSelection({
+  ...atomSelector,
+  sourceIdentity: {
+    ...atomSelector.sourceIdentity,
+    labelAsymId: dnaB.labelAsymId,
+    labelEntityId: dnaB.labelEntityId,
+    labelSeqId: dnaB.labelSeqId,
+    labelCompId: dnaB.labelCompId,
+    labelAtomId: dnaB.labelAtomId
+  }
+}, parsed.atoms, structureId);
+assert.equal(conflictingLowerTier.valid, true);
+assert.equal(conflictingLowerTier.atoms[0].atomSiteId, ligand.atomSiteId,
+  'the first globally successful identity tier wins even when lower tiers identify another atom');
+const ambiguousPreferredTier = Core.matchSavedSelection({
+  ...atomSelector,
+  sourceIdentity: {
+    modelNumber: ligand.model,
+    labelAsymId: ligand.labelAsymId,
+    authAsymId: ligand.authAsymId,
+    authSeqId: ligand.authSeqId,
+    authAtomId: ligand.authAtomId
+  }
+}, parsed.atoms, structureId);
+assert.equal(ambiguousPreferredTier.valid, false);
+assert.match(ambiguousPreferredTier.error, /ambiguous/i,
+  'an ambiguous higher-priority tier is not narrowed by lower-priority identities or legacy fields');
+const legacyFallback = Core.matchSavedSelection({
+  ...atomSelector,
+  sourceIdentity: {
+    ...atomSelector.sourceIdentity,
+    atomSiteId: 'missing-atom-site', labelAsymId: 'missing-instance', authAsymId: 'missing-chain'
+  }
+}, parsed.atoms, structureId);
+assert.equal(legacyFallback.valid, true);
+assert.equal(legacyFallback.atoms[0].atomSiteId, ligand.atomSiteId,
+  'legacy identity is used only after every declared source-identity tier fails globally');
 const unresolved = Core.matchSavedSelection({
   ...atomSelector,
+  chain: 'missing-chain', resi: -1, atom: 'missing-atom', serial: -1,
   sourceIdentity: {
     ...atomSelector.sourceIdentity,
     atomSiteId: 'missing-atom-site', labelAsymId: 'missing-instance', authAsymId: 'missing-chain'
@@ -183,6 +229,13 @@ const unresolved = Core.matchSavedSelection({
 }, parsed.atoms, structureId);
 assert.equal(unresolved.valid, false);
 assert.match(unresolved.error, /did not resolve/i, 'missing source identity is reported explicitly');
+const unbound = Core.resolveUniqueAtomSelector(
+  Object.fromEntries(Object.entries(atomSelector).filter(([key]) => key !== 'structureId')),
+  parsed.atoms,
+  structureId
+);
+assert.equal(unbound.valid, false);
+assert.match(unbound.error, /missing structureId/i, 'persisted selectors cannot silently bind to the current structure');
 
 const roleSelector = { kind: 'role', ...Core.selectorForAtom(ligand, 'role', structureId) };
 const roleMatch = Core.matchSavedSelection(roleSelector, parsed.atoms, structureId);
@@ -263,13 +316,23 @@ const ambiguousStructConn = Core.parseStructure(authorStructConnCif
 assert.equal(ambiguousStructConn.bonds.length, 0, 'ambiguous struct_conn identities never create Cartesian-product bonds');
 assert.ok(ambiguousStructConn.diagnostics.parserWarnings.some(warning => /ambiguous or unresolved/i.test(warning)));
 const symmetryStructConn = Core.parseStructure(
-  authorStructConnCif.replace('1_555 1_555 doub', '1_555 2_555 doub'), 'mmcif'
+  authorStructConnCif
+    .replace('1_555 1_555 doub', '1_555 2_555 doub')
+    .replace('10.000 0.000 0.000', '1.300 0.000 0.000'),
+  'mmcif'
 );
 assert.equal(symmetryStructConn.bonds.length, 0, 'symmetry-mate connections are excluded from base topology');
 assert.equal(symmetryStructConn.topology.connectedComponents.length, 4,
-  'symmetry-mate connections do not merge asymmetric-unit connected components');
+  'symmetry-qualified atom pairs cannot be resurrected by distance inference');
 assert.ok(symmetryStructConn.diagnostics.parserWarnings.some(warning => /symmetry mate/i.test(warning)),
   'unsupported symmetry-mate connections produce a parser diagnostic');
+const crossConformerStructConn = Core.parseStructure(
+  authorStructConnCif.replace('N1 A 1_555', 'N1 B 1_555'),
+  'mmcif'
+);
+assert.ok(crossConformerStructConn.bonds.some(bond =>
+  bond.provenance === 'mmcif-struct-conn' && bond.atomIndices[0] === 0 && bond.atomIndices[1] === 3),
+'explicit mmCIF topology preserves a connection between named alternate conformers');
 
 for (const [format, source] of [['pdb', alternateConformerPdb], ['mmcif', alternateConformerCif]]) {
   const alternateConformers = Core.parseStructure(source, format);
@@ -282,9 +345,11 @@ for (const [format, source] of [['pdb', alternateConformerPdb], ['mmcif', altern
 const crossConformerConect = Core.parseStructure(
   alternateConformerPdb.replace('END', 'CONECT    1    4\nEND'), 'pdb'
 );
-assert.deepEqual(JSON.parse(JSON.stringify(crossConformerConect.bonds.map(bond => bond.atomIndices))), [[0, 1], [2, 3]],
-  'PDB CONECT cannot override alternate-conformer compatibility');
-assert.ok(crossConformerConect.diagnostics.parserWarnings.some(warning => /incompatible alternate locations/i.test(warning)));
+assert.ok(crossConformerConect.bonds.some(bond =>
+  bond.provenance === 'pdb-conect' && bond.atomIndices[0] === 0 && bond.atomIndices[1] === 3),
+'explicit PDB CONECT topology preserves a connection between named alternate conformers');
+assert.equal(crossConformerConect.bonds.filter(bond => bond.provenance === 'inferred-distance').length, 2,
+  'alternate-location compatibility remains enforced for inferred bonds');
 
 const modifiedResidue = Core.parseStructure(modifiedResiduePdb, 'pdb');
 assertNormalizedInvariants(modifiedResidue);
@@ -292,6 +357,7 @@ const mseAtoms = modifiedResidue.atoms.filter(atom => atom.resn === 'MSE');
 assert.ok(mseAtoms.length > 0);
 assert.ok(mseAtoms.every(atom => atom.role === 'polymer' && atom.subtype === 'protein'));
 assert.ok(mseAtoms.every(atom => atom.parentCompId === 'MET' && atom.classificationProvenance === 'pdb-modres'));
+assert.ok(mseAtoms.every(atom => JSON.stringify(atom.parentCompIds) === '["MET"]'));
 assert.equal(new Set(modifiedResidue.atoms.map(atom => atom.instanceIndex)).size, 1,
   'MODRES polymer residues remain in the surrounding polymer instance');
 assert.equal(new Set(modifiedResidue.atoms.map(atom => atom.entityIndex)).size, 1,
@@ -304,6 +370,20 @@ const fallbackModifiedResidue = Core.parseStructure(modifiedResiduePdb.replace(/
 assert.ok(fallbackModifiedResidue.atoms.filter(atom => atom.resn === 'MSE')
   .every(atom => atom.role === 'polymer' && atom.classificationProvenance === 'modified-residue-map'),
   'common modified residues retain a tested parent fallback when MODRES is absent');
+const multiParentModified = Core.parseStructure(multiParentModifiedCif, 'mmcif');
+assertNormalizedInvariants(multiParentModified);
+const xaa = multiParentModified.atoms.find(atom => atom.resn === 'XAA');
+const mixed = multiParentModified.atoms.find(atom => atom.resn === 'MIX');
+assert.deepEqual(JSON.parse(JSON.stringify(xaa.parentCompIds)), ['UNK', 'MET']);
+assert.equal(xaa.parentCompId, 'UNK', 'the first parent remains available through the compatibility field');
+assert.equal(xaa.role, 'polymer');
+assert.equal(xaa.subtype, 'protein', 'all declared parents are considered when recognizing a modified polymer');
+assert.deepEqual(JSON.parse(JSON.stringify(mixed.parentCompIds)), ['MET', 'DA']);
+assert.equal(mixed.role, 'unknown');
+assert.equal(mixed.classificationProvenance, 'ambiguous-modified-residue-parent',
+  'conflicting recognized parent families remain explicit instead of being guessed');
+assert.deepEqual(JSON.parse(JSON.stringify(multiParentModified.topology.residues.map(residue => residue.parentCompIds))),
+  [['UNK', 'MET'], ['MET', 'DA']], 'residue topology preserves every declared chemical-component parent');
 
 const pdbAssembly = Core.parseStructure(pdbAssemblyText, 'pdb');
 assertNormalizedInvariants(pdbAssembly);
@@ -376,6 +456,45 @@ assert.equal(v1.futureDocumentField.preserved, true);
 assert.equal(v1.structure.futureStructureField, 42);
 assert.equal(v1.scene.futureSceneField, true);
 
+const migratedV1Bindings = Core.normalizeDocument({
+  format: 'molhtml/document', version: 1, documentId: 'legacy-bindings', revision: 1,
+  structure: { id: 'legacy-structure', name: 'Legacy bindings', format: 'pdb', data: pdb },
+  scene: {
+    selection: { kind: 'atom', selector: { kind: 'atom', model: 1, chain: 'A', resi: 1, atom: 'N' } },
+    customColors: [{ selector: { kind: 'chain', model: 1, chain: 'A' }, color: '#ffffff' }],
+    measurements: [{ type: 'distance', atoms: [{ serial: 1 }, { serial: 2 }] }],
+    savedSelections: [{ name: 'Legacy selection', selector: { kind: 'chain', model: 1, chain: 'A' } }],
+    ligandAnalysis: { selectedLigand: { kind: 'instance', instanceId: 'legacy-instance' } },
+    savedViews: [{ title: 'Legacy view', snapshot: {
+      selection: { kind: 'atom', selector: { kind: 'atom', serial: 1 } },
+      customColors: [{ selector: { kind: 'chain', chain: 'A' }, color: '#ffffff' }]
+    } }]
+  }
+});
+assert.equal(migratedV1Bindings.scene.selection.selector.structureId, 'legacy-structure');
+assert.equal(migratedV1Bindings.scene.customColors[0].selector.structureId, 'legacy-structure');
+assert.ok(migratedV1Bindings.scene.measurements[0].atoms.every(selector => selector.structureId === 'legacy-structure'));
+assert.equal(migratedV1Bindings.scene.savedSelections[0].selector.structureId, 'legacy-structure');
+assert.equal(migratedV1Bindings.scene.ligandAnalysis.selectedLigand.structureId, 'legacy-structure');
+assert.equal(migratedV1Bindings.scene.savedViews[0].structureId, 'legacy-structure');
+assert.equal(migratedV1Bindings.scene.savedViews[0].snapshot.selection.selector.structureId, 'legacy-structure');
+assert.equal(migratedV1Bindings.scene.savedViews[0].snapshot.customColors[0].selector.structureId, 'legacy-structure');
+
+const malformedV2Binding = Core.normalizeDocument({
+  format: 'molhtml/document', version: 2, documentId: 'malformed-v2-binding', revision: 1,
+  structure: { id: 'v2-structure', name: 'Malformed v2 binding', format: 'pdb', data: pdb },
+  scene: { measurements: [{ type: 'distance', atoms: [{ serial: 1 }, { structureId: 'v2-structure', serial: 2 }] }] }
+});
+assert.equal(malformedV2Binding.scene.measurements[0].atoms[0].structureId, undefined,
+  'v2 normalization does not silently repair malformed persisted selectors');
+const malformedV2LigandBinding = Core.normalizeDocument({
+  format: 'molhtml/document', version: 2, documentId: 'malformed-v2-ligand-binding', revision: 1,
+  structure: { id: 'v2-structure', name: 'Malformed v2 ligand binding', format: 'pdb', data: pdb },
+  scene: { ligandAnalysis: { selectedLigand: { model: 1, chain: 'A', resi: 1, resn: 'ALA' } } }
+});
+assert.equal(malformedV2LigandBinding.scene.ligandAnalysis.selectedLigand.structureId, undefined,
+  'v2 ligand analysis preserves an unbound selector as invalid instead of silently repairing it');
+
 Core.applyDocumentCommand(v1, { type: 'set-scene-field', field: 'colorMode', value: 'instance' });
 assert.equal(v1.scene.colorMode, 'instance');
 assert.equal(v1.version, 2, 'identity-aware commands upgrade the document version');
@@ -388,7 +507,7 @@ Core.applyDocumentCommand(v1, { type: 'set-saved-selections', savedSelections: [
 assert.equal(v1.scene.savedSelections[0].selector.role, 'ligand');
 Core.applyDocumentCommand(v1, { type: 'set-ligand-analysis', ligandAnalysis: { cutoff: 6 } });
 assert.equal(v1.scene.ligandAnalysis.cutoff, 6);
-Core.applyDocumentCommand(v1, { type: 'set-saved-views', savedViews: [{ title: 'Overview', snapshot: {} }] });
+Core.applyDocumentCommand(v1, { type: 'set-saved-views', savedViews: [{ title: 'Overview', structureId: 'pdb', snapshot: {} }] });
 assert.equal(v1.scene.savedViews[0].title, 'Overview');
 Core.applyDocumentCommand(v1, { type: 'set-camera', camera: { view: [0, 0, 0, 1, 0, 0, 0, 1] } });
 assert.equal(v1.scene.camera.view.length, 8);
