@@ -260,7 +260,7 @@ test('creates safe deterministic filenames for international and hostile titles'
   expect(names.transparent).toBe('DNA_sample_320x200_transparent.png');
 });
 
-test('keeps exact backing pixels at a fractional device-pixel ratio', async ({ browser }) => {
+test('keeps exact pixels and live label geometry at a fractional device-pixel ratio', async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 900, height: 700 }, deviceScaleFactor: 1.25 });
   await guardUnexpectedNetwork(context);
   await context.addInitScript(() => {
@@ -273,9 +273,66 @@ test('keeps exact backing pixels at a fractional device-pixel ratio', async ({ b
   try {
     await openArtifact(page);
     expect(await page.evaluate(() => window.devicePixelRatio)).toBe(1.25);
+    await page.evaluate(() => {
+      const documentCopy = structuredClone(window.molhtml.document);
+      const structure = window.MolhtmlCore.parseStructure(
+        documentCopy.structure.data, documentCopy.structure.format
+      );
+      documentCopy.scene.selection = {
+        kind: 'atom',
+        selector: window.MolhtmlCore.selectorForAtom(structure.atoms[0], 'atom', documentCopy.structure.id)
+      };
+      window.molhtml.loadDocument(documentCopy, 'fractional-dpr-label-test');
+    });
+    await expectHealthyRender(page);
     const png = await inspectExport(page, { width: 257, height: 193, transparent: true });
     expect(png).toMatchObject({ width: 257, height: 193 });
     expect(png.corner[3]).toBe(0);
+    const labels = await page.evaluate(async () => {
+      async function labelGeometry(blob) {
+        const bitmap = await createImageBitmap(blob);
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        context.drawImage(bitmap, 0, 0);
+        const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        let count = 0;
+        let minX = canvas.width;
+        let minY = canvas.height;
+        let maxX = -1;
+        let maxY = -1;
+        for (let index = 0; index < pixels.length; index += 4) {
+          const red = pixels[index];
+          const green = pixels[index + 1];
+          const blue = pixels[index + 2];
+          if (red < 210 || red > 230 || green < 175 || green > 195 || blue < 75 || blue > 105) continue;
+          const pixel = index / 4;
+          const x = pixel % canvas.width;
+          const y = Math.floor(pixel / canvas.width);
+          count += 1;
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
+        }
+        bitmap.close();
+        return { count, width: maxX - minX + 1, height: maxY - minY + 1 };
+      }
+      const visibleCanvas = document.querySelector('#molecule-viewer canvas');
+      const visibleBlob = await new Promise(resolve => visibleCanvas.toBlob(resolve, 'image/png'));
+      const currentBlob = await window.molhtml.renderPNG();
+      return {
+        backingScale: visibleCanvas.width / visibleCanvas.getBoundingClientRect().width,
+        visible: await labelGeometry(visibleBlob),
+        current: await labelGeometry(currentBlob)
+      };
+    });
+    expect(labels.backingScale).toBeCloseTo(2, 1);
+    expect(labels.visible.count).toBeGreaterThan(100);
+    expect(labels.current.count).toBeGreaterThan(100);
+    expect(Math.abs(labels.current.width - labels.visible.width)).toBeLessThanOrEqual(4);
+    expect(Math.abs(labels.current.height - labels.visible.height)).toBeLessThanOrEqual(4);
     await expectHealthyRender(page);
   } finally {
     await closeContext(context);
@@ -965,6 +1022,26 @@ test('downloads from the inspector with a safe deterministic filename', async ({
   const objectUrls = await page.evaluate(() => globalThis.__exportObjectUrls);
   expect(objectUrls.created).toHaveLength(objectUrlBaseline.created + 1);
   expect(objectUrls.revoked.at(-1)).toBe(objectUrls.created.at(-1));
+});
+
+test('keeps current export dimensions in sync after the desktop inspector resizes the viewer', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openArtifact(page);
+  const canvas = page.locator('#molecule-viewer canvas');
+  const before = await canvas.evaluate(element => ({ width: element.width, height: element.height }));
+
+  await page.locator('[data-inspector-target="export"]').click();
+  await expect.poll(() => canvas.evaluate(element => element.width)).toBeLessThan(before.width);
+  const resized = await canvas.evaluate(element => ({ width: element.width, height: element.height }));
+  await expect(page.locator('#export-summary')).toContainText(
+    `${resized.width.toLocaleString()} x ${resized.height.toLocaleString()} px`
+  );
+
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.locator('#export-download').click()
+  ]);
+  expect(await downloadedPngDimensions(download)).toMatchObject(resized);
 });
 
 test('renders the 2x and 4x inspector presets at their promised pixels', async ({ page }) => {

@@ -91,6 +91,9 @@
     onCamera: camera => {
       Core.applyDocumentCommand(doc, { type: 'set-camera', camera });
       touchDocument('browser', false);
+    },
+    onResize: () => {
+      if (activeInspector === 'export') syncExportControls();
     }
   });
   const exportService = new Export.ExportService(() => {
@@ -100,7 +103,11 @@
       camera: renderer.getCameraSnapshot(),
       activeMeasurementId,
       activeSavedSelectionId,
-      visibleSize: { width: sizing.width, height: sizing.height }
+      visibleSize: {
+        width: sizing.width,
+        height: sizing.height,
+        devicePixelRatio: sizing.devicePixelRatio
+      }
     };
   });
 

@@ -13,6 +13,7 @@
         backgroundAlpha: options.backgroundAlpha === 0 ? 0 : 1,
         interactive: options.interactive !== false,
         screenScale: positiveNumber(options.screenScale, 1),
+        labelScale: positiveNumber(options.labelScale, positiveNumber(options.screenScale, 1)),
         upscale: options.upscale !== false
       };
       this.doc = null;
@@ -42,6 +43,7 @@
         this.resizeObserver = new ResizeObserver(() => {
           this.viewer.resize();
           this.viewer.render();
+          this.callbacks.onResize?.(this.getSizingInfo());
         });
         this.resizeObserver.observe(container);
       } else {
@@ -563,9 +565,10 @@
       this.viewer.render();
     }
 
-    setExportOptions({ backgroundAlpha, screenScale } = {}) {
+    setExportOptions({ backgroundAlpha, screenScale, labelScale } = {}) {
       if (backgroundAlpha === 0 || backgroundAlpha === 1) this.options.backgroundAlpha = backgroundAlpha;
       if (screenScale != null) this.options.screenScale = positiveNumber(screenScale, 1);
+      if (labelScale != null) this.options.labelScale = positiveNumber(labelScale, 1);
       if (this.doc) this.applyBackground();
     }
 
@@ -576,7 +579,7 @@
     }
 
     labelOptions(style) {
-      const scale = this.options.screenScale;
+      const scale = this.options.labelScale;
       const scaled = { ...style };
       for (const key of ['fontSize', 'padding', 'borderThickness']) {
         if (Number.isFinite(style[key])) scaled[key] = Math.max(1, Math.round(style[key] * scale));
@@ -700,6 +703,7 @@
       this.surfaceTasks.clear();
       this.options.backgroundAlpha = 1;
       this.options.screenScale = 1;
+      this.options.labelScale = 1;
       if (this.viewer.config) this.viewer.config.backgroundAlpha = 1;
       this.viewer.setBackgroundColor('#07111f', 1);
       this.setOutputSize(64, 64);

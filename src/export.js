@@ -150,11 +150,14 @@
       try {
         renderer = this.ensureRenderer();
         validateHardwareLimits(job, renderer.getSizingInfo());
+        renderer.setOutputSize(job.options.width, job.options.height);
+        const outputSizing = renderer.getSizingInfo();
+        const outputPixelRatio = positiveNumber(outputSizing.devicePixelRatio, 1);
         renderer.setExportOptions({
           backgroundAlpha: job.options.transparent ? 0 : 1,
-          screenScale: job.screenScale
+          screenScale: job.screenScale,
+          labelScale: job.screenScale * job.visiblePixelRatio / outputPixelRatio
         });
-        renderer.setOutputSize(job.options.width, job.options.height);
         generation = renderer.setDocument(job.document, {
           cameraMode: 'snapshot',
           writeCamera: false,
@@ -295,6 +298,7 @@
       options: normalized,
       title: String(source.document.title || source.document.structure?.name || 'molecule'),
       screenScale: Math.min(normalized.width / visibleWidth, normalized.height / visibleHeight),
+      visiblePixelRatio: positiveNumber(source.visibleSize?.devicePixelRatio, 1),
       presentationState: {
         activeMeasurementId: measurementIds.has(source.activeMeasurementId) ? source.activeMeasurementId : null,
         activeSavedSelectionId: savedSelectionIds.has(source.activeSavedSelectionId) ? source.activeSavedSelectionId : null
@@ -444,6 +448,11 @@
   function positiveInteger(value, fallback) {
     const number = Number(value);
     return Number.isInteger(number) && number > 0 ? number : fallback;
+  }
+
+  function positiveNumber(value, fallback) {
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0 ? number : fallback;
   }
 
   function minimumPositive(fallback, ...values) {

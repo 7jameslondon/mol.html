@@ -4288,6 +4288,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         backgroundAlpha: options.backgroundAlpha === 0 ? 0 : 1,
         interactive: options.interactive !== false,
         screenScale: positiveNumber(options.screenScale, 1),
+        labelScale: positiveNumber(options.labelScale, positiveNumber(options.screenScale, 1)),
         upscale: options.upscale !== false
       };
       this.doc = null;
@@ -4317,6 +4318,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         this.resizeObserver = new ResizeObserver(() => {
           this.viewer.resize();
           this.viewer.render();
+          this.callbacks.onResize?.(this.getSizingInfo());
         });
         this.resizeObserver.observe(container);
       } else {
@@ -4838,9 +4840,10 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       this.viewer.render();
     }
 
-    setExportOptions({ backgroundAlpha, screenScale } = {}) {
+    setExportOptions({ backgroundAlpha, screenScale, labelScale } = {}) {
       if (backgroundAlpha === 0 || backgroundAlpha === 1) this.options.backgroundAlpha = backgroundAlpha;
       if (screenScale != null) this.options.screenScale = positiveNumber(screenScale, 1);
+      if (labelScale != null) this.options.labelScale = positiveNumber(labelScale, 1);
       if (this.doc) this.applyBackground();
     }
 
@@ -4851,7 +4854,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     }
 
     labelOptions(style) {
-      const scale = this.options.screenScale;
+      const scale = this.options.labelScale;
       const scaled = { ...style };
       for (const key of ['fontSize', 'padding', 'borderThickness']) {
         if (Number.isFinite(style[key])) scaled[key] = Math.max(1, Math.round(style[key] * scale));
@@ -4975,6 +4978,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       this.surfaceTasks.clear();
       this.options.backgroundAlpha = 1;
       this.options.screenScale = 1;
+      this.options.labelScale = 1;
       if (this.viewer.config) this.viewer.config.backgroundAlpha = 1;
       this.viewer.setBackgroundColor('#07111f', 1);
       this.setOutputSize(64, 64);
@@ -5349,11 +5353,14 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       try {
         renderer = this.ensureRenderer();
         validateHardwareLimits(job, renderer.getSizingInfo());
+        renderer.setOutputSize(job.options.width, job.options.height);
+        const outputSizing = renderer.getSizingInfo();
+        const outputPixelRatio = positiveNumber(outputSizing.devicePixelRatio, 1);
         renderer.setExportOptions({
           backgroundAlpha: job.options.transparent ? 0 : 1,
-          screenScale: job.screenScale
+          screenScale: job.screenScale,
+          labelScale: job.screenScale * job.visiblePixelRatio / outputPixelRatio
         });
-        renderer.setOutputSize(job.options.width, job.options.height);
         generation = renderer.setDocument(job.document, {
           cameraMode: 'snapshot',
           writeCamera: false,
@@ -5494,6 +5501,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       options: normalized,
       title: String(source.document.title || source.document.structure?.name || 'molecule'),
       screenScale: Math.min(normalized.width / visibleWidth, normalized.height / visibleHeight),
+      visiblePixelRatio: positiveNumber(source.visibleSize?.devicePixelRatio, 1),
       presentationState: {
         activeMeasurementId: measurementIds.has(source.activeMeasurementId) ? source.activeMeasurementId : null,
         activeSavedSelectionId: savedSelectionIds.has(source.activeSavedSelectionId) ? source.activeSavedSelectionId : null
@@ -5643,6 +5651,11 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
   function positiveInteger(value, fallback) {
     const number = Number(value);
     return Number.isInteger(number) && number > 0 ? number : fallback;
+  }
+
+  function positiveNumber(value, fallback) {
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0 ? number : fallback;
   }
 
   function minimumPositive(fallback, ...values) {
@@ -5986,6 +5999,9 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     onCamera: camera => {
       Core.applyDocumentCommand(doc, { type: 'set-camera', camera });
       touchDocument('browser', false);
+    },
+    onResize: () => {
+      if (activeInspector === 'export') syncExportControls();
     }
   });
   const exportService = new Export.ExportService(() => {
@@ -5995,7 +6011,11 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       camera: renderer.getCameraSnapshot(),
       activeMeasurementId,
       activeSavedSelectionId,
-      visibleSize: { width: sizing.width, height: sizing.height }
+      visibleSize: {
+        width: sizing.width,
+        height: sizing.height,
+        devicePixelRatio: sizing.devicePixelRatio
+      }
     };
   });
 
