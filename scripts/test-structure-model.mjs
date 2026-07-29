@@ -433,6 +433,25 @@ const numericAssembly = Core.parseStructure(pdbAssemblyText.replace(
 ), 'pdb');
 assert.equal(numericAssembly.assemblies[0].oligomericCount, 24,
   'numeric N-MERIC assembly descriptions preserve arbitrary positive oligomer counts');
+const legacyNumericAssembly = Core.parseStructure(pdbAssemblyText.replace(
+  'AUTHOR DETERMINED BIOLOGICAL UNIT: DIMERIC',
+  'QUATERNARY STRUCTURE FOR THIS ENTRY: 21MERIC'
+), 'pdb');
+assert.equal(legacyNumericAssembly.assemblies[0].oligomericCount, 21,
+  'the standard legacy quaternary-structure remark form is preserved');
+const extendedNamedAssembly = Core.parseStructure(pdbAssemblyText.replace(
+  'AUTHOR DETERMINED BIOLOGICAL UNIT: DIMERIC',
+  'SOFTWARE DETERMINED QUATERNARY STRUCTURE: EICOSAMERIC'
+), 'pdb');
+assert.equal(extendedNamedAssembly.assemblies[0].oligomericCount, 20,
+  'the full canonical monomer-through-eicosamer vocabulary is recognized');
+const blankChainAssembly = Core.parseStructure(pdbAssemblyText
+  .replace('APPLY THE FOLLOWING TO CHAINS: A', 'APPLY THE FOLLOWING TO CHAINS: NULL')
+  .replaceAll('GLY A   1', 'GLY     1'), 'pdb');
+assert.deepEqual(JSON.parse(JSON.stringify(blankChainAssembly.assemblies[0].generators[0].asymIds)), ['_'],
+  'REMARK 350 NULL chain identifiers map to the normalized blank PDB chain');
+assert.equal(blankChainAssembly.assemblyInstances.length, 2,
+  'blank-chain biological assemblies retain every BIOMT instance');
 
 const conformance = Core.parseStructure(conformanceCif, 'mmcif');
 assertNormalizedInvariants(conformance);

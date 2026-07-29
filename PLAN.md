@@ -52,9 +52,10 @@ The subsequent independent review also closes ambiguous symmetry-row inference, 
 alternate identity a label-tier tiebreaker only when it can actually disambiguate, aligns
 measurement cardinality and kind-specific selector requirements across the v2 schema and
 runtime, and recognizes standard software-determined PDB assemblies plus larger named or
-numeric oligomer counts.
+numeric oligomer counts. Final assembly hardening also supports the legacy `QUATERNARY
+STRUCTURE FOR THIS ENTRY` form and maps REMARK 350 `NULL` to the normalized blank chain.
 
-The final deterministic artifact is 949,659 bytes, leaving 341 bytes under the existing
+The final deterministic artifact is 949,782 bytes, leaving 218 bytes under the existing
 950,000-byte ceiling. Model/schema checks, 67 artifact invariants, all 29 Chromium regression
 tests, and the scheduled 5,000-atom performance case pass. Publication is performed from the
 dedicated branch through a review-ready pull request; merging is intentionally outside this

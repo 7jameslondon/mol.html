@@ -1732,7 +1732,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         for (const id of activeAssemblyIds) ensureAssembly(id);
         continue;
       }
-      const oligomer = body.match(/^(?:AUTHOR DETERMINED BIOLOGICAL UNIT|SOFTWARE DETERMINED (?:BIOLOGICAL UNIT|QUATERNARY STRUCTURE)):\s*(.+)$/i);
+      const oligomer = body.match(/^(?:(?:AUTHOR|SOFTWARE) DETERMINED (?:BIOLOGICAL UNIT|QUATERNARY STRUCTURE)|QUATERNARY STRUCTURE FOR THIS ENTRY):\s*(.+)$/i);
       if (oligomer) {
         const details = oligomer[1].trim();
         for (const id of activeAssemblyIds) {
@@ -1744,7 +1744,8 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       }
       const chains = body.match(/^(?:APPLY THE FOLLOWING TO|AND) CHAINS:\s*(.*)$/i);
       if (chains) {
-        const asymIds = chains[1].split(',').map(id => id.trim()).filter(id => id && id.toUpperCase() !== 'NULL');
+        const asymIds = chains[1].split(',').map(id => id.trim()).filter(Boolean)
+          .map(id => id.toUpperCase() === 'NULL' ? '_' : id);
         const append = /^AND CHAINS:/i.test(body);
         for (const id of activeAssemblyIds) {
           const assembly = ensureAssembly(id);
@@ -1805,11 +1806,8 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     const normalized = String(value || '').trim().toLowerCase().replace(/ic$/, '');
     const numeric = normalized.match(/^(\d+)\s*-?\s*mer$/);
     if (numeric) return Number(numeric[1]) || null;
-    return {
-      monomer: 1, dimer: 2, trimer: 3, tetramer: 4, pentamer: 5,
-      hexamer: 6, heptamer: 7, octamer: 8, nonamer: 9, decamer: 10,
-      undecamer: 11, dodecamer: 12
-    }[normalized] || null;
+    const named = 'monomer,dimer,trimer,tetramer,pentamer,hexamer,heptamer,octamer,nonamer,decamer,undecamer,dodecamer,tridecamer,tetradecamer,pentadecamer,hexadecamer,heptadecamer,octadecamer,nonadecamer,eicosamer'.split(',').indexOf(normalized);
+    return named < 0 ? null : named + 1;
   }
 
   function tokenizeMmcif(value) {

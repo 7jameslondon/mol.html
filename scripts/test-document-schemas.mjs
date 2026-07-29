@@ -176,6 +176,12 @@ const identitylessCurrentSelection = structuredClone(validV2);
 identitylessCurrentSelection.scene.selection.selector = { structureId: 'structure-2' };
 assert.ok(schemaErrors(v2, v2, identitylessCurrentSelection).length,
   'current atom selections require a usable source or legacy atom identity');
+const emptySourceIdentity = structuredClone(validV2);
+emptySourceIdentity.scene.selection.selector = {
+  structureId: 'structure-2', sourceIdentity: { atomSiteId: '' }
+};
+assert.ok(schemaErrors(v2, v2, emptySourceIdentity).length,
+  'empty source identifiers do not satisfy an atom-identity tier');
 const identitylessColor = structuredClone(validV2);
 identitylessColor.scene.customColors[0].selector = { structureId: 'structure-2' };
 assert.ok(schemaErrors(v2, v2, identitylessColor).length,

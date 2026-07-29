@@ -99,10 +99,10 @@ The accepted implementation was measured on the feature branch after the determi
 release build:
 
 - Branch-start artifact: 862,392 bytes.
-- Final artifact: 949,659 bytes.
-- First-party increase: 87,267 bytes.
+- Final artifact: 949,782 bytes.
+- First-party increase: 87,390 bytes.
 - Bundled 3Dmol payload: unchanged at 537,792 bytes.
-- Remaining headroom under the 950,000-byte ceiling: 341 bytes.
+- Remaining headroom under the 950,000-byte ceiling: 218 bytes.
 - Model/schema and artifact verification: passed, including 67 artifact invariants.
 - Browser regression suite: 29 tests passed in Chromium.
 - Scheduled performance observation: the deterministic 5,000-atom case passed.
