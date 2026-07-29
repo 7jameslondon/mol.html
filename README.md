@@ -59,7 +59,7 @@ The two coverage commands enforce regression floors and write browsable reports
 to `coverage/node/` and `coverage/playwright/`. Playwright coverage uses
 Chromium's native JavaScript coverage API, so run `pnpm setup:e2e` first. The
 Node floor is 90% statements/lines, 85% functions, and 65% branches; the
-Playwright floor is 75% bytes, 60% functions, and 64% lines.
+Playwright floor is 70% statements, 50% branches, 60% functions, and 75% lines.
 
 ## Continuous integration
 

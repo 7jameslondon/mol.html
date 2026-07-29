@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { readdir, readFile, rm } from 'node:fs/promises';
+import { readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CoverageReport } from 'monocart-coverage-reports';
@@ -29,8 +29,10 @@ function run(label, script, args = [], env = {}) {
 await rm(reportDirectory, { recursive: true, force: true });
 await rm(rawDirectory, { recursive: true, force: true });
 await run('build the Playwright coverage subject', 'scripts/build.mjs');
-await run('collect Playwright JavaScript coverage', 'scripts/run-playwright.mjs', ['test'], {
-  MOLHTML_COVERAGE: '1'
+await run('collect Playwright JavaScript coverage', 'scripts/run-playwright.mjs', ['test', '--project=chromium'], {
+  MOLHTML_ALL_BROWSERS: '0',
+  MOLHTML_COVERAGE: '1',
+  MOLHTML_SCHEDULED: '0'
 });
 
 let rawFiles;
@@ -53,11 +55,10 @@ const report = new CoverageReport({
     return match ? `src/${match[1]}.js` : filePath;
   },
   reports: [
-    ['v8', { outputFile: 'index.html', metrics: ['bytes', 'functions', 'lines'] }],
-    ['console-details', { metrics: ['bytes', 'functions', 'lines'] }],
+    'html',
+    'text',
     ['lcovonly', { file: 'lcov.info' }],
-    ['json-summary', { file: 'coverage-summary.json' }],
-    ['markdown-summary', { outputFile: 'coverage-summary.md', metrics: ['bytes', 'functions', 'lines'] }]
+    ['json-summary', { file: 'coverage-summary.json' }]
   ],
   clean: true,
   cleanCache: true
@@ -70,27 +71,43 @@ for (const name of rawFiles) {
 const results = await report.generate();
 if (!results) throw new Error('The Playwright coverage report was empty.');
 
+const summary = JSON.parse(await readFile(resolve(reportDirectory, 'coverage-summary.json'), 'utf8'));
 const expectedSources = new Set([
   'src/model.js',
   'src/renderer.js',
   'src/persistence.js',
   'src/app.js'
 ]);
-for (const file of results.files) expectedSources.delete(file.sourcePath.replaceAll('\\', '/'));
+for (const sourcePath of Object.keys(summary)) expectedSources.delete(sourcePath.replaceAll('\\', '/'));
 if (expectedSources.size) {
   throw new Error(`Playwright coverage is missing expected sources: ${[...expectedSources].join(', ')}.`);
 }
 
 const thresholds = {
-  bytes: 75,
+  statements: 70,
+  branches: 50,
   functions: 60,
-  lines: 64
+  lines: 75
 };
 const failures = [];
 for (const [metric, minimum] of Object.entries(thresholds)) {
-  const actual = Number(results.summary[metric].pct);
+  const actual = Number(summary.total[metric].pct);
   if (!Number.isFinite(actual) || actual < minimum) {
     failures.push(`${metric} ${Number.isFinite(actual) ? actual : 'unknown'}% < ${minimum}%`);
   }
 }
 if (failures.length) throw new Error(`Playwright coverage thresholds failed: ${failures.join(', ')}.`);
+
+const markdownRows = Object.keys(thresholds).map(metric => {
+  const value = summary.total[metric];
+  const label = `${metric[0].toUpperCase()}${metric.slice(1)}`;
+  return `| ${label} | ${value.pct}% | ${value.covered} | ${value.total - value.covered} | ${value.total} |`;
+});
+await writeFile(resolve(reportDirectory, 'coverage-summary.md'), [
+  '## Playwright application coverage',
+  '',
+  '| Metric | Coverage | Covered | Uncovered | Total |',
+  '| :--- | ---: | ---: | ---: | ---: |',
+  ...markdownRows,
+  ''
+].join('\n'), 'utf8');
