@@ -175,6 +175,14 @@ const preferredAtomSite = Core.matchSavedSelection({
 assert.equal(preferredAtomSite.valid, true);
 assert.equal(preferredAtomSite.atoms[0].atomSiteId, ligand.atomSiteId,
   'an exact atom-site id takes priority over lower identity tiers');
+const staleAuthorAlt = structuredClone(atomSelector);
+delete staleAuthorAlt.sourceIdentity.atomSiteId;
+staleAuthorAlt.sourceIdentity.authAltId = 'stale-alternate';
+Object.assign(staleAuthorAlt, { chain: 'missing-chain', resi: -1, atom: 'missing-atom', serial: -1 });
+const staleAuthorAltMatch = Core.matchSavedSelection(staleAuthorAlt, parsed.atoms, structureId);
+assert.equal(staleAuthorAltMatch.valid, true);
+assert.equal(staleAuthorAltMatch.atoms[0].atomSiteId, ligand.atomSiteId,
+  'a stale author alternate cannot veto an otherwise unique higher-priority label match');
 const staleLegacyIdentity = Core.matchSavedSelection({
   ...atomSelector,
   chain: 'missing-chain', resi: -1, atom: 'missing-atom', serial: -1
@@ -326,6 +334,26 @@ assert.equal(symmetryStructConn.topology.connectedComponents.length, 4,
   'symmetry-qualified atom pairs cannot be resurrected by distance inference');
 assert.ok(symmetryStructConn.diagnostics.parserWarnings.some(warning => /symmetry mate/i.test(warning)),
   'unsupported symmetry-mate connections produce a parser diagnostic');
+const ambiguousSymmetryStructConn = Core.parseStructure(alternateConformerCif.replace(
+  'loop_\n_atom_site.group_PDB',
+  `loop_
+_struct_conn.id
+_struct_conn.conn_type_id
+_struct_conn.ptnr1_label_asym_id
+_struct_conn.ptnr1_label_comp_id
+_struct_conn.ptnr1_label_atom_id
+_struct_conn.ptnr2_label_asym_id
+_struct_conn.ptnr2_label_comp_id
+_struct_conn.ptnr2_label_atom_id
+_struct_conn.ptnr1_symmetry
+_struct_conn.ptnr2_symmetry
+ambiguous-symmetry covale A LIG C1 A LIG N1 1_555 2_555
+loop_
+_atom_site.group_PDB`
+), 'mmcif');
+assert.equal(ambiguousSymmetryStructConn.bonds.length, 0,
+  'all candidate pairs from an ambiguous symmetry-qualified connection are denied to inference');
+assert.equal(ambiguousSymmetryStructConn.topology.connectedComponents.length, 4);
 const crossConformerStructConn = Core.parseStructure(
   authorStructConnCif.replace('N1 A 1_555', 'N1 B 1_555'),
   'mmcif'
@@ -393,6 +421,18 @@ assert.equal(pdbAssembly.assemblies[0].instances.length, 2);
 assert.deepEqual(JSON.parse(JSON.stringify(pdbAssembly.assemblies[0].generators[0].operatorSequences)), [['1'], ['2']]);
 assert.deepEqual(JSON.parse(JSON.stringify(pdbAssembly.assemblyInstances[1].transform)).map(row => row[3]), [12, 0, 0, 1],
   'PDB BIOMT records produce the same base-instance/operator representation as mmCIF assemblies');
+const softwareAssembly = Core.parseStructure(pdbAssemblyText.replace(
+  'AUTHOR DETERMINED BIOLOGICAL UNIT: DIMERIC',
+  'SOFTWARE DETERMINED QUATERNARY STRUCTURE: DODECAMERIC'
+), 'pdb');
+assert.equal(softwareAssembly.assemblies[0].oligomericCount, 12,
+  'standard software-determined quaternary-structure remarks preserve larger named oligomers');
+const numericAssembly = Core.parseStructure(pdbAssemblyText.replace(
+  'AUTHOR DETERMINED BIOLOGICAL UNIT: DIMERIC',
+  'SOFTWARE DETERMINED QUATERNARY STRUCTURE: 24-MERIC'
+), 'pdb');
+assert.equal(numericAssembly.assemblies[0].oligomericCount, 24,
+  'numeric N-MERIC assembly descriptions preserve arbitrary positive oligomer counts');
 
 const conformance = Core.parseStructure(conformanceCif, 'mmcif');
 assertNormalizedInvariants(conformance);

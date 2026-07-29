@@ -235,7 +235,7 @@
         for (const id of activeAssemblyIds) ensureAssembly(id);
         continue;
       }
-      const oligomer = body.match(/^(?:AUTHOR|SOFTWARE) DETERMINED BIOLOGICAL UNIT:\s*(.+)$/i);
+      const oligomer = body.match(/^(?:AUTHOR DETERMINED BIOLOGICAL UNIT|SOFTWARE DETERMINED (?:BIOLOGICAL UNIT|QUATERNARY STRUCTURE)):\s*(.+)$/i);
       if (oligomer) {
         const details = oligomer[1].trim();
         for (const id of activeAssemblyIds) {
@@ -306,9 +306,12 @@
 
   function oligomericCount(value) {
     const normalized = String(value || '').trim().toLowerCase().replace(/ic$/, '');
+    const numeric = normalized.match(/^(\d+)\s*-?\s*mer$/);
+    if (numeric) return Number(numeric[1]) || null;
     return {
       monomer: 1, dimer: 2, trimer: 3, tetramer: 4, pentamer: 5,
-      hexamer: 6, heptamer: 7, octamer: 8, nonamer: 9, decamer: 10
+      hexamer: 6, heptamer: 7, octamer: 8, nonamer: 9, decamer: 10,
+      undecamer: 11, dodecamer: 12
     }[normalized] || null;
   }
 
@@ -907,10 +910,19 @@
       const baseCoordinates = isBaseStructConnSymmetry(row.ptnr1_symmetry) && isBaseStructConnSymmetry(row.ptnr2_symmetry);
       const leftAtoms = findStructConnAtoms(atoms, row, 'ptnr1');
       const rightAtoms = findStructConnAtoms(atoms, row, 'ptnr2');
-      let reportedSymmetryExclusion = false;
+      if (!baseCoordinates && diagnostics?.parserWarnings?.length < 50) {
+        diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} references a crystallographic symmetry mate and was excluded from base topology.`);
+      }
       for (const modelNumber of modelNumbers) {
         const leftMatches = leftAtoms.filter(atom => atom.model === modelNumber);
         const rightMatches = rightAtoms.filter(atom => atom.model === modelNumber);
+        if (!baseCoordinates) {
+          for (const left of leftMatches) for (const right of rightMatches) {
+            if (left.index !== right.index) deniedInferencePairs.add(left.index < right.index
+              ? `${left.index}:${right.index}` : `${right.index}:${left.index}`);
+          }
+          continue;
+        }
         if (leftMatches.length !== 1 || rightMatches.length !== 1) {
           if (diagnostics?.parserWarnings?.length < 50) {
             diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} is ambiguous or unresolved in model ${modelNumber}.`);
@@ -921,16 +933,6 @@
         const right = rightMatches[0];
         if (left.index === right.index) continue;
         const key = left.index < right.index ? `${left.index}:${right.index}` : `${right.index}:${left.index}`;
-        if (!baseCoordinates) {
-          deniedInferencePairs.add(key);
-          if (diagnostics?.parserWarnings?.length < 50) {
-            if (!reportedSymmetryExclusion) {
-              diagnostics.parserWarnings.push(`struct_conn ${cifValue(row.id) || '(unnamed)'} references a crystallographic symmetry mate and was excluded from base topology.`);
-              reportedSymmetryExclusion = true;
-            }
-          }
-          continue;
-        }
         if (!existing.has(key)) {
           existing.add(key);
           bonds.push(bondRecord(

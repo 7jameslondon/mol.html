@@ -24,6 +24,13 @@ function schemaErrors(root, schema, value, path = '$') {
       if (validBranchCount === 0) errors.push(...branchErrors.flat());
     }
   }
+  if (schema.anyOf) {
+    const branchErrors = schema.anyOf.map(branch => schemaErrors(root, branch, value, path));
+    if (!branchErrors.some(candidate => candidate.length === 0)) {
+      errors.push(`${path}: expected at least one schema alternative`);
+      errors.push(...branchErrors.flat());
+    }
+  }
   const types = Array.isArray(schema.type) ? schema.type : schema.type ? [schema.type] : [];
   const matchesType = type => {
     if (type === 'null') return value === null;
@@ -40,10 +47,10 @@ function schemaErrors(root, schema, value, path = '$') {
     if (schema.pattern && !new RegExp(schema.pattern).test(value)) errors.push(`${path}: string does not match ${schema.pattern}`);
   }
   if (typeof value === 'number' && schema.minimum != null && value < schema.minimum) errors.push(`${path}: number is below minimum`);
-  if (Array.isArray(value) && schema.items) {
+  if (Array.isArray(value)) {
     if (schema.minItems != null && value.length < schema.minItems) errors.push(`${path}: array has too few items`);
     if (schema.maxItems != null && value.length > schema.maxItems) errors.push(`${path}: array has too many items`);
-    value.forEach((item, index) => errors.push(...schemaErrors(root, schema.items, item, `${path}[${index}]`)));
+    if (schema.items) value.forEach((item, index) => errors.push(...schemaErrors(root, schema.items, item, `${path}[${index}]`)));
   }
   if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
     for (const required of schema.required || []) {
@@ -128,7 +135,7 @@ const validV2 = {
           selector: { structureId: 'structure-2', sourceIdentity: { modelNumber: 1, atomSiteId: '9' } }
         },
         customColors: [{
-          color: '#ff0000',
+          scope: 'atom', color: '#ff0000',
           selector: { structureId: 'structure-2', sourceIdentity: { modelNumber: 1, atomSiteId: '9' } }
         }],
         camera: { view: null }
@@ -165,5 +172,51 @@ const withoutSavedViewStructure = structuredClone(validV2);
 delete withoutSavedViewStructure.scene.savedViews[0].snapshot.selection.selector.structureId;
 assert.match(schemaErrors(v2, v2, withoutSavedViewStructure).join('\n'), /structureId.*required/i,
   'saved-view snapshot selections require structure binding');
+const identitylessCurrentSelection = structuredClone(validV2);
+identitylessCurrentSelection.scene.selection.selector = { structureId: 'structure-2' };
+assert.ok(schemaErrors(v2, v2, identitylessCurrentSelection).length,
+  'current atom selections require a usable source or legacy atom identity');
+const identitylessColor = structuredClone(validV2);
+identitylessColor.scene.customColors[0].selector = { structureId: 'structure-2' };
+assert.ok(schemaErrors(v2, v2, identitylessColor).length,
+  'custom colors cannot use a selector that would match every atom');
+const identitylessLigand = structuredClone(validV2);
+identitylessLigand.scene.ligandAnalysis.selectedLigand = { structureId: 'structure-2' };
+assert.ok(schemaErrors(v2, v2, identitylessLigand).length,
+  'ligand analysis requires a usable residue identity');
+const roleWithoutRole = structuredClone(validV2);
+roleWithoutRole.scene.savedSelections[0].selector = { kind: 'role', structureId: 'structure-2' };
+assert.ok(schemaErrors(v2, v2, roleWithoutRole).length, 'role selectors require a role');
+const withinWithoutTarget = structuredClone(validV2);
+withinWithoutTarget.scene.savedSelections[0].selector = {
+  kind: 'within', structureId: 'structure-2', cutoff: 4
+};
+assert.ok(schemaErrors(v2, v2, withinWithoutTarget).length, 'within selectors require a target');
+for (const selector of [
+  { kind: 'atom', structureId: 'structure-2' },
+  { kind: 'residue', structureId: 'structure-2', model: 1, chain: 'A' },
+  { kind: 'chain', structureId: 'structure-2', model: 1 },
+  { kind: 'instance', structureId: 'structure-2', model: 1 },
+  { kind: 'entity', structureId: 'structure-2', model: 1 },
+  { kind: 'connected-component', structureId: 'structure-2', model: 1 },
+  { kind: 'residue-range', structureId: 'structure-2', model: 1, chain: 'A', start: {}, end: { resi: 3 } }
+]) {
+  const incompleteSelector = structuredClone(validV2);
+  incompleteSelector.scene.savedSelections[0].selector = selector;
+  assert.ok(schemaErrors(v2, v2, incompleteSelector).length,
+    `${selector.kind} selectors reject missing kind-specific identity fields`);
+}
+const atomReference = validV2.scene.measurements[0].atoms[0];
+for (const [type, count] of [['distance', 2], ['angle', 3], ['dihedral', 4]]) {
+  const exactMeasurement = structuredClone(validV2);
+  exactMeasurement.scene.measurements[0] = {
+    id: `${type}-exact`, type, atoms: Array.from({ length: count }, () => structuredClone(atomReference))
+  };
+  assert.deepEqual(schemaErrors(v2, v2, exactMeasurement), [], `${type} accepts exactly ${count} atom references`);
+  const mismatchedMeasurement = structuredClone(exactMeasurement);
+  mismatchedMeasurement.scene.measurements[0].atoms.pop();
+  assert.ok(schemaErrors(v2, v2, mismatchedMeasurement).length,
+    `${type} rejects a measurement with the wrong atom count`);
+}
 
 console.log('Document v1/v2 schema contract tests passed.');

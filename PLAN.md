@@ -48,7 +48,13 @@ distance inference remains conformer-compatible and cannot recreate a symmetry-q
 excluded from base topology. Modified mmCIF components now preserve and classify all declared
 parents, including an explicit unknown result when recognized parent families conflict.
 
-The final deterministic artifact is 949,278 bytes, leaving 722 bytes under the existing
+The subsequent independent review also closes ambiguous symmetry-row inference, makes author
+alternate identity a label-tier tiebreaker only when it can actually disambiguate, aligns
+measurement cardinality and kind-specific selector requirements across the v2 schema and
+runtime, and recognizes standard software-determined PDB assemblies plus larger named or
+numeric oligomer counts.
+
+The final deterministic artifact is 949,659 bytes, leaving 341 bytes under the existing
 950,000-byte ceiling. Model/schema checks, 67 artifact invariants, all 29 Chromium regression
 tests, and the scheduled 5,000-atom performance case pass. Publication is performed from the
 dedicated branch through a review-ready pull request; merging is intentionally outside this

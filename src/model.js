@@ -1196,10 +1196,8 @@
     if (identity.modelNumber != null && Number(identity.modelNumber) !== atom.model) return false;
     if (tier === 'atom-site') return String(atom.atomSiteId) === String(identity.atomSiteId);
     if (tier === 'label') {
-      const labelMatches = LABEL_IDENTITY_FIELDS.every(([key, atomKey]) =>
+      return LABEL_IDENTITY_FIELDS.every(([key, atomKey]) =>
         identity[key] == null || String(atom[atomKey] ?? '') === String(identity[key]));
-      return labelMatches && (identity.labelAltId != null || identity.authAltId == null
-        || String(atom.authAltId ?? '') === String(identity.authAltId));
     }
     if (tier === 'author') return AUTHOR_IDENTITY_FIELDS.every(([key, atomKey]) =>
       identity[key] == null || String(atom[atomKey] ?? '') === String(identity[key]));
@@ -1215,7 +1213,11 @@
     if (AUTHOR_IDENTITY_FIELDS.some(([key]) => identity[key] != null)) tiers.push('author');
     if (identity.pdbSerial != null) tiers.push('legacy-serial');
     for (const tier of tiers) {
-      const matched = atoms.filter(atom => sourceIdentityMatchesTier(atom, identity, tier));
+      let matched = atoms.filter(atom => sourceIdentityMatchesTier(atom, identity, tier));
+      if (tier === 'label' && matched.length > 1 && identity.labelAltId == null && identity.authAltId != null) {
+        const narrowed = matched.filter(atom => String(atom.authAltId ?? '') === String(identity.authAltId));
+        if (narrowed.length) matched = narrowed;
+      }
       if (matched.length) return matched;
     }
     return [];

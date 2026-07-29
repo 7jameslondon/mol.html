@@ -77,11 +77,178 @@
       },
       "additionalProperties": true
     },
-    "atomReference": { "$ref": "#/$defs/selectorReference" },
-    "selector": {
+    "atomReference": {
       "allOf": [
         { "$ref": "#/$defs/selectorReference" },
-        { "type": "object", "required": ["kind"] }
+        {
+          "anyOf": [
+            { "required": ["serial"] },
+            { "required": ["model", "chain", "resi", "atom"] },
+            {
+              "type": "object",
+              "required": ["sourceIdentity"],
+              "properties": {
+                "sourceIdentity": {
+                  "allOf": [
+                    { "$ref": "#/$defs/sourceIdentity" },
+                    {
+                      "anyOf": [
+                        { "required": ["atomSiteId"] },
+                        { "required": ["labelAsymId", "labelCompId", "labelAtomId"] },
+                        { "required": ["authAsymId", "authSeqId", "authCompId", "authAtomId"] },
+                        { "required": ["pdbSerial"] }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "residueReference": {
+      "allOf": [
+        { "$ref": "#/$defs/selectorReference" },
+        {
+          "anyOf": [
+            { "required": ["model", "chain", "resi"] },
+            {
+              "type": "object",
+              "required": ["sourceIdentity"],
+              "properties": {
+                "sourceIdentity": {
+                  "allOf": [
+                    { "$ref": "#/$defs/sourceIdentity" },
+                    {
+                      "anyOf": [
+                        { "required": ["labelAsymId", "labelCompId"] },
+                        { "required": ["authAsymId", "authSeqId", "authCompId"] }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "chainReference": {
+      "allOf": [
+        { "$ref": "#/$defs/selectorReference" },
+        { "required": ["model", "chain"] }
+      ]
+    },
+    "instanceReference": {
+      "allOf": [
+        { "$ref": "#/$defs/selectorReference" },
+        {
+          "anyOf": [
+            { "required": ["instanceId"] },
+            {
+              "required": ["sourceIdentity"],
+              "properties": { "sourceIdentity": { "required": ["labelAsymId"] } }
+            }
+          ]
+        }
+      ]
+    },
+    "entityReference": {
+      "allOf": [
+        { "$ref": "#/$defs/selectorReference" },
+        {
+          "anyOf": [
+            { "required": ["entityId"] },
+            {
+              "required": ["sourceIdentity"],
+              "properties": { "sourceIdentity": { "required": ["labelEntityId"] } }
+            }
+          ]
+        }
+      ]
+    },
+    "roleReference": {
+      "allOf": [
+        { "$ref": "#/$defs/selectorReference" },
+        { "required": ["role"] }
+      ]
+    },
+    "connectedComponentReference": {
+      "allOf": [
+        { "$ref": "#/$defs/selectorReference" },
+        { "required": ["connectedComponentId"] }
+      ]
+    },
+    "selector": {
+      "oneOf": [
+        {
+          "allOf": [
+            { "$ref": "#/$defs/atomReference" },
+            { "properties": { "kind": { "const": "atom" } }, "required": ["kind"] }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/residueReference" },
+            { "properties": { "kind": { "const": "residue" } }, "required": ["kind"] }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/chainReference" },
+            { "properties": { "kind": { "const": "chain" } }, "required": ["kind"] }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/instanceReference" },
+            { "properties": { "kind": { "const": "instance" } }, "required": ["kind"] }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/entityReference" },
+            { "properties": { "kind": { "const": "entity" } }, "required": ["kind"] }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/roleReference" },
+            { "properties": { "kind": { "const": "role" } }, "required": ["kind"] }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/connectedComponentReference" },
+            { "properties": { "kind": { "const": "connected-component" } }, "required": ["kind"] }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/selectorReference" },
+            {
+              "properties": {
+                "kind": { "const": "residue-range" },
+                "start": { "required": ["resi"] },
+                "end": { "required": ["resi"] }
+              },
+              "required": ["kind", "model", "chain", "start", "end"]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/selectorReference" },
+            { "properties": { "kind": { "const": "ligands" } }, "required": ["kind"] }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/selectorReference" },
+            { "properties": { "kind": { "const": "within" } }, "required": ["kind", "cutoff", "target"] }
+          ]
+        }
       ]
     },
     "currentSelection": {
@@ -96,7 +263,7 @@
     },
     "customColorRule": {
       "type": "object",
-      "required": ["color", "selector"],
+      "required": ["scope", "color", "selector"],
       "properties": {
         "id": { "type": "string" },
         "scope": { "enum": ["atom", "residue", "chain", "instance", "entity", "role", "connected-component"] },
@@ -104,6 +271,50 @@
         "selector": { "$ref": "#/$defs/selectorReference" },
         "label": { "type": "string" }
       },
+      "oneOf": [
+        {
+          "properties": {
+            "scope": { "const": "atom" },
+            "selector": { "$ref": "#/$defs/atomReference" }
+          }
+        },
+        {
+          "properties": {
+            "scope": { "const": "residue" },
+            "selector": { "$ref": "#/$defs/residueReference" }
+          }
+        },
+        {
+          "properties": {
+            "scope": { "const": "chain" },
+            "selector": { "$ref": "#/$defs/chainReference" }
+          }
+        },
+        {
+          "properties": {
+            "scope": { "const": "instance" },
+            "selector": { "$ref": "#/$defs/instanceReference" }
+          }
+        },
+        {
+          "properties": {
+            "scope": { "const": "entity" },
+            "selector": { "$ref": "#/$defs/entityReference" }
+          }
+        },
+        {
+          "properties": {
+            "scope": { "const": "role" },
+            "selector": { "$ref": "#/$defs/roleReference" }
+          }
+        },
+        {
+          "properties": {
+            "scope": { "const": "connected-component" },
+            "selector": { "$ref": "#/$defs/connectedComponentReference" }
+          }
+        }
+      ],
       "additionalProperties": true
     },
     "measurement": {
@@ -121,6 +332,26 @@
         "label": { "type": "string" },
         "note": { "type": "string" }
       },
+      "oneOf": [
+        {
+          "properties": {
+            "type": { "const": "distance" },
+            "atoms": { "minItems": 2, "maxItems": 2 }
+          }
+        },
+        {
+          "properties": {
+            "type": { "const": "angle" },
+            "atoms": { "minItems": 3, "maxItems": 3 }
+          }
+        },
+        {
+          "properties": {
+            "type": { "const": "dihedral" },
+            "atoms": { "minItems": 4, "maxItems": 4 }
+          }
+        }
+      ],
       "additionalProperties": true
     },
     "camera": {
@@ -184,7 +415,7 @@
         "selectedLigand": {
           "oneOf": [
             { "type": "null" },
-            { "$ref": "#/$defs/selectorReference" }
+            { "$ref": "#/$defs/residueReference" }
           ]
         },
         "cutoff": { "type": "number", "minimum": 0 },
