@@ -44,10 +44,18 @@ test.describe('non-covalent interaction overlays', () => {
     await expect(page.locator('#inspector')).toBeVisible();
     await expect(interactionsButton).toHaveAttribute('aria-pressed', 'true');
     await page.locator('#interactions-enabled').focus();
+    await expect(page.locator('#interactions-enabled + i')).toHaveCSS('outline-style', 'solid');
+    await expect(page.locator('#interactions-enabled + i')).toHaveCSS('outline-width', '2px');
     await page.keyboard.press('Space');
     await expect(page.locator('#interactions-ribbon-value')).toHaveText('2 visible');
     await expect(page.locator('#interaction-legend')).toBeVisible();
     await expect.poll(() => page.evaluate(() => window.molhtml.getInteractions().summary.rendered)).toBe(2);
+
+    for (const id of ['interaction-hydrogen-bonds', 'interaction-salt-bridges', 'interaction-include-water']) {
+      await page.locator(`#${id}`).focus();
+      await expect(page.locator(`#${id} + i`)).toHaveCSS('outline-style', 'solid');
+      await expect(page.locator(`#${id} + i`)).toHaveCSS('outline-width', '2px');
+    }
 
     await page.locator('#interaction-include-water').focus();
     await page.keyboard.press('Space');

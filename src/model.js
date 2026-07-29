@@ -1104,6 +1104,10 @@
     const atoms = parsed.atoms;
     const adjacency = atoms.map(() => new Set());
     adjacency._atoms = atoms;
+    const positivelyChargedResidues = new Set();
+    for (const atom of atoms) {
+      if (Number(atom.formalCharge) > 0) positivelyChargedResidues.add(interactionResidueKey(atom));
+    }
     for (const bond of parsed.bonds || []) {
       const [left, right] = bond.atomIndices || [];
       if (!atoms[left] || !atoms[right]) continue;
@@ -1112,12 +1116,19 @@
     }
     const partitions = new Map();
     const explicitKeys = new Set();
+    const explicitSaltSitePairKeys = new Set();
     const explicitByKey = new Map();
     for (const sourceRecord of parsed.interactions || []) {
       const record = normalizeExplicitInteraction(sourceRecord, atoms);
       if (!record) continue;
       const key = interactionDedupKey(record);
       explicitKeys.add(key);
+      if (record.type === 'salt-bridge') {
+        const sitePair = chargedSitePair(
+          atoms[record.participants[0].atomIndex], atoms[record.participants[1].atomIndex]
+        );
+        if (sitePair) explicitSaltSitePairKeys.add(sitePair.key);
+      }
       const existing = explicitByKey.get(key);
       if (existing) {
         existing.sources.push(...record.sources);
@@ -1140,18 +1151,15 @@
         if (hasShortCovalentPath(left.index, right.index, adjacency)) return;
 
         if (distance >= 2.5 && distance <= 3.5) {
-          const hydrogenBond = classifyHydrogenBond(left, right, distance, adjacency);
+          const hydrogenBond = classifyHydrogenBond(left, right, distance, adjacency, positivelyChargedResidues);
           if (hydrogenBond && !explicitKeys.has(interactionDedupKey(hydrogenBond))) {
             accumulateInteraction(partitions, hydrogenBond);
           }
         }
 
-        const leftSite = chargedSite(left);
-        const rightSite = chargedSite(right);
-        if (!leftSite || !rightSite || leftSite.sign === rightSite.sign) return;
-        const positive = leftSite.sign > 0 ? { atom: left, site: leftSite } : { atom: right, site: rightSite };
-        const negative = leftSite.sign < 0 ? { atom: left, site: leftSite } : { atom: right, site: rightSite };
-        const sitePairKey = `${positive.site.key}|${negative.site.key}`;
+        const sitePair = chargedSitePair(left, right);
+        if (!sitePair || explicitSaltSitePairKeys.has(sitePair.key)) return;
+        const { positive, negative, key: sitePairKey } = sitePair;
         const existing = saltSitePairs.get(sitePairKey);
         if (!existing && saltSitePairs.size >= INTERACTION_SALT_SITE_PAIR_LIMIT) {
           saltSitePairLimitReached = true;
@@ -1199,12 +1207,14 @@
     if (participants.length !== 2 || participants.some(participant => !atoms[participant.atomIndex])) return null;
     const left = atoms[participants[0].atomIndex];
     const right = atoms[participants[1].atomIndex];
+    const distance = optionalFiniteNumber(value.distance);
+    const reportedDistance = optionalFiniteNumber(value.reportedDistance);
     return {
       type: value.type,
       participants,
       direction: value.type === 'hydrogen-bond' ? (value.direction === 'directed' ? 'directed' : 'ambiguous') : null,
-      distance: Number.isFinite(Number(value.distance)) ? Number(value.distance) : magnitude(subtract(left, right)),
-      reportedDistance: Number.isFinite(Number(value.reportedDistance)) ? Number(value.reportedDistance) : null,
+      distance: distance ?? magnitude(subtract(left, right)),
+      reportedDistance,
       sources: Array.isArray(value.sources) ? structuredClone(value.sources) : [],
       heuristicQuality: null,
       model: Number(value.model) || left.model,
@@ -1212,9 +1222,15 @@
     };
   }
 
-  function classifyHydrogenBond(left, right, distance, adjacency) {
-    const forward = hydrogenBondDirection(left, right, adjacency);
-    const reverse = hydrogenBondDirection(right, left, adjacency);
+  function optionalFiniteNumber(value) {
+    if (value == null || String(value).trim() === '') return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function classifyHydrogenBond(left, right, distance, adjacency, positivelyChargedResidues) {
+    const forward = hydrogenBondDirection(left, right, adjacency, positivelyChargedResidues);
+    const reverse = hydrogenBondDirection(right, left, adjacency, positivelyChargedResidues);
     if (!forward && !reverse) return null;
     if (forward && !reverse) return inferredInteraction(
       'hydrogen-bond', left, 'donor', right, 'acceptor', distance, forward.quality, 'directed'
@@ -1241,8 +1257,8 @@
     );
   }
 
-  function hydrogenBondDirection(donor, acceptor, adjacency) {
-    if (!isHydrogenBondAcceptor(acceptor, adjacency)) return null;
+  function hydrogenBondDirection(donor, acceptor, adjacency, positivelyChargedResidues) {
+    if (!isHydrogenBondAcceptor(acceptor, adjacency, positivelyChargedResidues)) return null;
     if (!['N', 'O', 'S'].includes(donor.element)) return null;
     const hydrogens = [...adjacency[donor.index]].map(index => adjacencyAtom(index, donor, acceptor))
       .filter(atom => atom?.element === 'H');
@@ -1274,7 +1290,7 @@
     return NUCLEOTIDE_DONORS[residue]?.has(name) || false;
   }
 
-  function isHydrogenBondAcceptor(atom, adjacency) {
+  function isHydrogenBondAcceptor(atom, adjacency, positivelyChargedResidues) {
     if (!['N', 'O', 'S'].includes(atom.element) || Number(atom.formalCharge) > 0) return false;
     if (Number(atom.formalCharge) < 0) return true;
     const residue = String(atom.resn || '').toUpperCase();
@@ -1283,10 +1299,8 @@
     if (STANDARD_AMINO_ACIDS.has(residue)) {
       if (name === 'O' || name === 'OXT') return true;
       if (residue === 'HIS' && ['ND1', 'NE2'].includes(name)) {
-        const residueAtoms = adjacency._atoms?.filter(candidate => candidate.residueIndex === atom.residueIndex) || [];
-        const residuePositive = residueAtoms.some(candidate => Number(candidate.formalCharge) > 0);
         const hasHydrogen = [...adjacency[atom.index]].some(index => adjacency._atoms?.[index]?.element === 'H');
-        return !residuePositive && !hasHydrogen;
+        return !positivelyChargedResidues.has(interactionResidueKey(atom)) && !hasHydrogen;
       }
       return AMINO_ACCEPTORS[residue]?.has(name) || false;
     }
@@ -1295,6 +1309,10 @@
 
   function canonicalAtomName(value) {
     return String(value || '').trim().toUpperCase().replace(/\*$/, "'");
+  }
+
+  function interactionResidueKey(atom) {
+    return `${atom.model}|${atom.residueIndex}`;
   }
 
   function chargedSite(atom) {
@@ -1318,6 +1336,15 @@
         ? `${atom.model}|${atom.residueIndex}|${siteName}`
         : `${atom.model}|${atom.index}|formal-charge`
     };
+  }
+
+  function chargedSitePair(left, right) {
+    const leftSite = chargedSite(left);
+    const rightSite = chargedSite(right);
+    if (!leftSite || !rightSite || leftSite.sign === rightSite.sign) return null;
+    const positive = leftSite.sign > 0 ? { atom: left, site: leftSite } : { atom: right, site: rightSite };
+    const negative = leftSite.sign < 0 ? { atom: left, site: leftSite } : { atom: right, site: rightSite };
+    return { positive, negative, key: `${positive.site.key}|${negative.site.key}` };
   }
 
   function inferredInteraction(type, left, leftRole, right, rightRole, distance, quality, direction = null) {

@@ -20,6 +20,10 @@ test('has no serious or critical accessibility violations in primary UI states',
     expect(await seriousViolations(page)).toEqual([]);
   }
 
+  await page.evaluate(() => window.molhtml.setInteractions({ enabled: true }));
+  await expect(page.locator('#interaction-legend')).toBeVisible();
+  expect(await seriousViolations(page)).toEqual([]);
+
   await page.evaluate(() => {
     const first = window.molhtml.createSavedView({ title: 'Accessible story one', narrative: 'First scene' });
     window.molhtml.createSavedView({ title: 'Accessible story two', narrative: 'Second scene' });

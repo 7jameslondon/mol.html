@@ -74,7 +74,7 @@ H1 hydrog A 1 ASN ND2 B 2 GLU OE1 donor acceptor 1_555 1_555 3.00 'source hydrog
 H1D hydrog B 2 GLU OE1 A 1 ASN ND2 acceptor donor 1_555 1_555 3.00 'duplicate reversed endpoints'
 H2 hydbnd E 5 GLN NE2 F 6 ASN OD1 donor acceptor 1_555 1_555 3.10 'dictionary alias'
 S1 saltbr C 3 LYS NZ D 4 ASP OD1 positive negative 1_555 1_555 3.80 'source salt bridge'
-S2 sltbrg G 7 ARG NH1 H 8 GLU OE1 positive negative 1_555 1_555 3.90 'dictionary alias'
+S2 sltbrg G 7 ARG NH1 H 8 GLU OE1 positive negative 1_555 1_555 ? 'dictionary alias without reported distance'
 HBAD hydrog A 1 ASN ND2 B 2 GLU OE1 donor acceptor 2_555 1_555 3.00 'symmetry mate'
 `;
 
@@ -101,6 +101,13 @@ const explicitAnalysis = Core.analyzeInteractions(explicit, 'structure-explicit'
 assert.equal(explicitAnalysis.counts.total, 4, 'inferred duplicates do not supplement explicit atom pairs');
 assert.equal(explicitAnalysis.counts.explicit, 4);
 assert.equal(explicitAnalysis.counts.inferred, 0);
+const explicitWithoutReportedDistance = explicitAnalysis.interactions.find(record =>
+  record.sources.some(source => source.connectionId === 'S2')
+);
+assert.equal(explicitWithoutReportedDistance.reportedDistance, null,
+  'a missing optional mmCIF distance remains null instead of becoming a fabricated zero');
+assert.ok(Math.abs(explicitWithoutReportedDistance.distance - 3.9) < 1e-12,
+  'geometric distance is retained when an explicit interaction omits its reported distance');
 
 const scopedCif = `data_scoped_interactions
 loop_
@@ -187,6 +194,31 @@ function analyzedPair(left, right, distance = 3, bonds = []) {
   return Core.analyzeInteractions({ atoms, bonds, interactions: [] }, `pair-${left.resn}-${left.name}-${right.resn}-${right.name}`);
 }
 
+const explicitSaltSiteAtoms = [
+  atom(0, 'NH1', 'ARG', 0, 0, 0, 'N'),
+  atom(1, 'NH2', 'ARG', 0, 0, 1, 'N'),
+  atom(2, 'OD1', 'ASP', 1, 3, 0, 'O'),
+  atom(3, 'OD2', 'ASP', 1, 3.8, 1, 'O')
+];
+const explicitSaltSiteAnalysis = Core.analyzeInteractions({
+  atoms: explicitSaltSiteAtoms,
+  bonds: [],
+  interactions: [{
+    type: 'salt-bridge',
+    participants: [{ atomIndex: 1, role: 'positive' }, { atomIndex: 3, role: 'negative' }],
+    distance: 3.8,
+    sources: [{ kind: 'test-explicit', connectionId: 'SITE-PAIR' }]
+  }]
+}, 'explicit-salt-site-dedup');
+const explicitSaltSiteRecords = explicitSaltSiteAnalysis.interactions
+  .filter(record => record.type === 'salt-bridge');
+assert.equal(explicitSaltSiteRecords.length, 1,
+  'an explicit salt bridge suppresses inferred duplicates for the same charged-site pair');
+assert.equal(explicitSaltSiteRecords[0].heuristicQuality, null, 'the explicit site-level record is retained');
+assert.deepEqual(explicitSaltSiteRecords[0].participants.map(participant => participant.atomIndex), [1, 3]);
+assert.equal(explicitSaltSiteRecords[0].sources[0].connectionId, 'SITE-PAIR',
+  'explicit salt-bridge provenance survives site-level deduplication');
+
 const standardAminoAcids = [
   'ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE',
   'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL'
@@ -265,6 +297,34 @@ assert.equal(analyzedPair({ resn: 'ASN', name: 'ND2' }, { resn: 'HIS', name: 'ND
 assert.equal(analyzedPair({ resn: 'ASN', name: 'ND2' }, {
   resn: 'HIS', name: 'ND1', formalCharge: 1
 }).counts.hydrogenBonds, 0, 'a positively charged histidine ring nitrogen does not accept');
+const chargedHistidineResidue = [
+  atom(0, 'ND2', 'ASN', 0, 0, 0, 'N'),
+  atom(1, 'ND1', 'HIS', 1, 3, 0, 'N'),
+  atom(2, 'NE2', 'HIS', 1, 100, 0, 'N', 1)
+];
+assert.equal(Core.analyzeInteractions({
+  atoms: chargedHistidineResidue, bonds: [], interactions: []
+}, 'charged-histidine-residue').counts.hydrogenBonds, 0,
+'a neutral ring nitrogen does not accept when another atom marks its histidine residue as positive');
+
+const histidineRichAtoms = [];
+for (let pair = 0; pair < 256; pair += 1) {
+  histidineRichAtoms.push(atom(pair * 2, 'ND2', 'ASN', pair * 2, 0, pair * 10, 'N'));
+  histidineRichAtoms.push(atom(pair * 2 + 1, 'ND1', 'HIS', pair * 2 + 1, 3, pair * 10, 'N'));
+}
+let wholeStructureFilterCalls = 0;
+Object.defineProperty(histidineRichAtoms, 'filter', {
+  value(...args) {
+    wholeStructureFilterCalls += 1;
+    return Array.prototype.filter.apply(this, args);
+  }
+});
+const histidineRichAnalysis = Core.analyzeInteractions({
+  atoms: histidineRichAtoms, bonds: [], interactions: []
+}, 'histidine-rich-scaling');
+assert.equal(histidineRichAnalysis.counts.hydrogenBonds, 256);
+assert.equal(wholeStructureFilterCalls, 0,
+  'histidine classification uses a precomputed residue index instead of rescanning every atom per candidate');
 assert.equal(analyzedPair({ resn: 'HIS', name: 'ND1' }, { resn: 'ASP', name: 'OD1' }).counts.saltBridges, 0,
   'histidine is not inferred as a positive salt site without formal-charge evidence');
 assert.equal(analyzedPair({ resn: 'ASN', name: 'ND2' }, {

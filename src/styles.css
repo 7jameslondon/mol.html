@@ -214,6 +214,7 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
 .interaction-warning { margin: 10px 0 0; padding: 9px 10px; border: 1px solid rgba(255, 184, 77, .34); border-radius: 8px; background: rgba(255, 184, 77, .08); color: #ffd28c; font-size: 9px; line-height: 1.5; }
 .toggle { flex: 0 0 auto; display: block; position: relative; width: 32px; height: 18px; }
 .toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.toggle input:focus-visible + i { outline: 2px solid var(--blue); outline-offset: 2px; }
 .toggle i { display: block; width: 32px; height: 18px; position: relative; border-radius: 999px; background: #24364a; transition: .18s ease; }
 .toggle i::after { content: ""; position: absolute; width: 14px; height: 14px; left: 2px; top: 2px; border-radius: 50%; background: #8fa2b7; transition: .18s ease; }
 .toggle input:checked + i { background: #266eaa; }
