@@ -6,6 +6,13 @@
 self-editing HTML file. The HTML carries the viewer, editor, PDB or PDBx/mmCIF coordinates,
 selection, colors, camera, and agent-readable JSON state.
 
+## Website
+
+The latest build from `main` is published at
+[7jameslondon.github.io/mol.html](https://7jameslondon.github.io/mol.html/).
+The same self-contained artifact is also available as
+[`example.mol.html`](https://7jameslondon.github.io/mol.html/example.mol.html).
+
 ## Build
 
 Install the pinned dependencies and required Chromium binary once, then run the
