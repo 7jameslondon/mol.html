@@ -45,9 +45,17 @@ pnpm install --frozen-lockfile
 pnpm setup:e2e
 ```
 
-Both commands require an internet connection the first time. The frozen
-lockfile option installs the versions recorded in `pnpm-lock.yaml` and fails
-instead of rewriting the lockfile if it disagrees with `package.json`.
+On Linux, use the following command instead of `pnpm setup:e2e`. It installs
+Chromium and Playwright's required system libraries, matching CI:
+
+```bash
+pnpm exec playwright install --with-deps chromium
+```
+
+The dependency and browser setup commands require an internet connection the
+first time. The frozen lockfile option installs the versions recorded in
+`pnpm-lock.yaml` and fails instead of rewriting the lockfile if it disagrees
+with `package.json`.
 `pnpm setup:e2e` is a separate, explicit browser download; dependency
 installation never downloads a browser implicitly.
 
@@ -80,6 +88,10 @@ Focused commands are also available:
 | `pnpm test:e2e` | Exercise the built artifact in the configured browser. |
 | `pnpm test:performance` | Run the scheduled performance checks. |
 
+The artifact, end-to-end, and performance commands test the existing
+`dist/example.mol.html`; they do not rebuild it. After changing source files,
+run `pnpm build` first, or use `pnpm check` to build and validate in one command.
+
 Model and artifact checks require no network. Browser tests abort unexpected
 HTTP(S) traffic and mock exact RCSB coordinate, Search API, and Data API
 requests. Test output is isolated under Playwright's per-test output directory.
@@ -99,7 +111,8 @@ dependencies, rebuild the file, and run checks.
 - If `pnpm install --frozen-lockfile` reports that the lockfile is outdated, do
   not bypass the check for a normal setup. `package.json` and `pnpm-lock.yaml`
   must be updated together when dependencies are intentionally changed.
-- If a browser test reports that Chromium is missing, run `pnpm setup:e2e`.
+- If a browser test reports that Chromium is missing, run `pnpm setup:e2e`, or
+  use the Linux command above to install Chromium and its system dependencies.
 
 ## Continuous integration
 
