@@ -425,6 +425,16 @@ window.molhtml.getSavedViews()
 const pngBlob = await window.molhtml.renderPNG({ width: 2048, transparent: true })
 await window.molhtml.downloadPNG({ width: 2048, filename: 'active-site.png' })
 await window.molhtml.copyImage({ width: 2048, transparent: true })
+const capabilities = window.molhtml.getTurntableCapabilities()
+const videoBlob = await window.molhtml.renderTurntable({
+  width: 1280, durationSeconds: 6, fps: 30, direction: 'clockwise',
+  signal: abortController.signal,
+  onProgress({ phase, completedFrames, totalFrames, percent, mimeType }) {}
+})
+const videoDownload = await window.molhtml.downloadTurntable({
+  width: 1920, durationSeconds: 6, direction: 'counterclockwise',
+  filename: 'active-site-turntable'
+})
 window.molhtml.importStructure('entry.cif', cifText, 'mmcif')
 window.molhtml.fetchStructure('4HHB')
 window.molhtml.fetchPDB('4HHB')
@@ -484,3 +494,32 @@ calls reject while another export or a timed-out surface generation is active.
 Failures use `MolhtmlExportError` subclasses with machine-readable codes:
 `export-busy`, `export-dimensions`, `export-render`, `export-timeout`,
 `export-clipboard`, or `export-download`.
+
+Turntable options default to 6 seconds, 30 fps, clockwise, and the visible
+drawing-buffer size rounded down to even pixels. Duration must be a whole 2-20
+seconds; fps is 24 or 30; explicit dimensions must be even, 64-3840 pixels per
+side, no more than 8,294,400 pixels total, and within WebGL hardware limits. If
+one dimension is omitted, the other is derived from the accepted visible aspect
+ratio. Output is one ordered 360-degree viewer-relative vertical-axis turn with
+no duplicated 360-degree endpoint and an opaque scene background.
+
+`renderTurntable()` returns the final video `Blob`. `downloadTurntable()` returns
+`status`, `filename`, dimensions, `requestedDurationSeconds`, `requestedFps`,
+`submittedFrameCount`, measured `recordingElapsedSeconds`, bytes, actual
+`mimeType`, `requestedVideoBitsPerSecond`, and
+`recorderTargetVideoBitsPerSecond`. As with PNG, `status: 'downloaded'` means the
+download click was requested; the browser cannot confirm that policy wrote the
+file to disk. `getTurntableCapabilities()` is synchronous and advisory. It
+reports canvas capture, `MediaRecorder`, manual-frame support, preferred format,
+and every probed MP4/WebM candidate, but construction and encoding can still
+fail at runtime.
+
+Progress records are frozen and use `preparing`, `recording`, `finalizing`, and
+`complete` phases. Callback exceptions and rejected callback promises are
+isolated. Pass an `AbortSignal` to cancel; hiding the document or navigating away
+also cancels. Video format negotiation prefers H.264 MP4 and otherwise accepts
+WebM. Trust the returned Blob MIME and download extension rather than assuming a
+container. Requested duration/fps are wall-clock targets, not exact encoded-frame
+guarantees; slow rendering may create holds or a longer file, and MediaRecorder
+may coalesce requested frames. Video-specific failures use
+`export-video-unsupported`, `export-video-encode`, and `export-cancelled`.

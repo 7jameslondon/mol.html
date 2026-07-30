@@ -175,9 +175,12 @@ Native file permissions and real-GPU behavior remain release checks; see
   sidebar's full-text search to find entries by molecule, organism, author,
   ligand, or other terms. Search results are temporary; the selected structure,
   its coordinates, and source provenance become embedded in the next saved HTML.
-- Open **Export** to download or copy a PNG of the live molecular composition.
-  Current, 2x, 4x, and custom backing-pixel sizes are available, with optional
-  transparency. Exporting does not include editor chrome or change the document.
+- Open **Export** to download or copy a PNG, or record a silent 360-degree
+  turntable video of the live molecular composition. Images offer Current, 2x,
+  4x, and custom backing-pixel sizes with optional transparency. Video offers
+  Current, 720p-fit, and 1080p-fit sizes, 4/6/8-second durations, and either
+  rotation direction. Exporting never includes editor chrome or changes the
+  document.
 - Press `Ctrl+S` or use **Save**. Chromium browsers can rewrite a selected file
   in place; other browsers download a new complete copy.
 
@@ -207,6 +210,17 @@ visible aspect ratio, and `{ transparent: true }` requests an alpha background.
 Image clipboard support depends on browser and operating-system permission.
 Rejected calls expose stable export error codes, including `export-download`
 when a PNG rendered successfully but the browser could not start its download.
+
+Turntable recording is also local and uses the browser's canvas capture and
+`MediaRecorder` support; it never requests camera or microphone access. The API
+exposes `renderTurntable(options)`, `downloadTurntable(options)`, and
+`getTurntableCapabilities()`. MP4/H.264 is preferred when available and WebM is
+a normal fallback, so the actual MIME type and filename extension are known only
+after recording starts. Video has an opaque scene background. Duration and frame
+rate are real-time targets: a loaded machine can introduce holds or a longer
+file, and the browser encoder may coalesce submitted frames. Keep the tab visible
+while recording; hiding or leaving the page cancels the job and the inspector's
+Cancel button can stop it explicitly.
 
 PDB and mmCIF are normalized into a custom runtime model that keeps atom,
 residue, molecular-instance, entity, connected-component, assembly, and source

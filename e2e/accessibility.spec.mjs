@@ -57,3 +57,29 @@ test('keeps the export workflow accessible by keyboard at the narrow breakpoint'
   await expect(page.locator('#inspector')).toBeHidden();
   await expect(exportButton).toBeFocused();
 });
+
+test('keeps video progress, status, and cancellation accessible while busy', async ({ page }) => {
+  await openArtifact(page);
+  await page.locator('[data-inspector-target="export"]').click();
+  await page.evaluate(() => {
+    globalThis.__turntableStatusMutations = 0;
+    new MutationObserver(() => { globalThis.__turntableStatusMutations += 1; })
+      .observe(document.querySelector('#export-status'), { childList: true, characterData: true, subtree: true });
+  });
+  await page.locator('#turntable-download').click();
+  await expect(page.locator('#turntable-cancel')).toBeVisible();
+  await expect(page.locator('#turntable-cancel')).toBeFocused();
+  await expect(page.locator('#export-options')).toHaveAttribute('aria-busy', 'true');
+  await expect(page.locator('#turntable-progress')).toHaveAttribute('aria-label', 'Turntable video recording progress');
+  await expect(page.locator('#turntable-progress')).toHaveAttribute('aria-describedby', 'turntable-progress-text export-status');
+  expect(await page.evaluate(() => document.querySelector('#export-options').contains(document.querySelector('#export-status')))).toBe(false);
+  expect(await seriousViolations(page)).toEqual([]);
+  await expect.poll(() => page.locator('#turntable-progress').evaluate(element => element.value)).toBeGreaterThan(1);
+  expect(await page.evaluate(() => globalThis.__turntableStatusMutations)).toBeLessThanOrEqual(4);
+
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#export-status')).toContainText(/cancel/i);
+  await expect(page.locator('#turntable-download')).toBeFocused();
+  await expect(page.locator('#export-options')).toHaveAttribute('aria-busy', 'false');
+  expect(await seriousViolations(page)).toEqual([]);
+});

@@ -128,7 +128,7 @@ __DOCUMENT__
         <div class="ribbon-buttons">
           <button id="export-button" class="ribbon-button" type="button" data-inspector-target="export" aria-controls="inspector" aria-pressed="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-4-4 4 4 4-4M5 14v5h14v-5"/></svg>
-            <span>Export</span><small>PNG image</small>
+            <span>Export</span><small>Image / video</small>
           </button>
         </div>
         <div class="ribbon-group-label">Share / Export</div>
@@ -409,36 +409,70 @@ __DOCUMENT__
           </section>
 
           <section id="panel-export" class="inspector-panel" data-inspector-panel="export" hidden>
-            <p class="panel-intro">Render the current molecular composition without including editor controls or changing the document.</p>
-            <div id="export-controls" aria-busy="false">
-              <label class="field-label" for="export-size">Image size</label>
-              <select id="export-size">
-                <option value="current">Current</option>
-                <option value="2">2x</option>
-                <option value="4">4x</option>
-                <option value="custom">Custom</option>
-              </select>
-              <div id="export-custom-fields" class="export-custom-fields" hidden>
-                <label for="export-width"><span>Width</span><input id="export-width" type="number" inputmode="numeric" min="64" max="8192" step="1" aria-describedby="export-summary export-status" aria-errormessage="export-status"></label>
-                <span aria-hidden="true">x</span>
-                <label for="export-height"><span>Height</span><input id="export-height" type="number" inputmode="numeric" min="64" max="8192" step="1" aria-describedby="export-summary export-status" aria-errormessage="export-status"></label>
+            <p class="panel-intro">Export the current molecular composition without editor controls or document changes.</p>
+            <div id="export-controls">
+              <div id="export-options" aria-busy="false">
+                <fieldset class="export-group">
+                  <legend>Image</legend>
+                  <label class="field-label" for="export-size">Image size</label>
+                  <select id="export-size">
+                    <option value="current">Current</option>
+                    <option value="2">2x</option>
+                    <option value="4">4x</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                  <div id="export-custom-fields" class="export-custom-fields" hidden>
+                    <label for="export-width"><span>Width</span><input id="export-width" type="number" inputmode="numeric" min="64" max="8192" step="1" aria-describedby="export-summary export-status" aria-errormessage="export-status"></label>
+                    <span aria-hidden="true">x</span>
+                    <label for="export-height"><span>Height</span><input id="export-height" type="number" inputmode="numeric" min="64" max="8192" step="1" aria-describedby="export-summary export-status" aria-errormessage="export-status"></label>
+                  </div>
+                  <label id="export-aspect-row" class="visibility-option export-aspect-row" hidden>
+                    <span><strong>Lock aspect ratio</strong><small>Match the visible composition</small></span>
+                    <span class="toggle"><input id="export-lock-aspect" type="checkbox" checked><i></i></span>
+                  </label>
+                  <label class="field-label" for="export-background">Background</label>
+                  <select id="export-background">
+                    <option value="scene">Scene color</option>
+                    <option value="transparent">Transparent</option>
+                  </select>
+                  <output id="export-summary" class="export-summary" aria-live="polite"></output>
+                  <div class="export-actions">
+                    <button id="export-download" class="button accent full-width" type="button">Download PNG</button>
+                    <button id="export-copy" class="button secondary full-width" type="button">Copy image</button>
+                  </div>
+                </fieldset>
+
+                <fieldset class="export-group turntable-group">
+                  <legend>Turntable video</legend>
+                  <label class="field-label" for="turntable-size">Video size</label>
+                  <select id="turntable-size" aria-describedby="turntable-summary export-status">
+                    <option value="current">Current</option>
+                    <option value="720">Fit within 1280 x 720</option>
+                    <option value="1080">Fit within 1920 x 1080</option>
+                  </select>
+                  <label class="field-label" for="turntable-duration">Duration</label>
+                  <select id="turntable-duration" aria-describedby="turntable-summary export-status">
+                    <option value="4">4 seconds</option>
+                    <option value="6" selected>6 seconds</option>
+                    <option value="8">8 seconds</option>
+                  </select>
+                  <label class="field-label" for="turntable-direction">Direction</label>
+                  <select id="turntable-direction" aria-describedby="turntable-summary export-status">
+                    <option value="clockwise">Clockwise</option>
+                    <option value="counterclockwise">Counterclockwise</option>
+                  </select>
+                  <output id="turntable-summary" class="export-summary turntable-summary"></output>
+                  <button id="turntable-download" class="button accent full-width" type="button">Download video</button>
+                </fieldset>
               </div>
-              <label id="export-aspect-row" class="visibility-option export-aspect-row" hidden>
-                <span><strong>Lock aspect ratio</strong><small>Match the visible composition</small></span>
-                <span class="toggle"><input id="export-lock-aspect" type="checkbox" checked><i></i></span>
-              </label>
-              <label class="field-label" for="export-background">Background</label>
-              <select id="export-background">
-                <option value="scene">Scene color</option>
-                <option value="transparent">Transparent</option>
-              </select>
-              <output id="export-summary" class="export-summary" aria-live="polite"></output>
-              <div class="export-actions">
-                <button id="export-download" class="button accent full-width" type="button">Download PNG</button>
-                <button id="export-copy" class="button secondary full-width" type="button">Copy image</button>
+
+              <div id="export-activity" class="export-activity">
+                <progress id="turntable-progress" max="180" value="0" aria-label="Turntable video recording progress" aria-describedby="turntable-progress-text export-status" hidden></progress>
+                <span id="turntable-progress-text" class="turntable-progress-text" hidden>0 of 180 frames</span>
+                <button id="turntable-cancel" class="button secondary full-width" type="button" hidden>Cancel video export</button>
+                <p id="export-status" class="export-status" role="status" aria-live="polite" aria-atomic="true">Ready to export.</p>
               </div>
-              <p id="export-status" class="export-status" role="status" aria-live="polite" aria-atomic="true">Ready to render.</p>
-              <p class="panel-note">Exports contain only renderer-owned molecular content. Large surfaces can take longer to finish.</p>
+              <p class="panel-note">Images may use transparency. Video uses the opaque scene background and records in real time, so keep this tab visible. H.264 MP4 is preferred with WebM fallback.</p>
             </div>
           </section>
 

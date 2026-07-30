@@ -227,14 +227,25 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
   width: 100%; min-width: 0; height: 36px; padding: 0 9px; border: 1px solid var(--line); border-radius: 8px;
   background: rgba(10, 24, 40, .9); color: var(--ink); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10px;
 }
+.export-group { min-width: 0; margin: 0; padding: 0; border: 0; }
+.export-group + .export-group { margin-top: 18px; padding-top: 17px; border-top: 1px solid var(--line); }
+.export-group legend { width: 100%; margin: 0 0 11px; padding: 0; color: #dceeff; font-size: 10px; font-weight: 850; letter-spacing: .12em; text-transform: uppercase; }
+.export-group:disabled { opacity: .62; }
+.turntable-group select + .field-label { margin-top: 12px; }
 .export-aspect-row { margin-top: 9px; padding: 10px 11px; }
 .export-summary { display: block; min-height: 35px; margin-top: 13px; padding: 9px 10px; border: 1px solid rgba(88, 168, 255, .2); border-radius: 8px; background: rgba(88, 168, 255, .06); color: #b9d7f5; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10px; line-height: 1.5; text-align: center; }
+.turntable-summary { min-height: 63px; overflow-wrap: anywhere; }
 .export-actions { display: grid; gap: 8px; margin-top: 12px; }
+.export-activity { margin-top: 13px; }
+.export-activity progress { display: block; width: 100%; height: 8px; accent-color: var(--blue); }
+.export-activity progress[hidden] { display: none; }
+.turntable-progress-text { display: block; margin: 6px 0 10px; color: var(--muted-2); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 9px; text-align: center; }
+.turntable-progress-text[hidden] { display: none; }
 .export-status { min-height: 34px; margin: 10px 0 0; color: var(--muted-2); font-size: 9px; line-height: 1.45; }
 .export-status[data-tone="success"] { color: var(--success); }
 .export-status[data-tone="warning"] { color: var(--warning); }
 .export-status[data-tone="error"] { color: var(--danger); }
-#export-controls[aria-busy="true"] .export-summary::before { content: "Rendering\2026  "; color: var(--warning); }
+#export-options[aria-busy="true"] .export-summary { border-color: rgba(255, 184, 77, .28); }
 
 .metadata-source { display: inline-flex; max-width: 100%; padding: 5px 7px; border: 1px solid rgba(88, 168, 255, .24); border-radius: 6px; background: rgba(88, 168, 255, .08); color: #9dccff; font-size: 8px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .metadata-section-heading { margin: 17px 0 8px; color: var(--muted-2); font-size: 9px; font-weight: 800; letter-spacing: .13em; }

@@ -53,9 +53,11 @@
     'saved-views-button', 'saved-views-ribbon-value', 'create-saved-view', 'start-story',
     'saved-view-count', 'empty-saved-views', 'saved-view-list', 'story-overlay',
     'story-position', 'story-title', 'story-narrative', 'story-previous', 'story-next', 'story-exit',
-    'export-button', 'export-controls', 'export-size', 'export-custom-fields', 'export-width',
+    'export-button', 'export-controls', 'export-options', 'export-activity', 'export-size', 'export-custom-fields', 'export-width',
     'export-height', 'export-aspect-row', 'export-lock-aspect', 'export-background', 'export-summary',
-    'export-download', 'export-copy', 'export-status'
+    'export-download', 'export-copy', 'export-status', 'turntable-size', 'turntable-duration',
+    'turntable-direction', 'turntable-summary', 'turntable-progress', 'turntable-progress-text',
+    'turntable-download', 'turntable-cancel'
   ].map(id => [id, document.getElementById(id)]));
 
   const undoStack = [];
@@ -71,9 +73,12 @@
   let activeMeasurementId = null;
   let activeSavedSelectionId = null;
   let currentQuality = null;
-  let exportBusy = false;
+  let exportActivity = null;
   let exportCustomInitialized = false;
   let pendingClipboardExport = null;
+  let turntableUnsupportedReason = '';
+  let turntableLiveMilestone = 0;
+  let completedTurntableSummary = null;
   const storyState = { active: false, index: 0 };
   const navigatorState = {
     structureKey: '', chains: [], residueByKey: new Map(),
@@ -88,7 +93,7 @@
     navigator: 'Structure navigator', 'saved-selections': 'Named selections',
     ligands: 'Ligands and pocket', metadata: 'Metadata and quality',
     interactions: 'Interactions',
-    'saved-views': 'Saved views and story', export: 'Export image'
+    'saved-views': 'Saved views and story', export: 'Export'
   };
 
   const renderer = new window.MoleculeRenderer(elements['molecule-viewer'], {
@@ -98,6 +103,7 @@
       touchDocument('browser', false);
     },
     onResize: () => {
+      if (!exportActivity) completedTurntableSummary = null;
       if (activeInspector === 'export') syncExportControls();
     }
   });
@@ -1665,22 +1671,23 @@
 
   function syncExportControls(resetStatus = false) {
     if (!elements['export-size']) return;
+    const busy = Boolean(exportActivity);
     const custom = elements['export-size'].value === 'custom';
     if (custom) initializeCustomExportSize();
     elements['export-custom-fields'].hidden = !custom;
     elements['export-aspect-row'].hidden = !custom;
     elements['export-copy'].hidden = !exportService.canCopyImage();
-    let valid = false;
+    let imageValid = false;
     try {
       const options = normalizedSelectedExport();
       const background = options.transparent ? 'transparent' : 'scene color';
       elements['export-summary'].textContent = `${options.width.toLocaleString()} x ${options.height.toLocaleString()} px - ${background}`;
       elements['export-width'].removeAttribute('aria-invalid');
       elements['export-height'].removeAttribute('aria-invalid');
-      valid = true;
-      if (resetStatus && !exportBusy) {
+      imageValid = true;
+      if (resetStatus && !busy) {
         setExportStatus(exportService.canCopyImage()
-          ? 'Ready to render.'
+          ? 'Ready to export.'
           : 'Ready to download. Image clipboard access is unavailable in this browser.', '');
       }
     } catch (error) {
@@ -1692,10 +1699,80 @@
         elements['export-width'].removeAttribute('aria-invalid');
         elements['export-height'].removeAttribute('aria-invalid');
       }
-      if (!exportBusy) setExportStatus(error.message, 'error');
+      if (!busy) setExportStatus(error.message, 'error');
     }
-    elements['export-download'].disabled = exportBusy || !valid;
-    elements['export-copy'].disabled = exportBusy || !valid;
+    let videoValid = false;
+    try {
+      const options = exportActivity?.kind === 'video' && exportActivity.options
+        ? exportActivity.options
+        : normalizedSelectedTurntable();
+      const capabilities = exportService.getTurntableCapabilities();
+      const preferred = preferredTurntableFormat(capabilities);
+      const reason = turntableUnsupportedReason || capabilities.reason;
+      const advisorySummary = reason
+        ? `${options.width.toLocaleString()} x ${options.height.toLocaleString()} px - ${reason}`
+        : turntableSummary(options, preferred);
+      const acceptedSummary = exportActivity?.kind === 'video'
+        ? exportActivity.summary
+        : completedTurntableSummary?.signature === turntableOptionsSignature(options)
+          ? completedTurntableSummary.text
+          : null;
+      elements['turntable-summary'].textContent = acceptedSummary || advisorySummary;
+      elements['turntable-summary'].dataset.mimeType = exportActivity?.mimeType
+        || (completedTurntableSummary?.signature === turntableOptionsSignature(options)
+          ? completedTurntableSummary.mimeType : '');
+      videoValid = capabilities.supported && !turntableUnsupportedReason;
+    } catch (error) {
+      elements['turntable-summary'].textContent = error.message;
+      if (!busy && imageValid) setExportStatus(error.message, 'error');
+    }
+    elements['export-options'].setAttribute('aria-busy', String(busy));
+    for (const id of [
+      'export-size', 'export-width', 'export-height', 'export-lock-aspect', 'export-background',
+      'turntable-size', 'turntable-duration', 'turntable-direction'
+    ]) elements[id].disabled = busy;
+    elements['export-download'].disabled = busy || !imageValid;
+    elements['export-copy'].disabled = busy || !imageValid;
+    elements['turntable-download'].disabled = busy || !videoValid;
+  }
+
+  function selectedTurntableOptions() {
+    const visible = visibleExportSize();
+    const size = elements['turntable-size'].value;
+    let dimensions = {
+      width: Math.floor(visible.width / 2) * 2,
+      height: Math.floor(visible.height / 2) * 2
+    };
+    if (size === '720') dimensions = Export.fitVideoDimensions(visible.width, visible.height, 1280, 720);
+    else if (size === '1080') dimensions = Export.fitVideoDimensions(visible.width, visible.height, 1920, 1080);
+    return {
+      ...dimensions,
+      durationSeconds: Number(elements['turntable-duration'].value),
+      fps: 30,
+      direction: elements['turntable-direction'].value
+    };
+  }
+
+  function normalizedSelectedTurntable() {
+    const visible = visibleExportSize();
+    return Export.normalizeTurntableOptions(selectedTurntableOptions(), visible.width, visible.height);
+  }
+
+  function preferredTurntableFormat(capabilities) {
+    const mime = capabilities.preferredMimeType || '';
+    if (!mime) return 'Browser-selected format';
+    if (mime.startsWith('video/mp4;') && mime.includes('avc1')) return 'H.264 MP4 preferred; WebM fallback';
+    if (mime.startsWith('video/mp4')) return 'MP4 preferred; WebM fallback';
+    if (mime.startsWith('video/webm')) return `${mime.includes('vp9') ? 'VP9 ' : mime.includes('vp8') ? 'VP8 ' : ''}WebM preferred`;
+    return 'Browser-selected format';
+  }
+
+  function turntableOptionsSignature(options) {
+    return [options.width, options.height, options.durationSeconds, options.fps, options.direction].join(':');
+  }
+
+  function turntableSummary(options, format) {
+    return `${options.width.toLocaleString()} x ${options.height.toLocaleString()} px - ${options.durationSeconds}s at ${options.fps} fps - ${options.frameCount} frames - ${format}`;
   }
 
   function setExportStatus(message, tone = '') {
@@ -1703,13 +1780,24 @@
     elements['export-status'].dataset.tone = tone;
   }
 
-  function setExportBusy(busy) {
-    exportBusy = busy;
-    elements['export-controls'].setAttribute('aria-busy', String(busy));
-    for (const id of ['export-size', 'export-width', 'export-height', 'export-lock-aspect', 'export-background']) {
-      elements[id].disabled = busy;
+  function setExportActivity(activity) {
+    exportActivity = activity;
+    const video = activity?.kind === 'video';
+    const progress = activity?.progress;
+    elements['turntable-cancel'].hidden = !video;
+    elements['turntable-cancel'].disabled = !video || !activity.abortController || activity.abortController.signal.aborted;
+    elements['turntable-progress'].hidden = !video || activity.phase === 'preparing';
+    elements['turntable-progress-text'].hidden = elements['turntable-progress'].hidden;
+    if (video && progress) {
+      elements['turntable-progress'].max = progress.totalFrames;
+      elements['turntable-progress'].value = progress.completedFrames;
+      elements['turntable-progress-text'].textContent = `${progress.completedFrames} of ${progress.totalFrames} frames`;
     }
     syncExportControls();
+  }
+
+  function setExportBusy(busy) {
+    setExportActivity(busy ? { kind: 'image', phase: 'preparing' } : null);
   }
 
   function invalidatePendingClipboardExport() {
@@ -1781,6 +1869,119 @@
     }
   }
 
+  function handleTurntableProgress(progress) {
+    if (exportActivity?.kind !== 'video') return;
+    const negotiatedMimeType = progress.phase === 'preparing' ? '' : progress.mimeType;
+    const mimeType = negotiatedMimeType || exportActivity.mimeType || '';
+    exportActivity = {
+      ...exportActivity,
+      phase: progress.phase,
+      progress,
+      mimeType,
+      summary: mimeType
+        ? turntableSummary(exportActivity.options, recordedFormatLabel(mimeType))
+        : exportActivity.summary
+    };
+    elements['turntable-summary'].textContent = exportActivity.summary;
+    elements['turntable-summary'].dataset.mimeType = mimeType;
+    const showProgress = progress.phase !== 'preparing';
+    elements['turntable-progress'].hidden = !showProgress;
+    elements['turntable-progress-text'].hidden = !showProgress;
+    elements['turntable-progress'].max = progress.totalFrames;
+    elements['turntable-progress'].value = progress.completedFrames;
+    elements['turntable-progress-text'].textContent = `${progress.completedFrames} of ${progress.totalFrames} frames`;
+    if (progress.phase === 'recording' && turntableLiveMilestone === 0) {
+      turntableLiveMilestone = 1;
+      setExportStatus(`Recording ${progress.totalFrames} turntable frames...`);
+    } else if (progress.phase === 'recording') {
+      const milestone = progress.percent >= 75 ? 75 : progress.percent >= 50 ? 50 : progress.percent >= 25 ? 25 : 0;
+      if (milestone > turntableLiveMilestone) {
+        turntableLiveMilestone = milestone;
+        setExportStatus(`Recording turntable video - ${milestone}% complete.`);
+      }
+    } else if (progress.phase === 'finalizing') {
+      setExportStatus('Finalizing turntable video...');
+    }
+  }
+
+  function recordedFormatLabel(mimeType) {
+    const normalized = Export.normalizeMimeType(mimeType);
+    if (normalized.startsWith('video/mp4;') && normalized.includes('avc1')) return 'H.264 MP4';
+    if (normalized.startsWith('video/mp4')) return 'MP4';
+    if (normalized.startsWith('video/webm;') && normalized.includes('vp9')) return 'VP9 WebM';
+    if (normalized.startsWith('video/webm;') && normalized.includes('vp8')) return 'VP8 WebM';
+    if (normalized.startsWith('video/webm')) return 'WebM';
+    return 'video';
+  }
+
+  async function downloadTurntableVideo() {
+    let options;
+    try {
+      options = normalizedSelectedTurntable();
+    } catch (error) {
+      setExportStatus(error.message, 'error');
+      return;
+    }
+    const abortController = new AbortController();
+    turntableLiveMilestone = 0;
+    completedTurntableSummary = null;
+    const capabilities = exportService.getTurntableCapabilities();
+    setExportActivity({
+      kind: 'video', phase: 'preparing', abortController,
+      options,
+      mimeType: '',
+      summary: turntableSummary(options, preferredTurntableFormat(capabilities)),
+      progress: { completedFrames: 0, totalFrames: options.frameCount }
+    });
+    setExportStatus('Preparing the molecular scene for video...');
+    if (activeInspector === 'export' && !elements['inspector'].hidden) elements['turntable-cancel'].focus();
+    try {
+      const result = await exportService.downloadTurntable({
+        ...options,
+        signal: abortController.signal,
+        onProgress: handleTurntableProgress
+      });
+      const actualSummary = turntableSummary(options, recordedFormatLabel(result.mimeType));
+      completedTurntableSummary = {
+        signature: turntableOptionsSignature(options),
+        text: actualSummary,
+        mimeType: result.mimeType
+      };
+      elements['turntable-summary'].textContent = actualSummary;
+      elements['turntable-summary'].dataset.mimeType = result.mimeType;
+      setExportStatus(
+        `Downloaded ${result.filename} (${result.width} x ${result.height} px, ${recordedFormatLabel(result.mimeType)}).`,
+        'success'
+      );
+      toast('Turntable video downloaded', 'success');
+    } catch (error) {
+      if (error?.code === 'export-cancelled') {
+        setExportStatus(error.message || 'Turntable video export cancelled.', 'warning');
+        toast('Turntable video export cancelled', 'warning');
+      } else {
+        if (error?.code === 'export-video-unsupported') {
+          turntableUnsupportedReason = error.message;
+          elements['turntable-summary'].tabIndex = -1;
+        }
+        setExportStatus(error.message, 'error');
+        toast(error.message, 'error');
+      }
+    } finally {
+      setExportActivity(null);
+      if (activeInspector === 'export' && !elements['inspector'].hidden) {
+        if (turntableUnsupportedReason) elements['turntable-summary'].focus();
+        else if (!elements['turntable-download'].disabled) elements['turntable-download'].focus();
+      }
+    }
+  }
+
+  function cancelTurntableVideo() {
+    if (exportActivity?.kind !== 'video' || !exportActivity.abortController) return;
+    exportActivity.abortController.abort();
+    elements['turntable-cancel'].disabled = true;
+    setExportStatus('Cancelling turntable video...', 'warning');
+  }
+
   function openInspector(name) {
     if (!inspectorTitles[name]) return;
     if (storyState.active) exitStory(false);
@@ -1798,7 +1999,7 @@
       revealNavigatorSelection();
       renderNavigator();
     }
-    if (name === 'export') syncExportControls(true);
+    if (name === 'export') syncExportControls(!exportActivity);
   }
 
   function closeInspector() {
@@ -2297,8 +2498,17 @@
     updateLockedExportDimension('height');
     invalidatePendingClipboardExport();
   });
+  const changeTurntableOptions = () => {
+    completedTurntableSummary = null;
+    syncExportControls(true);
+  };
+  elements['turntable-size'].addEventListener('change', changeTurntableOptions);
+  elements['turntable-duration'].addEventListener('change', changeTurntableOptions);
+  elements['turntable-direction'].addEventListener('change', changeTurntableOptions);
   elements['export-download'].addEventListener('click', downloadExportImage);
   elements['export-copy'].addEventListener('click', copyExportImage);
+  elements['turntable-download'].addEventListener('click', downloadTurntableVideo);
+  elements['turntable-cancel'].addEventListener('click', cancelTurntableVideo);
   elements['apply-color'].addEventListener('click', () => {
     try {
       applySelectionColor(elements['selection-color'].value, elements['selection-scope'].value);
@@ -2445,6 +2655,9 @@
     renderPNG(options = {}) { return exportService.renderPNG(options); },
     downloadPNG(options = {}) { return exportService.downloadPNG(options); },
     copyImage(options = {}) { return exportService.copyImage(options); },
+    renderTurntable(options = {}) { return exportService.renderTurntable(options); },
+    downloadTurntable(options = {}) { return exportService.downloadTurntable(options); },
+    getTurntableCapabilities() { return exportService.getTurntableCapabilities(); },
     serialize() { return persistence.serialize(); },
     async save() { return persistence.save(false); },
     async importStructure(name, text, format) { return importStructure(name, text, { format }); },

@@ -56,6 +56,37 @@ real-GPU behavior.
   clipboard permission once and confirm mol.html offers an explicit download
   without starting a surprise download.
 
+## Turntable video export
+
+- Record Current, 720p-fit, and 1080p-fit videos in landscape and portrait
+  layouts; confirm decoded dimensions exactly match the inspector summaries and
+  every dimension is even and inside its advertised bounding box.
+- Record clockwise and counterclockwise from an obviously asymmetric view.
+  Confirm the directions are opposite, playback completes one turn, and looping
+  has no duplicated pause or obvious angular jump at the seam.
+- Rotate, pan, and zoom immediately before recording. Confirm frame zero matches
+  that live camera and the visible viewer, document JSON, selection state, save
+  state, and undo history remain unchanged afterward.
+- Exercise sticks, cartoon, surface, labels, measurements, saved-selection
+  emphasis, and interaction overlays. Confirm renderer-owned content appears and
+  editor controls, measurement drafts, and story UI do not.
+- Start recording, edit the live scene, close and reopen Export, then cancel.
+  Confirm the accepted video snapshot does not change, progress and Cancel return
+  when reopened, and PNG export still works afterward.
+- Hide the tab during preparation and during recording. Confirm a clean
+  cancellation, then repeat a successful PNG and video export without reload.
+- Exercise both MP4 and WebM on platforms that expose them. Confirm Blob MIME,
+  completion text, extension, decoded container, and codec description agree;
+  do not require MP4 where it is unavailable.
+- Play a successful file in the browser and one common desktop presentation or
+  video player. Record actual duration and inspect for uneven holds on a loaded
+  machine; duration and submitted fps are targets rather than encoded guarantees.
+- Repeat ten 1080p six-second exports including a surface, with mid-recording and
+  surface-preparation cancellations. Check for monotonic heap/WebGL growth,
+  progressive slowdown, lingering download URLs, or a lost export context.
+- Run offline and confirm recording causes no HTTP request and no camera,
+  microphone, screen-capture, or other permission prompt.
+
 ## Release record
 
 Record the operating system, Chromium version, GPU/driver, date, tester, and any
