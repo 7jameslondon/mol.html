@@ -11,8 +11,8 @@ const REGULAR_BLOB_MODES = new Set(['100644', '100755']);
 
 const inlineCode = value => `\`${String(value).replaceAll('|', '\\|').replaceAll('`', '\u02cb')}\``;
 const shortSha = sha => String(sha).slice(0, 7);
-const truncatedMegabytes = bytes => Math.trunc(Math.abs(bytes) / (MEGABYTE / 10)) / 10;
-const megabytesLabel = bytes => `${truncatedMegabytes(bytes).toFixed(1)} MB`;
+const megabyteTenths = bytes => Math.trunc(bytes / (MEGABYTE / 10));
+const megabytesLabel = bytes => `${(megabyteTenths(bytes) / 10).toFixed(1)} MB`;
 
 export function calculateArtifactSizeDelta(baseBytes, headBytes) {
   if (!Number.isSafeInteger(baseBytes) || baseBytes < 0 || !Number.isSafeInteger(headBytes) || headBytes < 0) {
@@ -31,11 +31,11 @@ const signedLabel = (value, magnitudeLabel, suffix) => {
   return `${sign}${magnitudeLabel}${suffix}`;
 };
 const signedFixed = (value, digits, suffix) => signedLabel(value, Math.abs(value).toFixed(digits), suffix);
-const signedMegabytes = bytes => signedLabel(bytes, truncatedMegabytes(bytes).toFixed(1), ' MB');
 
 export function formatArtifactSizeReport({ pullRequest, baseBytes, headBytes }) {
   const delta = calculateArtifactSizeDelta(baseBytes, headBytes);
-  const deltaMegabytes = signedMegabytes(delta.bytes);
+  const displayedDeltaMegabytes = (megabyteTenths(headBytes) - megabyteTenths(baseBytes)) / 10;
+  const deltaMegabytes = signedFixed(displayedDeltaMegabytes, 1, ' MB');
   const deltaPercent = delta.percent === null ? 'new artifact' : signedFixed(delta.percent, 0, '%');
   const baseDescription = `Merge branch ${inlineCode(pullRequest.base.ref)} (${inlineCode(shortSha(pullRequest.base.sha))})`;
   const headDescription = `PR head ${inlineCode(pullRequest.head.ref)} (${inlineCode(shortSha(pullRequest.head.sha))})`;

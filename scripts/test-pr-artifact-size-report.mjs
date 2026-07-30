@@ -65,10 +65,23 @@ assert.match(tinyIncrease, /\*\*0\.0 MB \(0%\)\*\*/, 'displayed zero values do n
 
 const tinyReduction = formatArtifactSizeReport({
   pullRequest,
+  baseBytes: 1_050_000,
+  headBytes: 1_049_999
+});
+assert.match(tinyReduction, /\*\*0\.0 MB \(0%\)\*\*/, 'displayed zero values do not retain negative signs');
+
+const boundaryReduction = formatArtifactSizeReport({
+  pullRequest,
   baseBytes: 1_000_000,
   headBytes: 999_999
 });
-assert.match(tinyReduction, /\*\*0\.0 MB \(0%\)\*\*/, 'displayed zero values do not retain negative signs');
+assert.match(boundaryReduction, /Merge branch.*\*\*1\.0 MB\*\*/, 'the boundary case shows the base size');
+assert.match(boundaryReduction, /PR head.*\*\*0\.9 MB\*\*/, 'the boundary case shows the head size');
+assert.match(
+  boundaryReduction,
+  /Change vs merge branch.*\*\*-0\.1 MB \(0%\)\*\*/,
+  'the displayed change remains coherent with revision values across a truncation boundary'
+);
 
 const reduction = formatArtifactSizeReport({
   pullRequest,
