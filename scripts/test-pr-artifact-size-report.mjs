@@ -46,7 +46,7 @@ assert.match(report, /Merge branch `main` \(`1111111`\)/, 'the report identifies
 assert.match(report, /PR head `feature\/build-size` \(`2222222`\)/, 'the report identifies the PR revision');
 assert.match(report, /Merge branch.*\*\*1\.0 MB\*\*/, 'the merge-branch size is reported in MB');
 assert.match(report, /PR head.*\*\*1\.0 MB\*\*/, 'the PR size is truncated to one decimal place');
-assert.match(report, /\+0\.1 MB \(\+7%\)/, 'the absolute and relative increases are signed');
+assert.match(report, /\*\*0\.0 MB \(\+7%\)\*\*/, 'the absolute change uses the same truncation as revision sizes');
 assert.doesNotMatch(report, /bytes/, 'raw byte counts and the MB definition are omitted');
 
 const unchanged = formatArtifactSizeReport({
@@ -55,6 +55,20 @@ const unchanged = formatArtifactSizeReport({
   headBytes: 1_065_712
 });
 assert.match(unchanged, /\*\*0\.0 MB \(0%\)\*\*/, 'an unchanged artifact uses compact zero values');
+
+const tinyIncrease = formatArtifactSizeReport({
+  pullRequest,
+  baseBytes: 1_000_000,
+  headBytes: 1_000_001
+});
+assert.match(tinyIncrease, /\*\*0\.0 MB \(0%\)\*\*/, 'displayed zero values do not retain positive signs');
+
+const tinyReduction = formatArtifactSizeReport({
+  pullRequest,
+  baseBytes: 1_000_000,
+  headBytes: 999_999
+});
+assert.match(tinyReduction, /\*\*0\.0 MB \(0%\)\*\*/, 'displayed zero values do not retain negative signs');
 
 const reduction = formatArtifactSizeReport({
   pullRequest,

@@ -11,7 +11,8 @@ const REGULAR_BLOB_MODES = new Set(['100644', '100755']);
 
 const inlineCode = value => `\`${String(value).replaceAll('|', '\\|').replaceAll('`', '\u02cb')}\``;
 const shortSha = sha => String(sha).slice(0, 7);
-const megabytesLabel = bytes => `${(Math.trunc(bytes / 100_000) / 10).toFixed(1)} MB`;
+const truncatedMegabytes = bytes => Math.trunc(Math.abs(bytes) / (MEGABYTE / 10)) / 10;
+const megabytesLabel = bytes => `${truncatedMegabytes(bytes).toFixed(1)} MB`;
 
 export function calculateArtifactSizeDelta(baseBytes, headBytes) {
   if (!Number.isSafeInteger(baseBytes) || baseBytes < 0 || !Number.isSafeInteger(headBytes) || headBytes < 0) {
@@ -25,15 +26,17 @@ export function calculateArtifactSizeDelta(baseBytes, headBytes) {
   return { bytes, percent };
 }
 
-const signed = (value, digits, suffix) => {
-  const sign = value > 0 ? '+' : '';
-  return `${sign}${value.toFixed(digits)}${suffix}`;
+const signedLabel = (value, magnitudeLabel, suffix) => {
+  const sign = Number(magnitudeLabel) === 0 ? '' : value > 0 ? '+' : '-';
+  return `${sign}${magnitudeLabel}${suffix}`;
 };
+const signedFixed = (value, digits, suffix) => signedLabel(value, Math.abs(value).toFixed(digits), suffix);
+const signedMegabytes = bytes => signedLabel(bytes, truncatedMegabytes(bytes).toFixed(1), ' MB');
 
 export function formatArtifactSizeReport({ pullRequest, baseBytes, headBytes }) {
   const delta = calculateArtifactSizeDelta(baseBytes, headBytes);
-  const deltaMegabytes = signed(delta.bytes / MEGABYTE, 1, ' MB');
-  const deltaPercent = delta.percent === null ? 'new artifact' : signed(delta.percent, 0, '%');
+  const deltaMegabytes = signedMegabytes(delta.bytes);
+  const deltaPercent = delta.percent === null ? 'new artifact' : signedFixed(delta.percent, 0, '%');
   const baseDescription = `Merge branch ${inlineCode(pullRequest.base.ref)} (${inlineCode(shortSha(pullRequest.base.sha))})`;
   const headDescription = `PR head ${inlineCode(pullRequest.head.ref)} (${inlineCode(shortSha(pullRequest.head.sha))})`;
 
@@ -220,7 +223,7 @@ async function reportPullRequest(request, repository, pullRequest) {
   const body = formatArtifactSizeReport({ pullRequest, baseBytes, headBytes });
   const result = await upsertReportComment(request, repository, pullRequest.number, body);
   const delta = calculateArtifactSizeDelta(baseBytes, headBytes);
-  const relativeChange = delta.percent === null ? 'new artifact' : signed(delta.percent, 2, '%');
+  const relativeChange = delta.percent === null ? 'new artifact' : signedFixed(delta.percent, 2, '%');
   console.log(`${result} build-size report for PR #${pullRequest.number}: ${megabytesLabel(headBytes)}, ${relativeChange}`);
 }
 
