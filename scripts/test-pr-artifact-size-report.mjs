@@ -38,22 +38,30 @@ assert.throws(
 const report = formatArtifactSizeReport({
   pullRequest,
   baseBytes: 1_000_000,
-  headBytes: 1_025_000
+  headBytes: 1_065_712
 });
 assert.ok(report.startsWith(REPORT_MARKER), 'the report has a stable marker for comment updates');
 assert.match(report, new RegExp(ARTIFACT_PATH.replace('.', '\\.')), 'the report identifies the artifact');
 assert.match(report, /Merge branch `main` \(`1111111`\)/, 'the report identifies the merge branch revision');
 assert.match(report, /PR head `feature\/build-size` \(`2222222`\)/, 'the report identifies the PR revision');
-assert.match(report, /1\.000000 MB.*1,000,000 bytes/, 'the merge-branch size is reported in MB and bytes');
-assert.match(report, /1\.025000 MB.*1,025,000 bytes/, 'the PR size is reported in MB and bytes');
-assert.match(report, /\+0\.025000 MB \(\+2\.50%\)/, 'the absolute and relative increases are signed');
+assert.match(report, /Merge branch.*\*\*1\.0 MB\*\*/, 'the merge-branch size is reported in MB');
+assert.match(report, /PR head.*\*\*1\.0 MB\*\*/, 'the PR size is truncated to one decimal place');
+assert.match(report, /\+0\.1 MB \(\+7%\)/, 'the absolute and relative increases are signed');
+assert.doesNotMatch(report, /bytes/, 'raw byte counts and the MB definition are omitted');
+
+const unchanged = formatArtifactSizeReport({
+  pullRequest,
+  baseBytes: 1_065_712,
+  headBytes: 1_065_712
+});
+assert.match(unchanged, /\*\*0\.0 MB \(0%\)\*\*/, 'an unchanged artifact uses compact zero values');
 
 const reduction = formatArtifactSizeReport({
   pullRequest,
   baseBytes: 1_000_000,
   headBytes: 900_000
 });
-assert.match(reduction, /-0\.100000 MB \(-10\.00%\)/, 'reductions are reported with negative signs');
+assert.match(reduction, /-0\.1 MB \(-10%\)/, 'reductions are reported with negative signs');
 
 const adversarialRefReport = formatArtifactSizeReport({
   pullRequest: {
@@ -302,7 +310,7 @@ try {
   assert.ok(updatedComment?.startsWith(REPORT_MARKER), 'the missing artifact replaces the existing sticky report');
   assert.doesNotMatch(updatedComment, /Previous successful size report/, 'the old successful report is removed');
   assert.match(updatedComment, /PR head `feature\/missing-artifact` \(`2222222`\)/, 'the warning identifies the current head');
-  assert.match(updatedComment, /Merge branch.*1\.000000 MB.*1,000,000 bytes/, 'the readable base size remains visible');
+  assert.match(updatedComment, /Merge branch.*\*\*1\.0 MB\*\*/, 'the readable base size remains visible');
   assert.match(updatedComment, /PR head.*\*\*Unavailable\*\*/, 'the missing head artifact is explicit');
   assert.match(updatedComment, /Change vs merge branch.*\*\*Unavailable\*\*/, 'no stale relative change is displayed');
 
@@ -323,7 +331,7 @@ try {
   );
   assert.match(
     createdFallbackComment,
-    /\+0\.100000 MB \(\+10\.00%\)/,
+    /\+0\.1 MB \(\+10%\)/,
     'the recovered PR report compares the current head with its merge branch'
   );
 
@@ -344,7 +352,7 @@ try {
   );
   assert.match(
     createdForkComment,
-    /\+0\.200000 MB \(\+20\.00%\)/,
+    /\+0\.2 MB \(\+20%\)/,
     'the recovered fork report compares the current head with its merge branch'
   );
   assert.equal(

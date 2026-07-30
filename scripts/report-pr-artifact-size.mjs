@@ -11,8 +11,7 @@ const REGULAR_BLOB_MODES = new Set(['100644', '100755']);
 
 const inlineCode = value => `\`${String(value).replaceAll('|', '\\|').replaceAll('`', '\u02cb')}\``;
 const shortSha = sha => String(sha).slice(0, 7);
-const bytesLabel = bytes => `${bytes.toLocaleString('en-US')} bytes`;
-const megabytesLabel = bytes => `${(bytes / MEGABYTE).toFixed(6)} MB`;
+const megabytesLabel = bytes => `${(Math.trunc(bytes / 100_000) / 10).toFixed(1)} MB`;
 
 export function calculateArtifactSizeDelta(baseBytes, headBytes) {
   if (!Number.isSafeInteger(baseBytes) || baseBytes < 0 || !Number.isSafeInteger(headBytes) || headBytes < 0) {
@@ -33,8 +32,8 @@ const signed = (value, digits, suffix) => {
 
 export function formatArtifactSizeReport({ pullRequest, baseBytes, headBytes }) {
   const delta = calculateArtifactSizeDelta(baseBytes, headBytes);
-  const deltaMegabytes = signed(delta.bytes / MEGABYTE, 6, ' MB');
-  const deltaPercent = delta.percent === null ? 'new artifact' : signed(delta.percent, 2, '%');
+  const deltaMegabytes = signed(delta.bytes / MEGABYTE, 1, ' MB');
+  const deltaPercent = delta.percent === null ? 'new artifact' : signed(delta.percent, 0, '%');
   const baseDescription = `Merge branch ${inlineCode(pullRequest.base.ref)} (${inlineCode(shortSha(pullRequest.base.sha))})`;
   const headDescription = `PR head ${inlineCode(pullRequest.head.ref)} (${inlineCode(shortSha(pullRequest.head.sha))})`;
 
@@ -43,17 +42,17 @@ export function formatArtifactSizeReport({ pullRequest, baseBytes, headBytes }) 
 
 | Revision | ${inlineCode(ARTIFACT_PATH)} |
 | --- | ---: |
-| ${baseDescription} | **${megabytesLabel(baseBytes)}** (${bytesLabel(baseBytes)}) |
-| ${headDescription} | **${megabytesLabel(headBytes)}** (${bytesLabel(headBytes)}) |
+| ${baseDescription} | **${megabytesLabel(baseBytes)}** |
+| ${headDescription} | **${megabytesLabel(headBytes)}** |
 | Change vs merge branch | **${deltaMegabytes} (${deltaPercent})** |
 
-<sub>MB uses 1,000,000 bytes. This comment updates automatically when the PR head or its merge branch changes.</sub>`;
+<sub>This comment updates automatically when the PR head or its merge branch changes.</sub>`;
 }
 
 export function formatArtifactSizeUnavailableReport({ pullRequest, baseBytes = null, headBytes = null }) {
   const cell = bytes => bytes === null
     ? '**Unavailable**'
-    : `**${megabytesLabel(bytes)}** (${bytesLabel(bytes)})`;
+    : `**${megabytesLabel(bytes)}**`;
   const baseDescription = `Merge branch ${inlineCode(pullRequest.base.ref)} (${inlineCode(shortSha(pullRequest.base.sha))})`;
   const headDescription = `PR head ${inlineCode(pullRequest.head.ref)} (${inlineCode(shortSha(pullRequest.head.sha))})`;
 
