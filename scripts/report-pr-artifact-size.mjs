@@ -99,27 +99,21 @@ function createGitHubClient(token, apiUrl = 'https://api.github.com') {
 
 const encodeRepository = repository => repository.split('/').map(encodeURIComponent).join('/');
 const encodeFilePath = path => path.split('/').map(encodeURIComponent).join('/');
+const sameRepository = (left, right) =>
+  typeof left === 'string'
+  && typeof right === 'string'
+  && left.toLowerCase() === right.toLowerCase();
 
 async function getPullRequest(request, repository, pullNumber) {
   return request(`/repos/${encodeRepository(repository)}/pulls/${pullNumber}`);
 }
 
-async function listOpenPullRequests(request, repository, baseBranch) {
+async function listOpenPullRequests(request, repository, baseBranch = null) {
   const pullRequests = [];
   for (let page = 1; ; page += 1) {
+    const baseQuery = baseBranch ? `&base=${encodeURIComponent(baseBranch)}` : '';
     const batch = await request(
-      `/repos/${encodeRepository(repository)}/pulls?state=open&base=${encodeURIComponent(baseBranch)}&per_page=100&page=${page}`
-    );
-    pullRequests.push(...batch);
-    if (batch.length < 100) return pullRequests;
-  }
-}
-
-async function listPullRequestsForCommit(request, repository, sha) {
-  const pullRequests = [];
-  for (let page = 1; ; page += 1) {
-    const batch = await request(
-      `/repos/${encodeRepository(repository)}/commits/${encodeURIComponent(sha)}/pulls?per_page=100&page=${page}`
+      `/repos/${encodeRepository(repository)}/pulls?state=open${baseQuery}&per_page=100&page=${page}`
     );
     pullRequests.push(...batch);
     if (batch.length < 100) return pullRequests;
@@ -216,16 +210,15 @@ export async function main(environment = process.env) {
         .filter(Number.isSafeInteger)
     )];
     if (pullNumbers.length === 0 && event.workflow_run.head_sha) {
-      const associatedPullRequests = await listPullRequestsForCommit(
-        request,
-        repository,
-        event.workflow_run.head_sha
-      );
+      const headRepository = event.workflow_run.head_repository?.full_name;
+      const associatedPullRequests = await listOpenPullRequests(request, repository);
       pullNumbers = [...new Set(
         associatedPullRequests
           .filter(pullRequest =>
             pullRequest.state === 'open'
             && pullRequest.head?.sha === event.workflow_run.head_sha
+            && sameRepository(pullRequest.base?.repo?.full_name, repository)
+            && (!headRepository || sameRepository(pullRequest.head?.repo?.full_name, headRepository))
           )
           .map(pullRequest => pullRequest.number)
           .filter(Number.isSafeInteger)

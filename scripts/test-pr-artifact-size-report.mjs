@@ -74,7 +74,9 @@ await mkdir(temporaryRoot, { recursive: true });
 const temporaryDirectory = await mkdtemp(join(temporaryRoot, 'molhtml-size-report-'));
 const eventPath = join(temporaryDirectory, 'event.json');
 const fallbackEventPath = join(temporaryDirectory, 'fallback-event.json');
+const forkEventPath = join(temporaryDirectory, 'fork-event.json');
 const fallbackSha = '3333333333333333333333333333333333333333';
+const forkSha = '5555555555555555555555555555555555555555';
 const apiPullRequest = {
   number: 22,
   base: {
@@ -98,12 +100,22 @@ await writeFile(fallbackEventPath, JSON.stringify({
   workflow_run: {
     event: 'pull_request',
     head_sha: fallbackSha,
+    head_repository: { full_name: 'owner/repository' },
+    pull_requests: []
+  }
+}), 'utf8');
+await writeFile(forkEventPath, JSON.stringify({
+  workflow_run: {
+    event: 'pull_request',
+    head_sha: forkSha,
+    head_repository: { full_name: 'contributor/repository' },
     pull_requests: []
   }
 }), 'utf8');
 const originalFetch = globalThis.fetch;
 let updatedComment = null;
 let createdFallbackComment = null;
+let createdForkComment = null;
 globalThis.fetch = async (url, options = {}) => {
   const requestUrl = new URL(url);
   const method = options.method || 'GET';
@@ -113,19 +125,35 @@ globalThis.fetch = async (url, options = {}) => {
   });
 
   if (requestUrl.pathname === '/repos/owner/repository/pulls/22') return json(apiPullRequest);
-  if (requestUrl.pathname === `/repos/owner/repository/commits/${fallbackSha}/pulls`) {
+  if (requestUrl.pathname === '/repos/owner/repository/pulls' && method === 'GET') {
     return json([{
       number: 1,
       state: 'open',
-      head: { sha: fallbackSha }
+      head: { sha: fallbackSha, repo: { full_name: 'owner/repository' } },
+      base: { repo: { full_name: 'owner/repository' } }
     }, {
       number: 2,
       state: 'closed',
-      head: { sha: fallbackSha }
+      head: { sha: fallbackSha, repo: { full_name: 'owner/repository' } },
+      base: { repo: { full_name: 'owner/repository' } }
     }, {
       number: 3,
       state: 'open',
-      head: { sha: '4444444444444444444444444444444444444444' }
+      head: {
+        sha: '4444444444444444444444444444444444444444',
+        repo: { full_name: 'owner/repository' }
+      },
+      base: { repo: { full_name: 'owner/repository' } }
+    }, {
+      number: 4,
+      state: 'open',
+      head: { sha: forkSha, repo: { full_name: 'contributor/repository' } },
+      base: { repo: { full_name: 'OWNER/REPOSITORY' } }
+    }, {
+      number: 5,
+      state: 'open',
+      head: { sha: forkSha, repo: { full_name: 'other/repository' } },
+      base: { repo: { full_name: 'owner/repository' } }
     }]);
   }
   if (requestUrl.pathname === '/repos/owner/repository/pulls/1') {
@@ -143,12 +171,30 @@ globalThis.fetch = async (url, options = {}) => {
       }
     });
   }
+  if (requestUrl.pathname === '/repos/owner/repository/pulls/4') {
+    return json({
+      number: 4,
+      base: {
+        ref: 'main',
+        sha: pullRequest.base.sha,
+        repo: { full_name: 'owner/repository' }
+      },
+      head: {
+        ref: 'feature/fork-build-size',
+        sha: forkSha,
+        repo: { full_name: 'contributor/repository' }
+      }
+    });
+  }
   if (requestUrl.pathname.endsWith(`/${ARTIFACT_PATH}`)) {
     if (requestUrl.searchParams.get('ref') === pullRequest.base.sha) {
       return json({ type: 'file', size: 1_000_000 });
     }
     if (requestUrl.searchParams.get('ref') === fallbackSha) {
       return json({ type: 'file', size: 1_100_000 });
+    }
+    if (requestUrl.searchParams.get('ref') === forkSha) {
+      return json({ type: 'file', size: 1_200_000 });
     }
     return json({ message: 'Not Found' }, 404);
   }
@@ -169,6 +215,13 @@ globalThis.fetch = async (url, options = {}) => {
   if (requestUrl.pathname === '/repos/owner/repository/issues/1/comments' && method === 'POST') {
     createdFallbackComment = JSON.parse(options.body).body;
     return json({ id: 8, body: createdFallbackComment });
+  }
+  if (requestUrl.pathname === '/repos/owner/repository/issues/4/comments' && method === 'GET') {
+    return json([]);
+  }
+  if (requestUrl.pathname === '/repos/owner/repository/issues/4/comments' && method === 'POST') {
+    createdForkComment = JSON.parse(options.body).body;
+    return json({ id: 9, body: createdForkComment });
   }
   throw new Error(`Unexpected test request: ${method} ${requestUrl}`);
 };
@@ -210,6 +263,27 @@ try {
     createdFallbackComment,
     /\+0\.100000 MB \(\+10\.00%\)/,
     'the recovered PR report compares the current head with its merge branch'
+  );
+
+  await main({
+    GITHUB_REPOSITORY: 'owner/repository',
+    GITHUB_EVENT_PATH: forkEventPath,
+    GITHUB_TOKEN: 'test-token',
+    GITHUB_API_URL: 'https://api.example.test'
+  });
+  assert.ok(
+    createdForkComment?.startsWith(REPORT_MARKER),
+    'an empty fork workflow-run association is recovered from current base-repository PRs'
+  );
+  assert.match(
+    createdForkComment,
+    /PR head `feature\/fork-build-size` \(`5555555`\)/,
+    'the recovered fork PR receives a report for the triggering head'
+  );
+  assert.match(
+    createdForkComment,
+    /\+0\.200000 MB \(\+20\.00%\)/,
+    'the recovered fork report compares the current head with its merge branch'
   );
 } finally {
   globalThis.fetch = originalFetch;
