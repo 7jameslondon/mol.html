@@ -20,7 +20,12 @@
       this.parsed = null;
       this.model = null;
       this.models = [];
-      this.cacheKey = '';
+      this.structureSnapshot = null;
+      this.interactionAnalysis = null;
+      this.interactionDisplay = null;
+      this.interactionShapes = [];
+      this.foregroundShapes = [];
+      this.foregroundLabels = [];
       this.surfaceGeneration = 0;
       this.surfaceTasks = new Map();
       this.applyingDocument = false;
@@ -61,14 +66,22 @@
         this.activeMeasurementId = presentationState.activeMeasurementId || null;
         this.activeSavedSelectionId = presentationState.activeSavedSelectionId || null;
       }
-      const key = `${doc.structure.id}:${doc.structure.data.length}:${doc.structure.data.slice(0, 60)}`;
-      const structureChanged = key !== this.cacheKey;
+      const structureChanged = !this.structureSnapshot
+        || this.structureSnapshot.id !== doc.structure.id
+        || this.structureSnapshot.format !== doc.structure.format
+        || this.structureSnapshot.data !== doc.structure.data;
       this.applyingDocument = true;
 
       try {
         if (structureChanged) {
           this.parsed = Core.parseStructure(doc.structure.data, doc.structure.format);
-          this.cacheKey = key;
+          this.structureSnapshot = {
+            id: doc.structure.id,
+            format: doc.structure.format,
+            data: doc.structure.data
+          };
+          this.interactionAnalysis = null;
+          this.interactionDisplay = null;
           this.surfaceGeneration += 1;
           this.disposeSurfaceRenderResources();
           this.viewer.removeAllSurfaces();
@@ -134,6 +147,9 @@
       this.removeLabels();
       this.disposeShapeRenderResources();
       this.viewer.removeAllShapes();
+      this.interactionShapes = [];
+      this.foregroundShapes = [];
+      this.foregroundLabels = [];
       this.disposeSurfaceRenderResources();
       this.viewer.removeAllSurfaces();
       this.disposeModelRenderResources();
@@ -180,6 +196,7 @@
 
       this.applySavedSelectionHighlight();
       this.applyLigandAnalysis();
+      this.applyInteractions();
       this.applySelectionHighlight();
       this.applyMeasurements();
       this.applyMeasurementDraft();
@@ -193,7 +210,7 @@
       return generation;
     }
 
-    applySelectionHighlight() {
+    applySelectionHighlight(includeAtomStyle = true) {
       const selector = this.doc.scene.selection?.selector;
       if (!selector) return;
       const resolution = Core.resolveUniqueAtomSelector(selector, this.parsed.atoms, this.doc.structure.id);
@@ -201,11 +218,13 @@
       const atom = resolution.atom;
 
       const selection = this.selectionForAtoms([atom]);
-      this.viewer.addStyle(selection, {
-        stick: { radius: .28, color: '#ffe66d' },
-        sphere: { scale: .5, color: '#ffe66d' }
-      });
-      this.viewer.addLabel(Core.atomLabel(atom), this.labelOptions({
+      if (includeAtomStyle) {
+        this.viewer.addStyle(selection, {
+          stick: { radius: .28, color: '#ffe66d' },
+          sphere: { scale: .5, color: '#ffe66d' }
+        });
+      }
+      const label = this.viewer.addLabel(Core.atomLabel(atom), this.labelOptions({
         position: { x: atom.x, y: atom.y, z: atom.z },
         fontColor: '#07111f',
         backgroundColor: '#f4c95d',
@@ -216,6 +235,7 @@
         padding: 4,
         inFront: true
       }));
+      if (label) this.foregroundLabels.push(label);
     }
 
     applySavedSelectionHighlight() {
@@ -269,6 +289,44 @@
       }
     }
 
+    applyInteractions() {
+      this.interactionAnalysis = Core.analyzeInteractions(this.parsed, this.doc.structure.id);
+      this.interactionDisplay = Core.selectInteractions(this.interactionAnalysis, this.doc.scene.interactions);
+      for (const interaction of this.interactionDisplay.interactions) {
+        const left = this.parsed.atoms[interaction.participants[0]?.atomIndex];
+        const right = this.parsed.atoms[interaction.participants[1]?.atomIndex];
+        if (!left || !right || left.model !== right.model) continue;
+        const shape = this.viewer.addLine({
+          start: point(left),
+          end: point(right),
+          color: interaction.type === 'hydrogen-bond' ? '#49d7ff' : '#ffb84d',
+          dashed: true,
+          linewidth: this.scaledLineWidth(interaction.type === 'hydrogen-bond' ? 1.8 : 2.1),
+          opacity: .88
+        });
+        if (shape) this.interactionShapes.push(shape);
+      }
+    }
+
+    updateInteractions() {
+      if (!this.doc || !this.parsed) return;
+      if (typeof this.viewer.removeShape === 'function') {
+        for (const shape of this.interactionShapes) this.viewer.removeShape(shape);
+        for (const shape of this.foregroundShapes) this.viewer.removeShape(shape);
+      }
+      if (typeof this.viewer.removeLabel === 'function') {
+        for (const label of this.foregroundLabels) this.viewer.removeLabel(label);
+      }
+      this.interactionShapes = [];
+      this.foregroundShapes = [];
+      this.foregroundLabels = [];
+      this.applyInteractions();
+      this.applySelectionHighlight(false);
+      this.applyMeasurements();
+      this.applyMeasurementDraft(false);
+      this.viewer.render();
+    }
+
     applyMeasurements() {
       for (const measurement of this.doc.scene.measurements || []) {
         const atoms = Core.measurementAtoms(measurement, this.parsed.atoms, this.doc.structure.id);
@@ -276,42 +334,49 @@
         const active = measurement.id === this.activeMeasurementId;
         const color = active ? '#ffcf5a' : '#49d7ff';
         for (let index = 1; index < atoms.length; index++) {
-          this.viewer.addLine({
+          const line = this.viewer.addLine({
             start: point(atoms[index - 1]), end: point(atoms[index]),
             color, dashed: true, linewidth: this.scaledLineWidth(active ? 3 : 2)
           });
+          if (line) this.foregroundShapes.push(line);
         }
         for (const atom of atoms) {
-          this.viewer.addSphere({ center: point(atom), radius: active ? .18 : .13, color, opacity: .94 });
+          const sphere = this.viewer.addSphere({ center: point(atom), radius: active ? .18 : .13, color, opacity: .94 });
+          if (sphere) this.foregroundShapes.push(sphere);
         }
         const value = Core.formatMeasurementValue(measurement.type, Core.measurementValue(measurement.type, atoms));
         const label = String(measurement.label || '').trim();
-        this.viewer.addLabel(label ? `${label}: ${value}` : value, this.labelOptions({
+        const renderedLabel = this.viewer.addLabel(label ? `${label}: ${value}` : value, this.labelOptions({
           position: measurementLabelPosition(measurement.type, atoms),
           fontColor: '#07111f', backgroundColor: color, backgroundOpacity: .92,
           borderColor: '#ffffff', borderThickness: active ? 2 : 1,
           fontSize: active ? 13 : 11, padding: 4, inFront: true
         }));
+        if (renderedLabel) this.foregroundLabels.push(renderedLabel);
       }
     }
 
-    applyMeasurementDraft() {
+    applyMeasurementDraft(includeAtomStyles = true) {
       if (!this.measurementDraft.length) return;
       for (let index = 0; index < this.measurementDraft.length; index++) {
         const atom = this.measurementDraft[index];
-        this.viewer.addStyle(this.to3DSelection(Core.selectorForAtom(atom, 'atom', this.doc.structure.id)), {
-          stick: { radius: .3, color: '#ff5e83' }, sphere: { scale: .54, color: '#ff5e83' }
-        });
-        this.viewer.addLabel(String(index + 1), this.labelOptions({
+        if (includeAtomStyles) {
+          this.viewer.addStyle(this.to3DSelection(Core.selectorForAtom(atom, 'atom', this.doc.structure.id)), {
+            stick: { radius: .3, color: '#ff5e83' }, sphere: { scale: .54, color: '#ff5e83' }
+          });
+        }
+        const label = this.viewer.addLabel(String(index + 1), this.labelOptions({
           position: point(atom), fontColor: '#ffffff', backgroundColor: '#d92d57',
           backgroundOpacity: .96, borderColor: '#ffffff', borderThickness: 1,
           fontSize: 12, padding: 4, inFront: true
         }));
+        if (label) this.foregroundLabels.push(label);
         if (index > 0) {
-          this.viewer.addLine({
+          const line = this.viewer.addLine({
             start: point(this.measurementDraft[index - 1]), end: point(atom),
             color: '#ff5e83', dashed: true, linewidth: this.scaledLineWidth(3)
           });
+          if (line) this.foregroundShapes.push(line);
         }
       }
     }
@@ -694,7 +759,12 @@
       this.parsed = null;
       this.model = null;
       this.models = [];
-      this.cacheKey = '';
+      this.structureSnapshot = null;
+      this.interactionAnalysis = null;
+      this.interactionDisplay = null;
+      this.interactionShapes = [];
+      this.foregroundShapes = [];
+      this.foregroundLabels = [];
       this.measurementDraft = [];
       this.activeMeasurementId = null;
       this.activeSavedSelectionId = null;

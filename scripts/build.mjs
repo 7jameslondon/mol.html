@@ -93,6 +93,11 @@ const document = {
     background: '#07111f',
     showHydrogens: false,
     showWater: false,
+    interactions: {
+      enabled: false,
+      types: { hydrogenBonds: true, saltBridges: true },
+      includeWater: false
+    },
     selection: null,
     customColors: [],
     measurements: [],

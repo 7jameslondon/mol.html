@@ -25,6 +25,11 @@ test('saves picker bytes, restores notices, and reopens hostile data', async ({ 
     next.documentId = `document-picker-${crypto.randomUUID()}`;
     next.title = 'Hostile browser round-trip';
     next.futureHostileValues = values;
+    next.scene.interactions = {
+      enabled: true,
+      types: { hydrogenBonds: false, saltBridges: true },
+      includeWater: true
+    };
     return window.molhtml.loadDocument(next, 'browser-test');
   }, hostileValues);
   await page.locator('#save-button').click();
@@ -36,6 +41,7 @@ test('saves picker bytes, restores notices, and reopens hostile data', async ({ 
   expect((savedHtml.match(/id="molhtml-license-notices"/g) || [])).toHaveLength(1);
   expect(savedHtml).not.toContain('<script>globalThis.__molhtmlAttack');
   expect(documentFromHtml(savedHtml).futureHostileValues).toEqual(hostileValues);
+  expect(documentFromHtml(savedHtml).scene.interactions).toEqual(expected.scene.interactions);
   expect(await page.evaluate(() => globalThis.__molhtmlAttack)).toBeUndefined();
 
   const reopenedContext = await browser.newContext();
@@ -45,6 +51,8 @@ test('saves picker bytes, restores notices, and reopens hostile data', async ({ 
   const reopenedDocument = await openArtifact(reopened, { url: pathToFileURL(savedPath).href });
   expect(reopenedDocument.documentId).toBe(expected.documentId);
   expect(reopenedDocument.futureHostileValues).toEqual(hostileValues);
+  expect(reopenedDocument.scene.interactions).toEqual(expected.scene.interactions);
+  expect(await reopened.evaluate(() => window.molhtml.getInteractions().state)).toEqual(expected.scene.interactions);
   expect(await reopened.evaluate(() => globalThis.__molhtmlAttack)).toBeUndefined();
   assertNoReopenErrors();
   await closeContext(reopenedContext);

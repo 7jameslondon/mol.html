@@ -21,6 +21,8 @@ const addedStyles = [];
 const addedLabels = [];
 const assignedStyles = [];
 const addedLines = [];
+const drawEvents = [];
+let shapeId = 0;
 let clickableCalls = 0;
 let framebufferInitCalls = 0;
 function nativeInitFrameBuffer() { framebufferInitCalls += 1; }
@@ -61,8 +63,24 @@ const viewer = {
   setViewChangeCallback() {}, setBackgroundColor() {},
   setStyle(selection, style) { assignedStyles.push({ selection, style }); },
   addStyle(selection, style) { addedStyles.push({ selection, style }); },
-  addLabel(text, style) { addedLabels.push({ text, style }); },
-  addLine(style) { addedLines.push(style); }, addSphere() {},
+  addLabel(text, style) {
+    addedLabels.push({ text, style });
+    const label = { kind: 'label', id: ++shapeId };
+    drawEvents.push({ kind: 'label', text, style, object: label });
+    return label;
+  },
+  addLine(style) {
+    addedLines.push(style);
+    const shape = { kind: 'line', id: ++shapeId };
+    drawEvents.push({ kind: 'line', style, object: shape });
+    return shape;
+  },
+  addSphere(style) {
+    const shape = { kind: 'sphere', id: ++shapeId };
+    drawEvents.push({ kind: 'sphere', style, object: shape });
+    return shape;
+  },
+  removeShape() {}, removeLabel() {},
   setClickable() { clickableCalls += 1; }, zoomTo() {}, render() {}, setView() {},
   getRenderer() { return webglRenderer; },
   getView() { return [0, 0, 0, 1, 0, 0, 0, 1]; }
@@ -199,6 +217,118 @@ assert.deepEqual(JSON.parse(JSON.stringify(completeResidueStyle.selection)), {
   and: [{ model: 0, index: [0, 1, 8, 9] }, { not: { elem: 'H' } }]
 }, 'pocket styling includes complete normalized residues without overriding hydrogen visibility');
 
+function interactionPdb(acceptorX = 3) {
+  const line = (serial, name, resn, chain, resi, x, element) =>
+    `${'ATOM'.padEnd(6)}${String(serial).padStart(5)} ${String(name).padStart(4)} ${resn} ${chain}${String(resi).padStart(4)}    ${Number(x).toFixed(3).padStart(8)}${'0.000'.padStart(8)}${'0.000'.padStart(8)}${'1.00'.padStart(6)}${'10.00'.padStart(6)}${''.padStart(10)}${element.padStart(2)}  `;
+  return [line(1, 'ND2', 'ASN', 'A', 1, 0, 'N'), line(2, 'OE1', 'GLU', 'B', 2, acceptorX, 'O'), 'END'].join('\n');
+}
+
+addedLines.length = 0;
+const interactionDoc = Core.normalizeDocument({
+  format: 'molhtml/document', version: 1, documentId: 'renderer-interactions', revision: 1,
+  structure: { id: 'interaction-structure', name: 'interactions.pdb', format: 'pdb', data: interactionPdb() },
+  scene: { interactions: { enabled: true, types: { hydrogenBonds: true, saltBridges: false }, includeWater: false } }
+});
+const interactionRenderer = new context.window.MoleculeRenderer({}, {});
+interactionRenderer.setDocument(interactionDoc, { fit: true });
+assert.equal(addedLines.length, 1, 'enabled hydrogen bonds create an interaction line');
+assert.equal(addedLines[0].dashed, true);
+assert.equal(addedLines[0].color, '#49d7ff');
+assert.equal(addedLines[0].linewidth, 1.8, 'visible interaction lines retain their requested width');
+assert.deepEqual(JSON.parse(JSON.stringify({ start: addedLines[0].start, end: addedLines[0].end })), {
+  start: { x: 0, y: 0, z: 0 }, end: { x: 3, y: 0, z: 0 }
+}, 'interaction lines use the normalized donor and acceptor coordinates');
+assert.deepEqual(Array.from(renderedModels[0].atoms, atom => Array.from(atom.bonds)), [[], []],
+  'rendered interaction lines do not mutate atom bond arrays');
+
+addedLines.length = 0;
+interactionDoc.scene.interactions.types = { hydrogenBonds: false, saltBridges: true };
+interactionRenderer.setDocument(interactionDoc);
+assert.equal(addedLines.length, 0, 'individual interaction type toggles filter renderer lines');
+
+addedLines.length = 0;
+const saltLine = (serial, name, resn, chain, resi, x, element) =>
+  `${'ATOM'.padEnd(6)}${String(serial).padStart(5)} ${String(name).padStart(4)} ${resn} ${chain}${String(resi).padStart(4)}    ${Number(x).toFixed(3).padStart(8)}${'0.000'.padStart(8)}${'0.000'.padStart(8)}${'1.00'.padStart(6)}${'10.00'.padStart(6)}${''.padStart(10)}${element.padStart(2)}  `;
+const saltData = [
+  saltLine(1, 'NZ', 'LYS', 'A', 1, 0, 'N'),
+  saltLine(2, 'OD1', 'ASP', 'B', 2, 4, 'O'),
+  'END'
+].join('\n');
+const saltDoc = Core.normalizeDocument({
+  format: 'molhtml/document', version: 1, documentId: 'renderer-salt', revision: 1,
+  structure: { id: 'salt-structure', name: 'salt.pdb', format: 'pdb', data: saltData },
+  scene: { interactions: { enabled: true, types: { hydrogenBonds: false, saltBridges: true }, includeWater: false } }
+});
+const saltRenderer = new context.window.MoleculeRenderer({}, {});
+saltRenderer.setDocument(saltDoc, { fit: true });
+assert.equal(addedLines.length, 1, 'enabled salt bridges create an interaction line');
+assert.equal(addedLines[0].dashed, true);
+assert.equal(addedLines[0].color, '#ffb84d');
+
+function cappedInteractionPdb() {
+  const rows = [];
+  const line = (serial, name, resn, chain, resi, x, y, element) =>
+    `${'ATOM'.padEnd(6)}${String(serial).padStart(5)} ${String(name).padStart(4)} ${resn} ${chain}${String(resi).padStart(4)}    ${Number(x).toFixed(3).padStart(8)}${Number(y).toFixed(3).padStart(8)}${'0.000'.padStart(8)}${'1.00'.padStart(6)}${'10.00'.padStart(6)}${''.padStart(10)}${element.padStart(2)}  `;
+  for (let pair = 0; pair < 600; pair += 1) {
+    rows.push(line(pair * 2 + 1, 'ND2', 'ASN', 'A', pair * 2 + 1, 0, pair * 10, 'N'));
+    rows.push(line(pair * 2 + 2, 'OE1', 'GLU', 'B', pair * 2 + 2, 2.5 + pair / 1_000, pair * 10, 'O'));
+  }
+  rows.push('END');
+  return rows.join('\n');
+}
+
+addedLines.length = 0;
+const capData = cappedInteractionPdb();
+const capDoc = Core.normalizeDocument({
+  format: 'molhtml/document', version: 1, documentId: 'renderer-cap', revision: 1,
+  structure: { id: 'cap-structure', name: 'cap.pdb', format: 'pdb', data: capData },
+  scene: { interactions: { enabled: true, types: { hydrogenBonds: true, saltBridges: false }, includeWater: false } }
+});
+const capRenderer = new context.window.MoleculeRenderer({}, {});
+capRenderer.setDocument(capDoc, { fit: true });
+assert.equal(addedLines.length, 500, 'renderer enforces the merged 500-line interaction cap');
+
+const firstParsedObject = interactionRenderer.parsed;
+interactionDoc.structure.data = interactionPdb(3.4);
+interactionRenderer.setDocument(interactionDoc);
+assert.notStrictEqual(interactionRenderer.parsed, firstParsedObject,
+  'complete coordinate data equality invalidates parsed structures even when ID, length, and prefix are unchanged');
+assert.equal(interactionRenderer.parsed.atoms[1].x, 3.4);
+
+drawEvents.length = 0;
+const orderingParsed = Core.parseStructure(interactionPdb(), 'pdb');
+const orderingDoc = Core.normalizeDocument({
+  format: 'molhtml/document', version: 1, documentId: 'renderer-interaction-order', revision: 1,
+  structure: { id: 'interaction-order', name: 'interactions.pdb', format: 'pdb', data: interactionPdb() },
+  scene: {
+    interactions: { enabled: true, types: { hydrogenBonds: true, saltBridges: false }, includeWater: false },
+    selection: {
+      kind: 'atom',
+      selector: Core.selectorForAtom(orderingParsed.atoms[0], 'atom', 'interaction-order')
+    },
+    measurements: [{
+      id: 'interaction-order-measurement', type: 'distance',
+      atoms: orderingParsed.atoms.map(atom => Core.selectorForAtom(atom, 'atom', 'interaction-order'))
+    }]
+  }
+});
+const orderingRenderer = new context.window.MoleculeRenderer({}, {});
+orderingRenderer.measurementDraft = [orderingParsed.atoms[0]];
+orderingRenderer.setDocument(orderingDoc, { fit: true });
+const foregroundStyleCount = addedStyles.length;
+drawEvents.length = 0;
+for (let toggle = 0; toggle < 20; toggle += 1) {
+  orderingDoc.scene.interactions.enabled = false;
+  orderingRenderer.updateInteractions();
+  orderingDoc.scene.interactions.enabled = true;
+  orderingRenderer.updateInteractions();
+}
+const fastToggleLines = drawEvents.filter(event => event.kind === 'line').slice(-2);
+assert.deepEqual(fastToggleLines.map(event => event.style.linewidth), [1.8, 2],
+  'fast toggles redraw measurement foreground lines after interaction overlays');
+assert.equal(addedStyles.length, foregroundStyleCount,
+  'repeated fast toggles do not append duplicate selection or measurement-draft atom styles');
+
 const exportStructure = Core.parseStructure(authorStructConnCif, 'mmcif');
 const exportAtom = exportStructure.atoms[0];
 const exportTarget = exportStructure.atoms[2];
@@ -255,6 +385,19 @@ function renderExportScale(screenScale, labelScale = screenScale) {
 const currentExport = renderExportScale(1);
 const highResolutionExport = renderExportScale(4);
 const adjustedPixelRatioExport = renderExportScale(1, 1.6);
+addedLines.length = 0;
+const scaledInteractionRenderer = new context.window.MoleculeRenderer({}, {}, {
+  backgroundAlpha: 0, interactive: false, screenScale: 4, labelScale: 4, upscale: false
+});
+scaledInteractionRenderer.setDocument(Core.normalizeDocument({
+  ...interactionDoc,
+  scene: {
+    ...interactionDoc.scene,
+    interactions: { enabled: true, types: { hydrogenBonds: true, saltBridges: false }, includeWater: false }
+  }
+}), { cameraMode: 'snapshot', writeCamera: false });
+assert.equal(addedLines.find(line => line.color === '#49d7ff')?.linewidth, 2,
+  'high-resolution interaction overlays clamp their scaled width to the WebGL range');
 assert.notEqual(webglRenderer.initFrameBuffer, nativeInitFrameBuffer,
   'the hidden non-interactive renderer stabilizes framebuffer reuse');
 assert.equal(framebufferInitCalls, 0, 'the export-only framebuffer shim does not invoke the native resize allocator');

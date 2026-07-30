@@ -408,6 +408,22 @@
       },
       "additionalProperties": true
     },
+    "interactions": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "types": {
+          "type": "object",
+          "properties": {
+            "hydrogenBonds": { "type": "boolean" },
+            "saltBridges": { "type": "boolean" }
+          },
+          "additionalProperties": true
+        },
+        "includeWater": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
     "savedViewSnapshot": {
       "type": "object",
       "properties": {
@@ -416,6 +432,7 @@
         "background": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
         "showHydrogens": { "type": "boolean" },
         "showWater": { "type": "boolean" },
+        "interactions": { "$ref": "#/$defs/interactions" },
         "selection": {
           "oneOf": [
             { "type": "null" },
@@ -476,6 +493,7 @@
         "background": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
         "showHydrogens": { "type": "boolean" },
         "showWater": { "type": "boolean" },
+        "interactions": { "$ref": "#/$defs/interactions" },
         "selection": {
           "oneOf": [
             { "type": "null" },

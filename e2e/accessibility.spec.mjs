@@ -14,11 +14,15 @@ test('has no serious or critical accessibility violations in primary UI states',
   await openArtifact(page);
   expect(await seriousViolations(page)).toEqual([]);
 
-  for (const target of ['representation', 'navigator', 'measurements', 'saved-selections', 'ligands', 'metadata', 'saved-views', 'export']) {
+  for (const target of ['representation', 'navigator', 'measurements', 'saved-selections', 'ligands', 'interactions', 'metadata', 'saved-views', 'export']) {
     await page.locator(`[data-inspector-target="${target}"]`).click();
     await expect(page.locator('#inspector')).toBeVisible();
     expect(await seriousViolations(page)).toEqual([]);
   }
+
+  await page.evaluate(() => window.molhtml.setInteractions({ enabled: true }));
+  await expect(page.locator('#interaction-legend')).toBeVisible();
+  expect(await seriousViolations(page)).toEqual([]);
 
   await page.evaluate(() => {
     const first = window.molhtml.createSavedView({ title: 'Accessible story one', narrative: 'First scene' });

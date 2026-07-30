@@ -8,7 +8,8 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const groups = {
   model: [
     'test-document-schemas.mjs', 'test-structure-model.mjs', 'test-renderer-models.mjs', 'test-measurements.mjs', 'test-saved-selections.mjs', 'test-navigator.mjs',
-    'test-ligand-analysis.mjs', 'test-metadata-quality.mjs', 'test-saved-views.mjs'
+    'test-ligand-analysis.mjs', 'test-metadata-quality.mjs', 'test-saved-views.mjs',
+    'test-interactions.mjs'
   ],
   artifact: [
     'verify.mjs', 'test-license-integrity.mjs', 'test-shell-conformance.mjs',
