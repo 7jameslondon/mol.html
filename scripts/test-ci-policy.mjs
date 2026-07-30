@@ -6,6 +6,7 @@ import { parse } from 'yaml';
 const workflowDirectory = resolve('.github/workflows');
 const workflow = await readFile(resolve(workflowDirectory, 'ci.yml'), 'utf8');
 const pagesWorkflow = await readFile(resolve(workflowDirectory, 'pages.yml'), 'utf8');
+const buildSizeWorkflow = await readFile(resolve(workflowDirectory, 'build-size.yml'), 'utf8');
 const extractActionUses = (source, name = 'workflow') => {
   const actionUses = [];
   const visit = value => {
@@ -68,6 +69,62 @@ assert.doesNotMatch(
   workflow,
   /^\s*(?:run:.*\b(?:publish|release|deploy)\b|-\s*name:.*\b(?:publish|release|deploy)\b)/im,
   'CI contains no release or publishing step'
+);
+
+const buildSizePolicy = parse(buildSizeWorkflow);
+assert.deepEqual(
+  buildSizePolicy.permissions,
+  { contents: 'read', 'pull-requests': 'write' },
+  'Build-size reporting grants only the permissions needed to read artifacts and update PR comments'
+);
+assert.deepEqual(
+  buildSizePolicy.on.workflow_run,
+  { workflows: ['Validate'], types: ['completed'] },
+  'Build-size reporting refreshes from trusted code after PR validation completes'
+);
+assert.deepEqual(
+  buildSizePolicy.on.push.branches,
+  ['main'],
+  'Build-size reporting refreshes open PRs after merge-branch changes'
+);
+assert.equal(
+  buildSizePolicy.on.pull_request_target,
+  undefined,
+  'Dependabot cannot force the comment writer onto a read-only pull-request token'
+);
+assert.equal(
+  buildSizePolicy.on.workflow_dispatch,
+  undefined,
+  'Privileged build-size reporting cannot be dispatched against an untrusted branch'
+);
+assert.deepEqual(
+  buildSizePolicy.concurrency,
+  {
+    group: 'build-size-report-comments',
+    'cancel-in-progress': false,
+    queue: 'max'
+  },
+  'Build-size comment writers are serialized without dropping pending refreshes'
+);
+assert.equal(
+  buildSizePolicy.jobs.report.if,
+  "${{ github.event_name == 'push' || github.event.workflow_run.event == 'pull_request' }}",
+  'Only PR validation completions and direct merge-branch pushes update reports'
+);
+assert.match(
+  buildSizeWorkflow,
+  /workflow_run deliberately checks out only the trusted default branch/,
+  'The privileged PR trigger documents its trust boundary'
+);
+assert.match(
+  buildSizeWorkflow,
+  /node scripts\/report-pr-artifact-size\.mjs/,
+  'Build-size reporting runs the trusted metadata-only reporter'
+);
+assert.doesNotMatch(
+  buildSizeWorkflow,
+  /pnpm|npm|github\.event\.pull_request\.head\.sha|github\.event\.workflow_run\.head_sha/,
+  'Build-size reporting never installs dependencies, builds, or checks out PR code'
 );
 
 const pagesPolicy = parse(pagesWorkflow);

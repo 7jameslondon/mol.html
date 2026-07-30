@@ -1,15 +1,17 @@
-import { readFile, stat } from 'node:fs/promises';
+import { lstat, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { loadLegalNotices, validateBuiltLicenseNotices } from './legal-notices.mjs';
 
 const file = resolve('dist/example.mol.html');
-const html = await readFile(file, 'utf8');
-const legal = await loadLegalNotices(resolve('.'));
 const checks = [];
 const assert = (condition, message) => {
   checks.push({ condition, message });
   if (!condition) throw new Error(`Verification failed: ${message}`);
 };
+const info = await lstat(file);
+assert(info.isFile(), 'artifact path is a regular file, not a symbolic link or special file');
+const html = await readFile(file, 'utf8');
+const legal = await loadLegalNotices(resolve('.'));
 
 assert(html.startsWith('<!DOCTYPE html>'), 'artifact is a complete HTML document');
 assert((html.match(/id="molhtml-doc"/g) || []).length === 1, 'artifact has exactly one document block');
@@ -102,5 +104,4 @@ assert(!html.toLowerCase().includes(legacyProductStem), 'artifact contains no le
 assert(!html.toLowerCase().includes(legacySuffix), 'artifact contains no legacy filename suffixes');
 assert(!html.includes('@playwright/test') && !html.includes('@axe-core/playwright'), 'development-only browser tooling is absent from the artifact');
 
-const info = await stat(file);
 console.log(`Verified ${checks.length} invariants in ${file} (${(info.size / 1024).toFixed(1)} KB)`);

@@ -1,0 +1,385 @@
+import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import {
+  ARTIFACT_PATH,
+  REPORT_MARKER,
+  calculateArtifactSizeDelta,
+  formatArtifactSizeReport,
+  main
+} from './report-pr-artifact-size.mjs';
+
+const pullRequest = {
+  base: { ref: 'main', sha: '1111111111111111111111111111111111111111' },
+  head: { ref: 'feature/build-size', sha: '2222222222222222222222222222222222222222' }
+};
+
+assert.deepEqual(
+  calculateArtifactSizeDelta(1_000_000, 1_025_000),
+  { bytes: 25_000, percent: 2.5 },
+  'size changes are calculated relative to the merge branch'
+);
+assert.deepEqual(
+  calculateArtifactSizeDelta(1_000_000, 900_000),
+  { bytes: -100_000, percent: -10 },
+  'size reductions remain negative'
+);
+assert.deepEqual(
+  calculateArtifactSizeDelta(0, 1),
+  { bytes: 1, percent: null },
+  'a new artifact has no finite relative percentage'
+);
+assert.throws(
+  () => calculateArtifactSizeDelta(-1, 1),
+  /non-negative safe integers/,
+  'invalid byte sizes are rejected'
+);
+
+const report = formatArtifactSizeReport({
+  pullRequest,
+  baseBytes: 1_000_000,
+  headBytes: 1_025_000
+});
+assert.ok(report.startsWith(REPORT_MARKER), 'the report has a stable marker for comment updates');
+assert.match(report, new RegExp(ARTIFACT_PATH.replace('.', '\\.')), 'the report identifies the artifact');
+assert.match(report, /Merge branch `main` \(`1111111`\)/, 'the report identifies the merge branch revision');
+assert.match(report, /PR head `feature\/build-size` \(`2222222`\)/, 'the report identifies the PR revision');
+assert.match(report, /1\.000000 MB.*1,000,000 bytes/, 'the merge-branch size is reported in MB and bytes');
+assert.match(report, /1\.025000 MB.*1,025,000 bytes/, 'the PR size is reported in MB and bytes');
+assert.match(report, /\+0\.025000 MB \(\+2\.50%\)/, 'the absolute and relative increases are signed');
+
+const reduction = formatArtifactSizeReport({
+  pullRequest,
+  baseBytes: 1_000_000,
+  headBytes: 900_000
+});
+assert.match(reduction, /-0\.100000 MB \(-10\.00%\)/, 'reductions are reported with negative signs');
+
+const adversarialRefReport = formatArtifactSizeReport({
+  pullRequest: {
+    ...pullRequest,
+    head: { ...pullRequest.head, ref: 'feature|misleading-cell' }
+  },
+  baseBytes: 1_000_000,
+  headBytes: 1_025_000
+});
+assert.match(
+  adversarialRefReport,
+  /PR head `feature\\\|misleading-cell`/,
+  'pipe characters in refs cannot add cells to the Markdown table'
+);
+
+const temporaryRoot = resolve('test-results');
+await mkdir(temporaryRoot, { recursive: true });
+const temporaryDirectory = await mkdtemp(join(temporaryRoot, 'molhtml-size-report-'));
+const eventPath = join(temporaryDirectory, 'event.json');
+const fallbackEventPath = join(temporaryDirectory, 'fallback-event.json');
+const forkEventPath = join(temporaryDirectory, 'fork-event.json');
+const symlinkEventPath = join(temporaryDirectory, 'symlink-event.json');
+const fallbackSha = '3333333333333333333333333333333333333333';
+const forkSha = '5555555555555555555555555555555555555555';
+const symlinkSha = '6666666666666666666666666666666666666666';
+const apiPullRequest = {
+  number: 22,
+  base: {
+    ref: 'main',
+    sha: pullRequest.base.sha,
+    repo: { full_name: 'owner/repository' }
+  },
+  head: {
+    ref: 'feature/missing-artifact',
+    sha: pullRequest.head.sha,
+    repo: { full_name: 'contributor/repository' }
+  }
+};
+await writeFile(eventPath, JSON.stringify({
+  workflow_run: {
+    event: 'pull_request',
+    pull_requests: [{ number: 22 }]
+  }
+}), 'utf8');
+await writeFile(fallbackEventPath, JSON.stringify({
+  workflow_run: {
+    event: 'pull_request',
+    head_sha: fallbackSha,
+    head_repository: { full_name: 'owner/repository' },
+    pull_requests: []
+  }
+}), 'utf8');
+await writeFile(forkEventPath, JSON.stringify({
+  workflow_run: {
+    event: 'pull_request',
+    head_sha: forkSha,
+    head_repository: { full_name: 'contributor/repository' },
+    pull_requests: []
+  }
+}), 'utf8');
+await writeFile(symlinkEventPath, JSON.stringify({
+  workflow_run: {
+    event: 'pull_request',
+    pull_requests: [{ number: 6 }]
+  }
+}), 'utf8');
+const originalFetch = globalThis.fetch;
+let updatedComment = null;
+let createdFallbackComment = null;
+let createdForkComment = null;
+let symlinkWarningComment = null;
+let crossRepositoryReadAttempts = 0;
+const artifactEntries = new Map([
+  [pullRequest.base.sha, { mode: '100644', size: 1_000_000 }],
+  [fallbackSha, { mode: '100644', size: 1_100_000 }],
+  [forkSha, { mode: '100644', size: 1_200_000 }],
+  [symlinkSha, { mode: '120000', size: 18 }]
+]);
+globalThis.fetch = async (url, options = {}) => {
+  const requestUrl = new URL(url);
+  const method = options.method || 'GET';
+  const json = (body, status = 200) => new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' }
+  });
+
+  if (requestUrl.pathname.startsWith('/repos/contributor/repository/')) {
+    crossRepositoryReadAttempts += 1;
+    return json({ message: 'Not Found' }, 404);
+  }
+  const commitPrefix = '/repos/owner/repository/git/commits/';
+  if (requestUrl.pathname.startsWith(commitPrefix)) {
+    const sha = decodeURIComponent(requestUrl.pathname.slice(commitPrefix.length));
+    return json({ sha, tree: { sha: `root-${sha}` } });
+  }
+  const treePrefix = '/repos/owner/repository/git/trees/';
+  if (requestUrl.pathname.startsWith(treePrefix)) {
+    const treeSha = decodeURIComponent(requestUrl.pathname.slice(treePrefix.length));
+    if (treeSha.startsWith('root-')) {
+      const sha = treeSha.slice('root-'.length);
+      return json({
+        sha: treeSha,
+        tree: [{ path: 'dist', type: 'tree', sha: `dist-${sha}` }]
+      });
+    }
+    if (treeSha.startsWith('dist-')) {
+      const sha = treeSha.slice('dist-'.length);
+      const artifactEntry = artifactEntries.get(sha);
+      return json({
+        sha: treeSha,
+        tree: artifactEntry === undefined
+          ? []
+          : [{
+              path: 'example.mol.html',
+              type: 'blob',
+              mode: artifactEntry.mode,
+              sha: `blob-${sha}`,
+              size: artifactEntry.size
+            }]
+      });
+    }
+  }
+  if (requestUrl.pathname === '/repos/owner/repository/pulls/22') return json(apiPullRequest);
+  if (requestUrl.pathname === '/repos/owner/repository/pulls' && method === 'GET') {
+    return json([{
+      number: 1,
+      state: 'open',
+      head: { sha: fallbackSha, repo: { full_name: 'owner/repository' } },
+      base: { repo: { full_name: 'owner/repository' } }
+    }, {
+      number: 2,
+      state: 'closed',
+      head: { sha: fallbackSha, repo: { full_name: 'owner/repository' } },
+      base: { repo: { full_name: 'owner/repository' } }
+    }, {
+      number: 3,
+      state: 'open',
+      head: {
+        sha: '4444444444444444444444444444444444444444',
+        repo: { full_name: 'owner/repository' }
+      },
+      base: { repo: { full_name: 'owner/repository' } }
+    }, {
+      number: 4,
+      state: 'open',
+      head: { sha: forkSha, repo: { full_name: 'contributor/repository' } },
+      base: { repo: { full_name: 'OWNER/REPOSITORY' } }
+    }, {
+      number: 5,
+      state: 'open',
+      head: { sha: forkSha, repo: { full_name: 'other/repository' } },
+      base: { repo: { full_name: 'owner/repository' } }
+    }]);
+  }
+  if (requestUrl.pathname === '/repos/owner/repository/pulls/1') {
+    return json({
+      number: 1,
+      base: {
+        ref: 'main',
+        sha: pullRequest.base.sha,
+        repo: { full_name: 'owner/repository' }
+      },
+      head: {
+        ref: 'dependabot/npm_and_yarn/example-1.2.3',
+        sha: fallbackSha,
+        repo: { full_name: 'owner/repository' }
+      }
+    });
+  }
+  if (requestUrl.pathname === '/repos/owner/repository/pulls/4') {
+    return json({
+      number: 4,
+      base: {
+        ref: 'main',
+        sha: pullRequest.base.sha,
+        repo: { full_name: 'owner/repository' }
+      },
+      head: {
+        ref: 'feature/fork-build-size',
+        sha: forkSha,
+        repo: { full_name: 'contributor/repository' }
+      }
+    });
+  }
+  if (requestUrl.pathname === '/repos/owner/repository/pulls/6') {
+    return json({
+      number: 6,
+      base: {
+        ref: 'main',
+        sha: pullRequest.base.sha,
+        repo: { full_name: 'owner/repository' }
+      },
+      head: {
+        ref: 'feature/symlink-artifact',
+        sha: symlinkSha,
+        repo: { full_name: 'owner/repository' }
+      }
+    });
+  }
+  if (requestUrl.pathname === '/repos/owner/repository/issues/22/comments' && method === 'GET') {
+    return json([{
+      id: 7,
+      user: { login: 'github-actions[bot]' },
+      body: `${REPORT_MARKER}\nPrevious successful size report`
+    }]);
+  }
+  if (requestUrl.pathname === '/repos/owner/repository/issues/comments/7' && method === 'PATCH') {
+    updatedComment = JSON.parse(options.body).body;
+    return json({ id: 7, body: updatedComment });
+  }
+  if (requestUrl.pathname === '/repos/owner/repository/issues/1/comments' && method === 'GET') {
+    return json([]);
+  }
+  if (requestUrl.pathname === '/repos/owner/repository/issues/1/comments' && method === 'POST') {
+    createdFallbackComment = JSON.parse(options.body).body;
+    return json({ id: 8, body: createdFallbackComment });
+  }
+  if (requestUrl.pathname === '/repos/owner/repository/issues/4/comments' && method === 'GET') {
+    return json([]);
+  }
+  if (requestUrl.pathname === '/repos/owner/repository/issues/4/comments' && method === 'POST') {
+    createdForkComment = JSON.parse(options.body).body;
+    return json({ id: 9, body: createdForkComment });
+  }
+  if (requestUrl.pathname === '/repos/owner/repository/issues/6/comments' && method === 'GET') {
+    return json([]);
+  }
+  if (requestUrl.pathname === '/repos/owner/repository/issues/6/comments' && method === 'POST') {
+    symlinkWarningComment = JSON.parse(options.body).body;
+    return json({ id: 10, body: symlinkWarningComment });
+  }
+  throw new Error(`Unexpected test request: ${method} ${requestUrl}`);
+};
+
+try {
+  await assert.rejects(
+    main({
+      GITHUB_REPOSITORY: 'owner/repository',
+      GITHUB_EVENT_PATH: eventPath,
+      GITHUB_TOKEN: 'test-token',
+      GITHUB_API_URL: 'https://api.example.test'
+    }),
+    /Could not update every build-size report.*not a regular file blob with a reported byte size/s,
+    'the workflow still fails when the current head artifact is missing'
+  );
+  assert.ok(updatedComment?.startsWith(REPORT_MARKER), 'the missing artifact replaces the existing sticky report');
+  assert.doesNotMatch(updatedComment, /Previous successful size report/, 'the old successful report is removed');
+  assert.match(updatedComment, /PR head `feature\/missing-artifact` \(`2222222`\)/, 'the warning identifies the current head');
+  assert.match(updatedComment, /Merge branch.*1\.000000 MB.*1,000,000 bytes/, 'the readable base size remains visible');
+  assert.match(updatedComment, /PR head.*\*\*Unavailable\*\*/, 'the missing head artifact is explicit');
+  assert.match(updatedComment, /Change vs merge branch.*\*\*Unavailable\*\*/, 'no stale relative change is displayed');
+
+  await main({
+    GITHUB_REPOSITORY: 'owner/repository',
+    GITHUB_EVENT_PATH: fallbackEventPath,
+    GITHUB_TOKEN: 'test-token',
+    GITHUB_API_URL: 'https://api.example.test'
+  });
+  assert.ok(
+    createdFallbackComment?.startsWith(REPORT_MARKER),
+    'an empty workflow-run association falls back to the triggering commit'
+  );
+  assert.match(
+    createdFallbackComment,
+    /PR head `dependabot\/npm_and_yarn\/example-1\.2\.3` \(`3333333`\)/,
+    'the recovered open PR receives a report for the triggering head'
+  );
+  assert.match(
+    createdFallbackComment,
+    /\+0\.100000 MB \(\+10\.00%\)/,
+    'the recovered PR report compares the current head with its merge branch'
+  );
+
+  await main({
+    GITHUB_REPOSITORY: 'owner/repository',
+    GITHUB_EVENT_PATH: forkEventPath,
+    GITHUB_TOKEN: 'test-token',
+    GITHUB_API_URL: 'https://api.example.test'
+  });
+  assert.ok(
+    createdForkComment?.startsWith(REPORT_MARKER),
+    'an empty fork workflow-run association is recovered from current base-repository PRs'
+  );
+  assert.match(
+    createdForkComment,
+    /PR head `feature\/fork-build-size` \(`5555555`\)/,
+    'the recovered fork PR receives a report for the triggering head'
+  );
+  assert.match(
+    createdForkComment,
+    /\+0\.200000 MB \(\+20\.00%\)/,
+    'the recovered fork report compares the current head with its merge branch'
+  );
+  assert.equal(
+    crossRepositoryReadAttempts,
+    0,
+    'fork artifacts are measured through base-repository PR Git objects without reading the private fork'
+  );
+
+  await assert.rejects(
+    main({
+      GITHUB_REPOSITORY: 'owner/repository',
+      GITHUB_EVENT_PATH: symlinkEventPath,
+      GITHUB_TOKEN: 'test-token',
+      GITHUB_API_URL: 'https://api.example.test'
+    }),
+    /Could not update every build-size report.*not a regular file blob with a reported byte size/s,
+    'a symlink blob is never reported as the HTML artifact size'
+  );
+  assert.ok(
+    symlinkWarningComment?.startsWith(REPORT_MARKER),
+    'a symlink artifact replaces any size report with a current unavailable warning'
+  );
+  assert.match(
+    symlinkWarningComment,
+    /PR head `feature\/symlink-artifact` \(`6666666`\).*\*\*Unavailable\*\*/s,
+    'the symlink warning identifies the rejected head revision'
+  );
+} finally {
+  globalThis.fetch = originalFetch;
+  await rm(temporaryDirectory, {
+    recursive: true,
+    force: true,
+    maxRetries: process.platform === 'win32' ? 5 : 0,
+    retryDelay: 100
+  });
+}
+
+console.log('PR artifact-size report tests passed.');

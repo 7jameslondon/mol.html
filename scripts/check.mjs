@@ -13,7 +13,7 @@ const groups = {
   ],
   artifact: [
     'verify.mjs', 'test-license-integrity.mjs', 'test-shell-conformance.mjs',
-    'test-roundtrip.mjs', 'test-artifact-budget.mjs', 'test-ci-policy.mjs'
+    'test-roundtrip.mjs', 'test-artifact-budget.mjs', 'test-pr-artifact-size-report.mjs', 'test-ci-policy.mjs'
   ]
 };
 
