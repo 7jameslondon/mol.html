@@ -711,6 +711,73 @@
       return generation;
     }
 
+    getExportCanvas(generation, expectedWidth, expectedHeight) {
+      if (generation !== this.surfaceGeneration) {
+        throw new Error('The requested render generation was superseded.');
+      }
+      const canvas = this.viewer.getCanvas?.();
+      if (!(canvas instanceof HTMLCanvasElement) || !canvas.isConnected) {
+        throw new Error('The export canvas is unavailable.');
+      }
+      const exact = this.getSizingInfo();
+      if (exact.contextLost) {
+        const error = new Error('The export WebGL context was lost.');
+        error.code = 'renderer-context-lost';
+        throw error;
+      }
+      const width = Number(expectedWidth);
+      const height = Number(expectedHeight);
+      if (exact.width !== width || exact.height !== height
+        || exact.drawingBufferWidth !== width || exact.drawingBufferHeight !== height) {
+        const error = new Error(
+          `The browser created ${exact.width} x ${exact.height} canvas pixels and `
+          + `${exact.drawingBufferWidth} x ${exact.drawingBufferHeight} WebGL pixels instead of `
+          + `${width} x ${height}.`
+        );
+        error.code = 'renderer-dimension-mismatch';
+        throw error;
+      }
+      return canvas;
+    }
+
+    renderTurntableFrame(generation, initialView, angle, axis = 'vy') {
+      if (generation !== this.surfaceGeneration) {
+        throw new Error('The requested render generation was superseded.');
+      }
+      if (!Array.isArray(initialView) || initialView.length !== 8
+        || initialView.some(value => !Number.isFinite(value))) {
+        throw new TypeError('A turntable frame requires an eight-number initial view.');
+      }
+      if (!Number.isFinite(angle)) throw new TypeError('A turntable frame angle must be finite.');
+      if (!['vx', 'vy', 'vz'].includes(axis)) throw new TypeError('A turntable frame axis must be viewer-relative.');
+      const axisComponents = {
+        vx: [1, 0, 0],
+        vy: [0, 1, 0],
+        vz: [0, 0, 1]
+      }[axis];
+      const initialRotation = new ThreeDmol.Quaternion(
+        initialView[4], initialView[5], initialView[6], initialView[7]
+      );
+      const rotationAxis = new ThreeDmol.Vector3(...axisComponents).applyQuaternion(initialRotation);
+      const halfAngle = Math.PI * angle / 360;
+      const sine = Math.sin(halfAngle);
+      const deltaRotation = new ThreeDmol.Quaternion(
+        rotationAxis.x * sine,
+        rotationAxis.y * sine,
+        rotationAxis.z * sine,
+        Math.cos(halfAngle)
+      ).normalize();
+      const finalRotation = new ThreeDmol.Quaternion().copy(initialRotation).multiply(deltaRotation);
+      const frameView = [...initialView];
+      frameView.splice(4, 4, finalRotation.x, finalRotation.y, finalRotation.z, finalRotation.w);
+      this.viewer.setView(frameView);
+      if (this.getSizingInfo().contextLost) {
+        const error = new Error('The export WebGL context was lost.');
+        error.code = 'renderer-context-lost';
+        throw error;
+      }
+    }
+
     capturePNG(generation, { width, height, backgroundAlpha = this.options.backgroundAlpha } = {}) {
       if (generation !== this.surfaceGeneration) {
         return Promise.reject(new Error('The requested render generation was superseded.'));
@@ -721,19 +788,12 @@
       this.setOutputSize(requestedWidth, requestedHeight);
       this.applyBackground();
       this.viewer.render();
-      const exact = this.getSizingInfo();
-      if (exact.contextLost) return Promise.reject(new Error('The export WebGL context was lost.'));
-      if (exact.width !== requestedWidth || exact.height !== requestedHeight
-        || exact.drawingBufferWidth !== requestedWidth || exact.drawingBufferHeight !== requestedHeight) {
-        const error = new Error(
-          `The browser created ${exact.width} x ${exact.height} canvas pixels and `
-          + `${exact.drawingBufferWidth} x ${exact.drawingBufferHeight} WebGL pixels instead of `
-          + `${requestedWidth} x ${requestedHeight}.`
-        );
-        error.code = 'renderer-dimension-mismatch';
+      let canvas;
+      try {
+        canvas = this.getExportCanvas(generation, requestedWidth, requestedHeight);
+      } catch (error) {
         return Promise.reject(error);
       }
-      const canvas = this.viewer.getCanvas?.();
       return new Promise((resolve, reject) => {
         try {
           canvas.toBlob(blob => resolve(blob), 'image/png');

@@ -64,6 +64,15 @@ assert(html.includes('data-inspector-target="saved-views"') && html.includes('id
 assert(html.includes('id="story-overlay"') && html.includes('startStory(id)'), 'artifact includes presentation story controls and API');
 assert(html.includes('data-inspector-target="export"') && html.includes('id="export-download"'), 'artifact includes the PNG export command and inspector');
 assert(html.includes('renderPNG(options') && html.includes('copyImage(options'), 'artifact exposes PNG render, download, and clipboard APIs');
+assert(html.includes('id="turntable-download"') && html.includes('id="turntable-cancel"')
+  && html.includes('id="turntable-progress"') && html.includes('id="turntable-summary"'),
+  'artifact includes turntable configuration, progress, download, and cancellation controls');
+assert(html.includes('renderTurntable(options') && html.includes('downloadTurntable(options')
+  && html.includes('getTurntableCapabilities()'), 'artifact exposes turntable render, download, and capability APIs');
+assert(html.includes('captureStream(0)') && html.includes('requestFrame()') && html.includes('recorder.start(1000)'),
+  'artifact uses manual canvas-frame capture and incremental MediaRecorder chunks');
+assert(html.includes('export-video-unsupported') && html.includes('export-video-encode')
+  && html.includes('export-cancelled'), 'artifact includes stable video export error codes');
 
 const match = html.match(/<script type="application\/molhtml\+json" id="molhtml-doc">\s*([\s\S]*?)\s*<\/script>/i);
 assert(Boolean(match), 'document JSON can be extracted with a simple splice contract');
