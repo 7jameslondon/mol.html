@@ -382,10 +382,10 @@
             const initialView = structuredClone(job.document.scene.camera.view);
             let firstFrameSubmittedAt = this.now();
             await session.start(job.signal, contextLoss.promise, () => {
+              session.requestFrame();
               renderer.renderTurntableFrame(
                 generation, initialView, turntableAngle(0, job.options.frameCount, job.options.direction), 'vy'
               );
-              session.requestFrame();
               firstFrameSubmittedAt = this.now();
             });
             await session.raceTerminal(this.nextAnimationFrame(job.signal), job.signal, contextLoss.promise);
@@ -418,7 +418,7 @@
             };
           } catch (error) {
             const mapped = mapVideoError(error, job.signal);
-            const canRetry = candidate.mimeType && !session?.hasStarted && !session?.hasSubmittedFrame
+            const canRetry = candidate.mimeType && !session?.hasStarted
               && (error?.name === 'NotSupportedError' || error?.molhtmlExplicitMimeRejected === true);
             if (canRetry) {
               lastUnsupported = mapped;
@@ -452,10 +452,10 @@
         await session.raceTerminal(
           this.waitUntil(startedAt + index * frameInterval, job.signal), job.signal, contextLossPromise
         );
+        session.requestFrame();
         renderer.renderTurntableFrame(
           generation, initialView, turntableAngle(index, frameCount, direction), 'vy'
         );
-        session.requestFrame();
         submittedFrameCount += 1;
         lastFrameSubmittedAt = this.now();
         await session.raceTerminal(this.nextAnimationFrame(job.signal), job.signal, contextLossPromise);
@@ -702,7 +702,10 @@
         });
         this.attach('error', event => {
           const detail = event?.error?.message || event?.message || 'The video recorder reported an error.';
-          this.latchTerminal(new ExportVideoEncodeError(detail, { cause: event?.error }));
+          const cause = event?.error;
+          this.latchTerminal(!this.hasStarted && cause?.name === 'NotSupportedError'
+            ? cause
+            : new ExportVideoEncodeError(detail, { cause }));
         });
         this.attach('stop', () => {
           if (this.disposed) return;
@@ -757,6 +760,8 @@
         this.state = 'failed';
         throw error;
       }
+      // Chromium does not emit `start` for a manual canvas stream until its first
+      // requested paint. A pre-start NotSupportedError is still safe to retry.
       if (typeof submitInitialFrame === 'function') submitInitialFrame();
       await this.waitForEvent(
         this.startEvent.promise, this.service.recorderStartTimeoutMs,

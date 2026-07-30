@@ -750,8 +750,27 @@
       }
       if (!Number.isFinite(angle)) throw new TypeError('A turntable frame angle must be finite.');
       if (!['vx', 'vy', 'vz'].includes(axis)) throw new TypeError('A turntable frame axis must be viewer-relative.');
-      this.viewer.setView(structuredClone(initialView));
-      this.viewer.rotate(angle, axis, 0);
+      const axisComponents = {
+        vx: [1, 0, 0],
+        vy: [0, 1, 0],
+        vz: [0, 0, 1]
+      }[axis];
+      const initialRotation = new ThreeDmol.Quaternion(
+        initialView[4], initialView[5], initialView[6], initialView[7]
+      );
+      const rotationAxis = new ThreeDmol.Vector3(...axisComponents).applyQuaternion(initialRotation);
+      const halfAngle = Math.PI * angle / 360;
+      const sine = Math.sin(halfAngle);
+      const deltaRotation = new ThreeDmol.Quaternion(
+        rotationAxis.x * sine,
+        rotationAxis.y * sine,
+        rotationAxis.z * sine,
+        Math.cos(halfAngle)
+      ).normalize();
+      const finalRotation = new ThreeDmol.Quaternion().copy(initialRotation).multiply(deltaRotation);
+      const frameView = [...initialView];
+      frameView.splice(4, 4, finalRotation.x, finalRotation.y, finalRotation.z, finalRotation.w);
+      this.viewer.setView(frameView);
       if (this.getSizingInfo().contextLost) {
         const error = new Error('The export WebGL context was lost.');
         error.code = 'renderer-context-lost';

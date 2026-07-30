@@ -69,8 +69,7 @@ test('renderer applies absolute viewer-relative frames without mutating camera s
     renderer.callbacks = { onCamera() { calls.push(['camera']); } };
     renderer.viewer = {
       getCanvas: () => canvas,
-      setView(view) { calls.push(['setView', view]); view[0] = 999; },
-      rotate(angle, axis, duration) { calls.push(['rotate', angle, axis, duration]); }
+      setView(view) { calls.push(['setView', [...view]]); view[0] = 999; }
     };
     renderer.getSizingInfo = () => ({
       width: 128, height: 96, drawingBufferWidth: 128, drawingBufferHeight: 96, contextLost
@@ -102,10 +101,13 @@ test('renderer applies absolute viewer-relative frames without mutating camera s
     };
   });
 
-  expect(result.calls).toEqual([
-    ['setView', [999, 2, 3, 4, 0, 0, 0, 1]],
-    ['rotate', -45, 'vy', 0]
-  ]);
+  expect(result.calls).toHaveLength(1);
+  expect(result.calls[0][0]).toBe('setView');
+  expect(result.calls[0][1].slice(0, 4)).toEqual([1, 2, 3, 4]);
+  expect(result.calls[0][1][4]).toBeCloseTo(0, 10);
+  expect(result.calls[0][1][5]).toBeCloseTo(-0.3826834324, 10);
+  expect(result.calls[0][1][6]).toBeCloseTo(0, 10);
+  expect(result.calls[0][1][7]).toBeCloseTo(0.9238795325, 10);
   expect(result.initialView).toEqual([1, 2, 3, 4, 0, 0, 0, 1]);
   expect(result.exportCanvas).toBe(true);
   expect(result.cameraUnchanged).toBe(true);
@@ -134,6 +136,7 @@ test('falls back before recorder start and releases every fake media resource', 
     const attempts = [];
     const tracks = [];
     const angles = [];
+    const capturedAngles = [];
     const progress = [];
     const sequence = [];
     const completeStates = [];
@@ -143,8 +146,8 @@ test('falls back before recorder start and releases every fake media resource', 
     document.body.appendChild(canvas);
     canvas.captureStream = () => {
       const track = {
-        readyState: 'live', requests: 0, stops: 0,
-        requestFrame() { this.requests += 1; sequence.push('request'); },
+        readyState: 'live', requests: 0, stops: 0, captureArmed: false,
+        requestFrame() { this.requests += 1; this.captureArmed = true; sequence.push('request'); },
         stop() { this.stops += 1; this.readyState = 'ended'; }
       };
       tracks.push(track);
@@ -157,15 +160,24 @@ test('falls back before recorder start and releases every fake media resource', 
       constructor(stream, options) {
         super();
         attempts.push(options.mimeType || 'browser');
-        if (options.mimeType === 'video/mp4;codecs=avc1') throw new DOMException('no encoder', 'NotSupportedError');
         this.state = 'inactive';
         this.mimeType = options.mimeType || 'video/webm';
         this.videoBitsPerSecond = options.videoBitsPerSecond;
+        stream.getVideoTracks()[0].captureForRecorder = this.mimeType !== 'video/mp4;codecs=avc1';
       }
       start(timeslice) {
         this.timeslice = timeslice;
         this.state = 'recording';
-        queueMicrotask(() => this.dispatchEvent(new Event('start')));
+        queueMicrotask(() => {
+          if (this.mimeType === 'video/mp4;codecs=avc1') {
+            this.state = 'inactive';
+            const event = new Event('error');
+            Object.defineProperty(event, 'error', {
+              value: new DOMException('no encoder', 'NotSupportedError')
+            });
+            this.dispatchEvent(event);
+          } else this.dispatchEvent(new Event('start'));
+        });
       }
       stop() {
         this.state = 'inactive';
@@ -193,6 +205,11 @@ test('falls back before recorder start and releases every fake media resource', 
       renderTurntableFrame(generation, view, angle, axis) {
         angles.push({ generation, view: [...view], angle, axis });
         sequence.push(`render:${angle}`);
+        const track = tracks.findLast(candidate => candidate.readyState === 'live');
+        if (track?.captureArmed && track.captureForRecorder) {
+          capturedAngles.push(angle);
+          track.captureArmed = false;
+        }
       },
       resetAfterExport() { resets += 1; return true; },
       resourceCounts: () => ({ models: 0, shapes: 0, labels: 0, surfaces: 0 })
@@ -249,6 +266,7 @@ test('falls back before recorder start and releases every fake media resource', 
       attempts,
       tracks: tracks.map(track => ({ requests: track.requests, stops: track.stops, readyState: track.readyState })),
       angles,
+      capturedAngles,
       progress,
       sequence,
       completeStates,
@@ -264,14 +282,22 @@ test('falls back before recorder start and releases every fake media resource', 
 
   expect(result.attempts).toEqual(Array(3).fill(['video/mp4;codecs=avc1', 'video/webm;codecs=vp8']).flat());
   expect(result.tracks).toEqual(Array(3).fill([
-    { requests: 0, stops: 1, readyState: 'ended' },
+    { requests: 1, stops: 1, readyState: 'ended' },
     { requests: 48, stops: 1, readyState: 'ended' }
   ]).flat());
-  expect(result.angles).toHaveLength(144);
+  expect(result.angles).toHaveLength(147);
   expect(result.angles[0]).toMatchObject({ angle: 0, axis: 'vy' });
-  expect(result.angles[47].angle).toBe(352.5);
-  expect(result.angles[48].angle).toBe(0);
+  expect(result.angles[1]).toMatchObject({ angle: 0, axis: 'vy' });
+  expect(result.angles[48].angle).toBe(352.5);
+  expect(result.angles[49].angle).toBe(0);
+  expect(result.angles[50].angle).toBe(0);
   expect(result.angles.at(-1).angle).toBe(352.5);
+  expect(result.capturedAngles).toHaveLength(144);
+  for (let offset = 0; offset < result.capturedAngles.length; offset += 48) {
+    expect(result.capturedAngles.slice(offset, offset + 48)).toEqual(
+      Array.from({ length: 48 }, (_, index) => index * 7.5)
+    );
+  }
   expect(result.resets).toBe(3);
   expect(result.blobs).toHaveLength(2);
   expect(result.blobs.every(blob => blob.type === 'video/webm;codecs=vp8' && blob.size > 0)).toBe(true);
@@ -290,9 +316,13 @@ test('falls back before recorder start and releases every fake media resource', 
   expect(result.immutable).toBe(true);
   expect(result.permissionCalls).toEqual([]);
   expect(result.progress.filter(record => record.phase === 'complete')).toHaveLength(3);
-  const initialFrameIndex = result.sequence.indexOf('render:0');
+  const initialFrameIndex = result.sequence.findIndex((entry, index) => (
+    entry === 'request'
+      && result.sequence[index + 1] === 'render:0'
+      && result.sequence[index + 2] === 'animation-frame'
+  ));
   expect(result.sequence.slice(initialFrameIndex, initialFrameIndex + 4)).toEqual([
-    'render:0', 'request', 'animation-frame', 'task'
+    'request', 'render:0', 'animation-frame', 'task'
   ]);
   expect(result.completeStates).toHaveLength(3);
   expect(result.completeStates.every(state => (

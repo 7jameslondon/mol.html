@@ -5761,8 +5761,27 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
       }
       if (!Number.isFinite(angle)) throw new TypeError('A turntable frame angle must be finite.');
       if (!['vx', 'vy', 'vz'].includes(axis)) throw new TypeError('A turntable frame axis must be viewer-relative.');
-      this.viewer.setView(structuredClone(initialView));
-      this.viewer.rotate(angle, axis, 0);
+      const axisComponents = {
+        vx: [1, 0, 0],
+        vy: [0, 1, 0],
+        vz: [0, 0, 1]
+      }[axis];
+      const initialRotation = new ThreeDmol.Quaternion(
+        initialView[4], initialView[5], initialView[6], initialView[7]
+      );
+      const rotationAxis = new ThreeDmol.Vector3(...axisComponents).applyQuaternion(initialRotation);
+      const halfAngle = Math.PI * angle / 360;
+      const sine = Math.sin(halfAngle);
+      const deltaRotation = new ThreeDmol.Quaternion(
+        rotationAxis.x * sine,
+        rotationAxis.y * sine,
+        rotationAxis.z * sine,
+        Math.cos(halfAngle)
+      ).normalize();
+      const finalRotation = new ThreeDmol.Quaternion().copy(initialRotation).multiply(deltaRotation);
+      const frameView = [...initialView];
+      frameView.splice(4, 4, finalRotation.x, finalRotation.y, finalRotation.z, finalRotation.w);
+      this.viewer.setView(frameView);
       if (this.getSizingInfo().contextLost) {
         const error = new Error('The export WebGL context was lost.');
         error.code = 'renderer-context-lost';
@@ -6432,10 +6451,10 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
             const initialView = structuredClone(job.document.scene.camera.view);
             let firstFrameSubmittedAt = this.now();
             await session.start(job.signal, contextLoss.promise, () => {
+              session.requestFrame();
               renderer.renderTurntableFrame(
                 generation, initialView, turntableAngle(0, job.options.frameCount, job.options.direction), 'vy'
               );
-              session.requestFrame();
               firstFrameSubmittedAt = this.now();
             });
             await session.raceTerminal(this.nextAnimationFrame(job.signal), job.signal, contextLoss.promise);
@@ -6468,7 +6487,7 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
             };
           } catch (error) {
             const mapped = mapVideoError(error, job.signal);
-            const canRetry = candidate.mimeType && !session?.hasStarted && !session?.hasSubmittedFrame
+            const canRetry = candidate.mimeType && !session?.hasStarted
               && (error?.name === 'NotSupportedError' || error?.molhtmlExplicitMimeRejected === true);
             if (canRetry) {
               lastUnsupported = mapped;
@@ -6502,10 +6521,10 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         await session.raceTerminal(
           this.waitUntil(startedAt + index * frameInterval, job.signal), job.signal, contextLossPromise
         );
+        session.requestFrame();
         renderer.renderTurntableFrame(
           generation, initialView, turntableAngle(index, frameCount, direction), 'vy'
         );
-        session.requestFrame();
         submittedFrameCount += 1;
         lastFrameSubmittedAt = this.now();
         await session.raceTerminal(this.nextAnimationFrame(job.signal), job.signal, contextLossPromise);
@@ -6752,7 +6771,10 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         });
         this.attach('error', event => {
           const detail = event?.error?.message || event?.message || 'The video recorder reported an error.';
-          this.latchTerminal(new ExportVideoEncodeError(detail, { cause: event?.error }));
+          const cause = event?.error;
+          this.latchTerminal(!this.hasStarted && cause?.name === 'NotSupportedError'
+            ? cause
+            : new ExportVideoEncodeError(detail, { cause }));
         });
         this.attach('stop', () => {
           if (this.disposed) return;
@@ -6807,6 +6829,8 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
         this.state = 'failed';
         throw error;
       }
+      // Chromium does not emit `start` for a manual canvas stream until its first
+      // requested paint. A pre-start NotSupportedError is still safe to retry.
       if (typeof submitInitialFrame === 'function') submitInitialFrame();
       await this.waitForEvent(
         this.startEvent.promise, this.service.recorderStartTimeoutMs,
