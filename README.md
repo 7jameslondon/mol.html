@@ -227,12 +227,3 @@ symmetry mates, predict protonation, or model solvent energetics.
 
 See [AGENT_GUIDE.md](AGENT_GUIDE.md). Agents should edit only the plaintext
 `#molhtml-doc` JSON block, increment `revision`, and preserve unknown fields.
-
-## License
-
-The mol.html project code is available under the [MIT License](LICENSE).
-Third-party terms and attributions are recorded in
-[THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt). Every built `.mol.html`
-file embeds both texts in a canonical, integrity-checked notice block. Dependency
-or renderer-bundle changes require an explicit review and update of
-`legal/third-party-manifest.json`; otherwise the build fails.
