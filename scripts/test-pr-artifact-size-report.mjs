@@ -75,8 +75,10 @@ const temporaryDirectory = await mkdtemp(join(temporaryRoot, 'molhtml-size-repor
 const eventPath = join(temporaryDirectory, 'event.json');
 const fallbackEventPath = join(temporaryDirectory, 'fallback-event.json');
 const forkEventPath = join(temporaryDirectory, 'fork-event.json');
+const symlinkEventPath = join(temporaryDirectory, 'symlink-event.json');
 const fallbackSha = '3333333333333333333333333333333333333333';
 const forkSha = '5555555555555555555555555555555555555555';
+const symlinkSha = '6666666666666666666666666666666666666666';
 const apiPullRequest = {
   number: 22,
   base: {
@@ -112,15 +114,23 @@ await writeFile(forkEventPath, JSON.stringify({
     pull_requests: []
   }
 }), 'utf8');
+await writeFile(symlinkEventPath, JSON.stringify({
+  workflow_run: {
+    event: 'pull_request',
+    pull_requests: [{ number: 6 }]
+  }
+}), 'utf8');
 const originalFetch = globalThis.fetch;
 let updatedComment = null;
 let createdFallbackComment = null;
 let createdForkComment = null;
+let symlinkWarningComment = null;
 let crossRepositoryReadAttempts = 0;
-const artifactSizes = new Map([
-  [pullRequest.base.sha, 1_000_000],
-  [fallbackSha, 1_100_000],
-  [forkSha, 1_200_000]
+const artifactEntries = new Map([
+  [pullRequest.base.sha, { mode: '100644', size: 1_000_000 }],
+  [fallbackSha, { mode: '100644', size: 1_100_000 }],
+  [forkSha, { mode: '100644', size: 1_200_000 }],
+  [symlinkSha, { mode: '120000', size: 18 }]
 ]);
 globalThis.fetch = async (url, options = {}) => {
   const requestUrl = new URL(url);
@@ -151,12 +161,18 @@ globalThis.fetch = async (url, options = {}) => {
     }
     if (treeSha.startsWith('dist-')) {
       const sha = treeSha.slice('dist-'.length);
-      const size = artifactSizes.get(sha);
+      const artifactEntry = artifactEntries.get(sha);
       return json({
         sha: treeSha,
-        tree: size === undefined
+        tree: artifactEntry === undefined
           ? []
-          : [{ path: 'example.mol.html', type: 'blob', sha: `blob-${sha}`, size }]
+          : [{
+              path: 'example.mol.html',
+              type: 'blob',
+              mode: artifactEntry.mode,
+              sha: `blob-${sha}`,
+              size: artifactEntry.size
+            }]
       });
     }
   }
@@ -222,6 +238,21 @@ globalThis.fetch = async (url, options = {}) => {
       }
     });
   }
+  if (requestUrl.pathname === '/repos/owner/repository/pulls/6') {
+    return json({
+      number: 6,
+      base: {
+        ref: 'main',
+        sha: pullRequest.base.sha,
+        repo: { full_name: 'owner/repository' }
+      },
+      head: {
+        ref: 'feature/symlink-artifact',
+        sha: symlinkSha,
+        repo: { full_name: 'owner/repository' }
+      }
+    });
+  }
   if (requestUrl.pathname === '/repos/owner/repository/issues/22/comments' && method === 'GET') {
     return json([{
       id: 7,
@@ -247,6 +278,13 @@ globalThis.fetch = async (url, options = {}) => {
     createdForkComment = JSON.parse(options.body).body;
     return json({ id: 9, body: createdForkComment });
   }
+  if (requestUrl.pathname === '/repos/owner/repository/issues/6/comments' && method === 'GET') {
+    return json([]);
+  }
+  if (requestUrl.pathname === '/repos/owner/repository/issues/6/comments' && method === 'POST') {
+    symlinkWarningComment = JSON.parse(options.body).body;
+    return json({ id: 10, body: symlinkWarningComment });
+  }
   throw new Error(`Unexpected test request: ${method} ${requestUrl}`);
 };
 
@@ -258,7 +296,7 @@ try {
       GITHUB_TOKEN: 'test-token',
       GITHUB_API_URL: 'https://api.example.test'
     }),
-    /Could not update every build-size report.*not a blob with a reported byte size/s,
+    /Could not update every build-size report.*not a regular file blob with a reported byte size/s,
     'the workflow still fails when the current head artifact is missing'
   );
   assert.ok(updatedComment?.startsWith(REPORT_MARKER), 'the missing artifact replaces the existing sticky report');
@@ -313,6 +351,26 @@ try {
     crossRepositoryReadAttempts,
     0,
     'fork artifacts are measured through base-repository PR Git objects without reading the private fork'
+  );
+
+  await assert.rejects(
+    main({
+      GITHUB_REPOSITORY: 'owner/repository',
+      GITHUB_EVENT_PATH: symlinkEventPath,
+      GITHUB_TOKEN: 'test-token',
+      GITHUB_API_URL: 'https://api.example.test'
+    }),
+    /Could not update every build-size report.*not a regular file blob with a reported byte size/s,
+    'a symlink blob is never reported as the HTML artifact size'
+  );
+  assert.ok(
+    symlinkWarningComment?.startsWith(REPORT_MARKER),
+    'a symlink artifact replaces any size report with a current unavailable warning'
+  );
+  assert.match(
+    symlinkWarningComment,
+    /PR head `feature\/symlink-artifact` \(`6666666`\).*\*\*Unavailable\*\*/s,
+    'the symlink warning identifies the rejected head revision'
   );
 } finally {
   globalThis.fetch = originalFetch;

@@ -7,6 +7,7 @@ export const REPORT_MARKER = '<!-- molhtml-build-size-report -->';
 
 const API_VERSION = '2022-11-28';
 const MEGABYTE = 1_000_000;
+const REGULAR_BLOB_MODES = new Set(['100644', '100755']);
 
 const inlineCode = value => `\`${String(value).replaceAll('|', '\\|').replaceAll('`', '\u02cb')}\``;
 const shortSha = sha => String(sha).slice(0, 7);
@@ -140,8 +141,12 @@ async function getArtifactSize(request, repository, sha) {
     const entry = tree.tree.find(candidate => candidate.path === pathPart);
     const isArtifact = index === pathParts.length - 1;
     if (isArtifact) {
-      if (entry?.type !== 'blob' || !Number.isSafeInteger(entry.size)) {
-        throw new Error(`${ARTIFACT_PATH} at ${repository}@${sha} is not a blob with a reported byte size.`);
+      if (
+        entry?.type !== 'blob'
+        || !REGULAR_BLOB_MODES.has(entry.mode)
+        || !Number.isSafeInteger(entry.size)
+      ) {
+        throw new Error(`${ARTIFACT_PATH} at ${repository}@${sha} is not a regular file blob with a reported byte size.`);
       }
       return entry.size;
     }
