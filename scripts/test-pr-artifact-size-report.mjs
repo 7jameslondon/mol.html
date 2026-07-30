@@ -73,6 +73,8 @@ const temporaryRoot = resolve('test-results');
 await mkdir(temporaryRoot, { recursive: true });
 const temporaryDirectory = await mkdtemp(join(temporaryRoot, 'molhtml-size-report-'));
 const eventPath = join(temporaryDirectory, 'event.json');
+const fallbackEventPath = join(temporaryDirectory, 'fallback-event.json');
+const fallbackSha = '3333333333333333333333333333333333333333';
 const apiPullRequest = {
   number: 22,
   base: {
@@ -92,8 +94,16 @@ await writeFile(eventPath, JSON.stringify({
     pull_requests: [{ number: 22 }]
   }
 }), 'utf8');
+await writeFile(fallbackEventPath, JSON.stringify({
+  workflow_run: {
+    event: 'pull_request',
+    head_sha: fallbackSha,
+    pull_requests: []
+  }
+}), 'utf8');
 const originalFetch = globalThis.fetch;
 let updatedComment = null;
+let createdFallbackComment = null;
 globalThis.fetch = async (url, options = {}) => {
   const requestUrl = new URL(url);
   const method = options.method || 'GET';
@@ -103,9 +113,42 @@ globalThis.fetch = async (url, options = {}) => {
   });
 
   if (requestUrl.pathname === '/repos/owner/repository/pulls/22') return json(apiPullRequest);
+  if (requestUrl.pathname === `/repos/owner/repository/commits/${fallbackSha}/pulls`) {
+    return json([{
+      number: 1,
+      state: 'open',
+      head: { sha: fallbackSha }
+    }, {
+      number: 2,
+      state: 'closed',
+      head: { sha: fallbackSha }
+    }, {
+      number: 3,
+      state: 'open',
+      head: { sha: '4444444444444444444444444444444444444444' }
+    }]);
+  }
+  if (requestUrl.pathname === '/repos/owner/repository/pulls/1') {
+    return json({
+      number: 1,
+      base: {
+        ref: 'main',
+        sha: pullRequest.base.sha,
+        repo: { full_name: 'owner/repository' }
+      },
+      head: {
+        ref: 'dependabot/npm_and_yarn/example-1.2.3',
+        sha: fallbackSha,
+        repo: { full_name: 'owner/repository' }
+      }
+    });
+  }
   if (requestUrl.pathname.endsWith(`/${ARTIFACT_PATH}`)) {
     if (requestUrl.searchParams.get('ref') === pullRequest.base.sha) {
       return json({ type: 'file', size: 1_000_000 });
+    }
+    if (requestUrl.searchParams.get('ref') === fallbackSha) {
+      return json({ type: 'file', size: 1_100_000 });
     }
     return json({ message: 'Not Found' }, 404);
   }
@@ -119,6 +162,13 @@ globalThis.fetch = async (url, options = {}) => {
   if (requestUrl.pathname === '/repos/owner/repository/issues/comments/7' && method === 'PATCH') {
     updatedComment = JSON.parse(options.body).body;
     return json({ id: 7, body: updatedComment });
+  }
+  if (requestUrl.pathname === '/repos/owner/repository/issues/1/comments' && method === 'GET') {
+    return json([]);
+  }
+  if (requestUrl.pathname === '/repos/owner/repository/issues/1/comments' && method === 'POST') {
+    createdFallbackComment = JSON.parse(options.body).body;
+    return json({ id: 8, body: createdFallbackComment });
   }
   throw new Error(`Unexpected test request: ${method} ${requestUrl}`);
 };
@@ -140,6 +190,27 @@ try {
   assert.match(updatedComment, /Merge branch.*1\.000000 MB.*1,000,000 bytes/, 'the readable base size remains visible');
   assert.match(updatedComment, /PR head.*\*\*Unavailable\*\*/, 'the missing head artifact is explicit');
   assert.match(updatedComment, /Change vs merge branch.*\*\*Unavailable\*\*/, 'no stale relative change is displayed');
+
+  await main({
+    GITHUB_REPOSITORY: 'owner/repository',
+    GITHUB_EVENT_PATH: fallbackEventPath,
+    GITHUB_TOKEN: 'test-token',
+    GITHUB_API_URL: 'https://api.example.test'
+  });
+  assert.ok(
+    createdFallbackComment?.startsWith(REPORT_MARKER),
+    'an empty workflow-run association falls back to the triggering commit'
+  );
+  assert.match(
+    createdFallbackComment,
+    /PR head `dependabot\/npm_and_yarn\/example-1\.2\.3` \(`3333333`\)/,
+    'the recovered open PR receives a report for the triggering head'
+  );
+  assert.match(
+    createdFallbackComment,
+    /\+0\.100000 MB \(\+10\.00%\)/,
+    'the recovered PR report compares the current head with its merge branch'
+  );
 } finally {
   globalThis.fetch = originalFetch;
   await rm(temporaryDirectory, {

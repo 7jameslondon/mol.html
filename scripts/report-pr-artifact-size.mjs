@@ -115,6 +115,17 @@ async function listOpenPullRequests(request, repository, baseBranch) {
   }
 }
 
+async function listPullRequestsForCommit(request, repository, sha) {
+  const pullRequests = [];
+  for (let page = 1; ; page += 1) {
+    const batch = await request(
+      `/repos/${encodeRepository(repository)}/commits/${encodeURIComponent(sha)}/pulls?per_page=100&page=${page}`
+    );
+    pullRequests.push(...batch);
+    if (batch.length < 100) return pullRequests;
+  }
+}
+
 async function getArtifactSize(request, repository, sha) {
   const file = await request(
     `/repos/${encodeRepository(repository)}/contents/${encodeFilePath(ARTIFACT_PATH)}?ref=${encodeURIComponent(sha)}`,
@@ -199,11 +210,27 @@ export async function main(environment = process.env) {
 
   let pullRequests;
   if (event.workflow_run) {
-    const pullNumbers = [...new Set(
+    let pullNumbers = [...new Set(
       (event.workflow_run.pull_requests || [])
         .map(pullRequest => pullRequest.number)
         .filter(Number.isSafeInteger)
     )];
+    if (pullNumbers.length === 0 && event.workflow_run.head_sha) {
+      const associatedPullRequests = await listPullRequestsForCommit(
+        request,
+        repository,
+        event.workflow_run.head_sha
+      );
+      pullNumbers = [...new Set(
+        associatedPullRequests
+          .filter(pullRequest =>
+            pullRequest.state === 'open'
+            && pullRequest.head?.sha === event.workflow_run.head_sha
+          )
+          .map(pullRequest => pullRequest.number)
+          .filter(Number.isSafeInteger)
+      )];
+    }
     if (pullNumbers.length === 0) {
       console.log('The completed workflow run is not associated with an open pull request.');
       return;
