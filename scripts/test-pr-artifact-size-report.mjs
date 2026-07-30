@@ -116,6 +116,12 @@ const originalFetch = globalThis.fetch;
 let updatedComment = null;
 let createdFallbackComment = null;
 let createdForkComment = null;
+let crossRepositoryReadAttempts = 0;
+const artifactSizes = new Map([
+  [pullRequest.base.sha, 1_000_000],
+  [fallbackSha, 1_100_000],
+  [forkSha, 1_200_000]
+]);
 globalThis.fetch = async (url, options = {}) => {
   const requestUrl = new URL(url);
   const method = options.method || 'GET';
@@ -124,6 +130,36 @@ globalThis.fetch = async (url, options = {}) => {
     headers: { 'content-type': 'application/json' }
   });
 
+  if (requestUrl.pathname.startsWith('/repos/contributor/repository/')) {
+    crossRepositoryReadAttempts += 1;
+    return json({ message: 'Not Found' }, 404);
+  }
+  const commitPrefix = '/repos/owner/repository/git/commits/';
+  if (requestUrl.pathname.startsWith(commitPrefix)) {
+    const sha = decodeURIComponent(requestUrl.pathname.slice(commitPrefix.length));
+    return json({ sha, tree: { sha: `root-${sha}` } });
+  }
+  const treePrefix = '/repos/owner/repository/git/trees/';
+  if (requestUrl.pathname.startsWith(treePrefix)) {
+    const treeSha = decodeURIComponent(requestUrl.pathname.slice(treePrefix.length));
+    if (treeSha.startsWith('root-')) {
+      const sha = treeSha.slice('root-'.length);
+      return json({
+        sha: treeSha,
+        tree: [{ path: 'dist', type: 'tree', sha: `dist-${sha}` }]
+      });
+    }
+    if (treeSha.startsWith('dist-')) {
+      const sha = treeSha.slice('dist-'.length);
+      const size = artifactSizes.get(sha);
+      return json({
+        sha: treeSha,
+        tree: size === undefined
+          ? []
+          : [{ path: 'example.mol.html', type: 'blob', sha: `blob-${sha}`, size }]
+      });
+    }
+  }
   if (requestUrl.pathname === '/repos/owner/repository/pulls/22') return json(apiPullRequest);
   if (requestUrl.pathname === '/repos/owner/repository/pulls' && method === 'GET') {
     return json([{
@@ -186,18 +222,6 @@ globalThis.fetch = async (url, options = {}) => {
       }
     });
   }
-  if (requestUrl.pathname.endsWith(`/${ARTIFACT_PATH}`)) {
-    if (requestUrl.searchParams.get('ref') === pullRequest.base.sha) {
-      return json({ type: 'file', size: 1_000_000 });
-    }
-    if (requestUrl.searchParams.get('ref') === fallbackSha) {
-      return json({ type: 'file', size: 1_100_000 });
-    }
-    if (requestUrl.searchParams.get('ref') === forkSha) {
-      return json({ type: 'file', size: 1_200_000 });
-    }
-    return json({ message: 'Not Found' }, 404);
-  }
   if (requestUrl.pathname === '/repos/owner/repository/issues/22/comments' && method === 'GET') {
     return json([{
       id: 7,
@@ -234,7 +258,7 @@ try {
       GITHUB_TOKEN: 'test-token',
       GITHUB_API_URL: 'https://api.example.test'
     }),
-    /Could not update every build-size report.*Not Found/s,
+    /Could not update every build-size report.*not a blob with a reported byte size/s,
     'the workflow still fails when the current head artifact is missing'
   );
   assert.ok(updatedComment?.startsWith(REPORT_MARKER), 'the missing artifact replaces the existing sticky report');
@@ -284,6 +308,11 @@ try {
     createdForkComment,
     /\+0\.200000 MB \(\+20\.00%\)/,
     'the recovered fork report compares the current head with its merge branch'
+  );
+  assert.equal(
+    crossRepositoryReadAttempts,
+    0,
+    'fork artifacts are measured through base-repository PR Git objects without reading the private fork'
   );
 } finally {
   globalThis.fetch = originalFetch;

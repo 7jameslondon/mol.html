@@ -98,7 +98,6 @@ function createGitHubClient(token, apiUrl = 'https://api.github.com') {
 }
 
 const encodeRepository = repository => repository.split('/').map(encodeURIComponent).join('/');
-const encodeFilePath = path => path.split('/').map(encodeURIComponent).join('/');
 const sameRepository = (left, right) =>
   typeof left === 'string'
   && typeof right === 'string'
@@ -121,14 +120,38 @@ async function listOpenPullRequests(request, repository, baseBranch = null) {
 }
 
 async function getArtifactSize(request, repository, sha) {
-  const file = await request(
-    `/repos/${encodeRepository(repository)}/contents/${encodeFilePath(ARTIFACT_PATH)}?ref=${encodeURIComponent(sha)}`,
-    { accept: 'application/vnd.github.object+json' }
+  const encodedRepository = encodeRepository(repository);
+  const commit = await request(
+    `/repos/${encodedRepository}/git/commits/${encodeURIComponent(sha)}`
   );
-  if (Array.isArray(file) || file.type !== 'file' || !Number.isSafeInteger(file.size)) {
-    throw new Error(`${ARTIFACT_PATH} at ${repository}@${sha} is not a file with a reported byte size.`);
+  let treeSha = commit?.tree?.sha;
+  if (typeof treeSha !== 'string') {
+    throw new Error(`${repository}@${sha} does not have a readable root tree.`);
   }
-  return file.size;
+
+  const pathParts = ARTIFACT_PATH.split('/');
+  for (const [index, pathPart] of pathParts.entries()) {
+    const tree = await request(
+      `/repos/${encodedRepository}/git/trees/${encodeURIComponent(treeSha)}`
+    );
+    if (!Array.isArray(tree?.tree)) {
+      throw new Error(`${ARTIFACT_PATH} at ${repository}@${sha} has an unreadable tree.`);
+    }
+    const entry = tree.tree.find(candidate => candidate.path === pathPart);
+    const isArtifact = index === pathParts.length - 1;
+    if (isArtifact) {
+      if (entry?.type !== 'blob' || !Number.isSafeInteger(entry.size)) {
+        throw new Error(`${ARTIFACT_PATH} at ${repository}@${sha} is not a blob with a reported byte size.`);
+      }
+      return entry.size;
+    }
+    if (entry?.type !== 'tree' || typeof entry.sha !== 'string') {
+      throw new Error(`${ARTIFACT_PATH} at ${repository}@${sha} does not have a readable parent tree.`);
+    }
+    treeSha = entry.sha;
+  }
+
+  throw new Error(`${ARTIFACT_PATH} at ${repository}@${sha} could not be resolved.`);
 }
 
 async function listIssueComments(request, repository, pullNumber) {
@@ -170,12 +193,13 @@ async function reportPullRequest(request, repository, pullRequest) {
   const unavailableRepository = label => Promise.reject(
     new Error(`PR #${pullRequest.number} does not have a readable ${label} repository.`)
   );
+  const baseRepositoryIsCurrent = sameRepository(pullRequest.base?.repo?.full_name, repository);
   const [baseResult, headResult] = await Promise.allSettled([
-    pullRequest.base?.repo?.full_name
-      ? getArtifactSize(request, pullRequest.base.repo.full_name, pullRequest.base.sha)
+    baseRepositoryIsCurrent && pullRequest.base?.sha
+      ? getArtifactSize(request, repository, pullRequest.base.sha)
       : unavailableRepository('merge-branch'),
-    pullRequest.head?.repo?.full_name
-      ? getArtifactSize(request, pullRequest.head.repo.full_name, pullRequest.head.sha)
+    baseRepositoryIsCurrent && pullRequest.head?.sha
+      ? getArtifactSize(request, repository, pullRequest.head.sha)
       : unavailableRepository('head')
   ]);
   const baseBytes = baseResult.status === 'fulfilled' ? baseResult.value : null;
