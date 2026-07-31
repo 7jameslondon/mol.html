@@ -396,6 +396,27 @@ Applying a view changes only the presentation fields explicitly owned by its sna
 unrelated and unknown scene fields survive. Structure import clears saved views because
 their selectors and cameras are not guaranteed to be compatible with replacement coordinates.
 
+Story presentation is temporary: it renders each saved-view snapshot without changing the
+document, revision, persistence state, saved views, or undo/redo history. **Present story**
+opens the requested view paused. The overlay's **Play** command advances every five seconds;
+**Pause** cancels the pending advance, and **Replay** restarts a completed multi-view story.
+Previous and Next remain available, restart the full countdown after a successful move, and
+do not reset it at a boundary. Playback stops at the last view, pauses while the tab is hidden,
+and never loops. A one-view story is already complete and has autoplay disabled. Exiting or
+opening an inspector cancels playback and restores the canonical document view.
+
+The manual browser API is unchanged: `startStory(id)` displays a cloned requested saved-view
+record (falling back to the first view for an unknown or omitted ID), starts paused, and does
+not wrap when started at the end. `previousStoryView()` and `nextStoryView()` return `false`
+while inactive or at a boundary and `true` after a successful transition. `exitStory()` returns
+`false` while inactive and `true` after stopping an active story, even if renderer restoration
+reports an error. Rendering and validation failures are rethrown to API callers.
+
+The runtime remains part of each self-contained HTML file. An already-saved `.mol.html` file
+keeps its embedded older runtime when reopened or re-saved, so it does not acquire autoplay in
+place. Its document JSON remains compatible when loaded into a newly built shell that includes
+autoplay.
+
 Valid `scene.representation` values are `cartoon`, `ball-and-stick`, `sticks`,
 `spacefill`, `lines`, and `surface`. Valid `scene.colorMode` values are `element`,
 `chain`, `author-chain`, `instance`, `entity`, `role`, `residue`, and `uniform`.

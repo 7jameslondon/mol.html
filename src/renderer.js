@@ -29,6 +29,8 @@
       this.surfaceGeneration = 0;
       this.surfaceTasks = new Map();
       this.applyingDocument = false;
+      this.writeCamera = true;
+      this.viewTimer = null;
       this.lastReportedView = '';
       this.measurementDraft = [];
       this.activeMeasurementId = null;
@@ -60,12 +62,15 @@
     setDocument(doc, {
       fit = false, cameraMode = 'document', writeCamera = true, presentationState = null
     } = {}) {
-      this.doc = doc;
-      this.writeCamera = writeCamera !== false;
-      if (presentationState) {
-        this.activeMeasurementId = presentationState.activeMeasurementId || null;
-        this.activeSavedSelectionId = presentationState.activeSavedSelectionId || null;
+      const nextWriteCamera = writeCamera !== false;
+      if (this.doc !== doc || this.writeCamera !== nextWriteCamera) {
+        clearTimeout(this.viewTimer);
+        this.viewTimer = null;
       }
+      this.doc = doc;
+      this.writeCamera = nextWriteCamera;
+      this.activeMeasurementId = presentationState?.activeMeasurementId || null;
+      this.activeSavedSelectionId = presentationState?.activeSavedSelectionId || null;
       const structureChanged = !this.structureSnapshot
         || this.structureSnapshot.id !== doc.structure.id
         || this.structureSnapshot.format !== doc.structure.format
@@ -807,6 +812,7 @@
       if (generation !== this.surfaceGeneration) return false;
       this.surfaceGeneration += 1;
       clearTimeout(this.viewTimer);
+      this.viewTimer = null;
       this.removeLabels();
       this.disposeShapeRenderResources();
       this.viewer.removeAllShapes();
@@ -963,16 +969,39 @@
     }
 
     queueViewChange() {
-      if (this.applyingDocument || !this.doc) return;
+      if (this.applyingDocument || !this.doc || !this.writeCamera) return;
       clearTimeout(this.viewTimer);
       this.viewTimer = setTimeout(() => {
-        if (this.applyingDocument || !this.doc) return;
-        const view = this.viewer.getView();
-        const serialized = JSON.stringify(view);
-        if (serialized === this.lastReportedView) return;
-        this.lastReportedView = serialized;
-        this.callbacks.onCamera?.({ view });
+        this.viewTimer = null;
+        this.reportViewChange();
       }, 220);
+    }
+
+    reportViewChange() {
+      if (this.applyingDocument || !this.doc || !this.writeCamera) return false;
+      const view = this.viewer.getView();
+      const serialized = JSON.stringify(view);
+      if (serialized === this.lastReportedView) return false;
+      this.lastReportedView = serialized;
+      this.callbacks.onCamera?.({ view });
+      return true;
+    }
+
+    flushCameraChange() {
+      if (this.viewTimer == null) return false;
+      const timer = this.viewTimer;
+      this.viewTimer = null;
+      clearTimeout(timer);
+      return this.reportViewChange();
+    }
+
+    setCameraWriteEnabled(enabled) {
+      const next = enabled !== false;
+      if (this.writeCamera === next) return false;
+      clearTimeout(this.viewTimer);
+      this.viewTimer = null;
+      this.writeCamera = next;
+      return true;
     }
   }
 

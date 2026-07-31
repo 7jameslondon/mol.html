@@ -519,12 +519,15 @@ __DOCUMENT__
         <section id="story-overlay" class="story-overlay" aria-label="Story presentation" hidden>
           <div class="story-progress"><span id="story-position">1 of 1</span><span>STORY</span></div>
           <h2 id="story-title">Saved view</h2>
-          <p id="story-narrative" hidden></p>
+          <p id="story-narrative" tabindex="0" aria-label="Story narrative" hidden></p>
+          <p id="story-timing" class="story-timing">Auto-advance: 5 seconds</p>
           <div class="story-controls">
             <button id="story-previous" class="story-control" type="button" aria-label="Previous story view">← Previous</button>
             <button id="story-next" class="story-control primary" type="button" aria-label="Next story view">Next →</button>
+            <button id="story-autoplay" class="story-control" type="button" aria-label="Play autoplay" aria-describedby="story-timing">Play</button>
             <button id="story-exit" class="story-control" type="button">Exit</button>
           </div>
+          <p id="story-status" class="visually-hidden" aria-live="polite" aria-atomic="true"></p>
         </section>
         <div class="controls-hint"><span>Drag</span> rotate <span>Shift + drag</span> pan <span>Scroll</span> zoom <span>Click</span> select</div>
         <div id="canvas-message" class="canvas-message" hidden></div>

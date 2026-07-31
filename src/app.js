@@ -52,7 +52,8 @@
     'quality-stats', 'quality-observations',
     'saved-views-button', 'saved-views-ribbon-value', 'create-saved-view', 'start-story',
     'saved-view-count', 'empty-saved-views', 'saved-view-list', 'story-overlay',
-    'story-position', 'story-title', 'story-narrative', 'story-previous', 'story-next', 'story-exit',
+    'story-position', 'story-title', 'story-narrative', 'story-previous', 'story-next', 'story-autoplay',
+    'story-timing', 'story-status', 'story-exit',
     'export-button', 'export-controls', 'export-options', 'export-activity', 'export-size', 'export-custom-fields', 'export-width',
     'export-height', 'export-aspect-row', 'export-lock-aspect', 'export-background', 'export-summary',
     'export-download', 'export-copy', 'export-status', 'turntable-size', 'turntable-duration',
@@ -79,7 +80,8 @@
   let turntableUnsupportedReason = '';
   let turntableLiveMilestone = 0;
   let completedTurntableSummary = null;
-  const storyState = { active: false, index: 0 };
+  const storyState = { active: false, index: 0, playing: false, timer: null };
+  const STORY_STEP_DURATION_MS = 5000;
   const navigatorState = {
     structureKey: '', chains: [], residueByKey: new Map(),
     expandedChains: new Set(), expandedResidues: new Set(), query: ''
@@ -99,6 +101,7 @@
   const renderer = new window.MoleculeRenderer(elements['molecule-viewer'], {
     onPick: atom => handleAtomPick(atom),
     onCamera: camera => {
+      if (storyState.active) return;
       Core.applyDocumentCommand(doc, { type: 'set-camera', camera });
       touchDocument('browser', false);
     },
@@ -146,18 +149,38 @@
   }
 
   function commit(change, { history = true, fit = false, source = 'browser', interactionOnly = false } = {}) {
-    if (history) {
-      undoStack.push(snapshot());
-      if (undoStack.length > 60) undoStack.shift();
-      redoStack.length = 0;
-    }
-    change();
-    touchDocument(source, true);
-    if (interactionOnly) {
-      renderer.updateInteractions();
+    const previousDocument = structuredClone(doc);
+    const previousTransientState = {
+      measurementDraft: measurementDraft ? structuredClone(measurementDraft) : null,
+      activeMeasurementId,
+      activeSavedSelectionId
+    };
+    const historySnapshot = snapshot();
+    const interruption = stopStory();
+    try {
+      change();
+      touchDocument(source, true);
+      if (interactionOnly && !interruption.wasActive) {
+        renderer.updateInteractions();
+        syncControls();
+        syncInteractions();
+      } else refresh({ fit });
+      if (history) {
+        undoStack.push(historySnapshot);
+        if (undoStack.length > 60) undoStack.shift();
+        redoStack.length = 0;
+      }
       syncControls();
-      syncInteractions();
-    } else refresh({ fit });
+    } catch (error) {
+      doc = previousDocument;
+      measurementDraft = previousTransientState.measurementDraft;
+      activeMeasurementId = previousTransientState.activeMeasurementId;
+      activeSavedSelectionId = previousTransientState.activeSavedSelectionId;
+      if (interruption.wasActive) restoreCanonicalAfterFailure(error);
+      throw error;
+    } finally {
+      repairStoryFocus(interruption);
+    }
   }
 
   function dispatch(command, options = {}) {
@@ -181,31 +204,98 @@
   }
 
   function undo() {
-    if (!undoStack.length) return;
-    exitStory(false);
-    resetMeasurementInteraction(false);
-    redoStack.push(snapshot());
-    restoreSnapshot(undoStack.pop());
-    touchDocument('browser');
-    refresh();
+    navigateHistory(undoStack, redoStack);
   }
 
   function redo() {
-    if (!redoStack.length) return;
-    exitStory(false);
-    resetMeasurementInteraction(false);
-    undoStack.push(snapshot());
-    restoreSnapshot(redoStack.pop());
-    touchDocument('browser');
-    refresh();
+    navigateHistory(redoStack, undoStack);
+  }
+
+  function navigateHistory(sourceStack, destinationStack) {
+    const interruption = stopStory();
+    if (!sourceStack.length) {
+      try {
+        if (interruption.wasActive) restoreCanonicalRenderer();
+      } catch (error) {
+        reportRestorationError(error);
+      } finally {
+        repairStoryFocus(interruption);
+      }
+      return;
+    }
+    const previousDocument = structuredClone(doc);
+    const previousTransientState = {
+      measurementDraft: measurementDraft ? structuredClone(measurementDraft) : null,
+      activeMeasurementId,
+      activeSavedSelectionId
+    };
+    const currentSnapshot = snapshot();
+    const nextSnapshot = sourceStack[sourceStack.length - 1];
+    try {
+      resetMeasurementInteraction(false);
+      restoreSnapshot(nextSnapshot);
+      touchDocument('browser');
+      refresh();
+      sourceStack.pop();
+      destinationStack.push(currentSnapshot);
+      syncControls();
+    } catch (error) {
+      doc = previousDocument;
+      measurementDraft = previousTransientState.measurementDraft;
+      activeMeasurementId = previousTransientState.activeMeasurementId;
+      activeSavedSelectionId = previousTransientState.activeSavedSelectionId;
+      if (interruption.wasActive) restoreCanonicalAfterFailure(error);
+      throw error;
+    } finally {
+      repairStoryFocus(interruption);
+    }
+  }
+
+  function canonicalDisplayState() {
+    return { activeMeasurementId, activeSavedSelectionId };
+  }
+
+  function restoreCanonicalRenderer() {
+    renderer.measurementDraft = measurementDraft?.atoms ? [...measurementDraft.atoms] : [];
+    try {
+      renderer.setDocument(doc, {
+        writeCamera: false,
+        presentationState: canonicalDisplayState()
+      });
+      parsed = renderer.parsed;
+      elements['canvas-message'].hidden = true;
+    } finally {
+      renderer.setCameraWriteEnabled(true);
+    }
+  }
+
+  function reportRestorationError(error) {
+    toast(`Could not restore the molecular document view: ${error.message}`, 'error');
+  }
+
+  function restoreCanonicalAfterFailure(originalError) {
+    try {
+      restoreCanonicalRenderer();
+    } catch (restorationError) {
+      if (restorationError !== originalError) reportRestorationError(restorationError);
+    }
+  }
+
+  function prepareCanonicalRendererAction(destination = elements['molecule-viewer']) {
+    const interruption = stopStory();
+    if (!interruption.wasActive) return false;
+    try {
+      restoreCanonicalRenderer();
+      return true;
+    } finally {
+      repairStoryFocus(interruption, destination);
+    }
   }
 
   function refresh({ fit = false } = {}) {
     try {
       renderer.measurementDraft = measurementDraft?.atoms ? [...measurementDraft.atoms] : [];
-      renderer.activeMeasurementId = activeMeasurementId;
-      renderer.activeSavedSelectionId = activeSavedSelectionId;
-      renderer.setDocument(doc, { fit });
+      renderer.setDocument(doc, { fit, presentationState: canonicalDisplayState() });
       parsed = renderer.parsed;
       syncLiveDataBlock();
       elements['canvas-message'].hidden = true;
@@ -581,6 +671,7 @@
   }
 
   function setSavedSelectionHighlight(id, { focus = false } = {}) {
+    prepareCanonicalRendererAction();
     if (id == null) {
       activeSavedSelectionId = null;
       renderer.setActiveSavedSelection(null);
@@ -892,6 +983,7 @@
   }
 
   function focusLigandAnalysis() {
+    prepareCanonicalRendererAction();
     const result = ligandAnalysisResult();
     if (!result.ligand) throw new Error('Choose a ligand first.');
     renderer.focusSelectors([result.ligand.selector, ...result.residues.map(residue => residue.selector)]);
@@ -928,6 +1020,7 @@
   }
 
   function startMeasurement(type = elements['measurement-type'].value) {
+    prepareCanonicalRendererAction();
     const expected = Core.MEASUREMENT_ATOM_COUNTS[type];
     if (!expected) throw new Error(`Unsupported measurement type: ${type}`);
     if (measurementDraft) cancelMeasurement(false);
@@ -998,6 +1091,7 @@
   }
 
   function selectMeasurement(id) {
+    prepareCanonicalRendererAction();
     activeMeasurementId = activeMeasurementId === id ? null : id;
     renderer.setActiveMeasurement(activeMeasurementId);
     syncMeasurements();
@@ -1378,6 +1472,7 @@
   }
 
   function savedViewSnapshot() {
+    prepareCanonicalRendererAction();
     return Core.captureSavedViewSnapshot(doc.scene, {
       camera: liveCamera(),
       activeAnalysis: activeMeasurementId
@@ -1417,7 +1512,10 @@
     if (changes.recapture || 'snapshot' in changes) {
       next.snapshot = 'snapshot' in changes
         ? Core.normalizeSavedViewSnapshot(changes.snapshot)
-        : savedViewSnapshot();
+        : Core.normalizeSavedViewSnapshot({
+          ...Core.normalizeSavedViewSnapshot(target.snapshot),
+          ...savedViewSnapshot()
+        });
       next.structureId = doc.structure.id;
     }
     commit(() => Core.applyDocumentCommand(doc, {
@@ -1460,33 +1558,45 @@
         .filter(view => view.id !== id)
         .map((view, order) => ({ ...view, order }))
     }), { source });
-    if (storyState.active) {
-      storyState.index = Math.min(storyState.index, Math.max(0, doc.scene.savedViews.length - 1));
-      if (!doc.scene.savedViews.length) exitStory();
-      else syncStory();
-    }
     return true;
+  }
+
+  function validateSavedView(view) {
+    if (!view?.structureId) throw new Error('This saved view is missing structureId.');
+    if (view.structureId !== doc.structure.id) {
+      throw new Error('This saved view belongs to a different structure.');
+    }
+    const selectors = [];
+    if (view.snapshot?.selection != null) {
+      if (!view.snapshot.selection?.selector) {
+        throw new Error('This saved view contains a malformed selection selector.');
+      }
+      selectors.push(['selection', {
+        ...view.snapshot.selection.selector,
+        kind: view.snapshot.selection.selector.kind || view.snapshot.selection.kind || 'atom'
+      }]);
+    }
+    for (const [index, rule] of (view.snapshot?.customColors || []).entries()) {
+      if (!rule?.selector) throw new Error(`This saved view contains a malformed custom color selector ${index + 1}.`);
+      selectors.push([`custom color ${index + 1}`, {
+        ...rule.selector,
+        kind: rule.selector.kind || rule.scope
+      }]);
+    }
+    for (const [label, selector] of selectors) {
+      const match = Core.matchSavedSelection(selector, parsed?.atoms || [], doc.structure.id);
+      if (!match.valid) throw new Error(`This saved view has an invalid ${label} selector: ${match.error}`);
+    }
+    return view;
   }
 
   function applySavedView(id, source = 'browser') {
     const view = savedViewById(id);
     if (!view) throw new Error(`Saved view ${id} was not found.`);
-    const snapshotStructureIds = [view.structureId];
-    if (view.snapshot?.selection?.selector) {
-      snapshotStructureIds.push(view.snapshot.selection.selector.structureId);
-    }
-    for (const rule of view.snapshot?.customColors || []) {
-      if (rule?.selector) snapshotStructureIds.push(rule.selector.structureId);
-    }
-    if (snapshotStructureIds.some(structureId => !structureId)) {
-      throw new Error('This saved view contains a selector without structureId.');
-    }
-    if (snapshotStructureIds.some(structureId => structureId !== doc.structure.id)) {
-      throw new Error('This saved view belongs to a different structure.');
-    }
-    resetMeasurementInteraction(false);
+    validateSavedView(view);
     const analysis = view.snapshot?.activeAnalysis;
     commit(() => {
+      resetMeasurementInteraction(false);
       Core.applyDocumentCommand(doc, { type: 'apply-saved-view', snapshot: view.snapshot });
       activeMeasurementId = analysis?.kind === 'measurement'
         && doc.scene.measurements.some(measurement => measurement.id === analysis.id)
@@ -1564,28 +1674,141 @@
     elements['saved-view-list'].appendChild(fragment);
   }
 
-  function startStory(id, source = 'browser') {
+  function renderStoryView(view) {
+    validateSavedView(view);
+    const presentationDoc = {
+      ...doc,
+      structure: doc.structure,
+      scene: Core.applySavedViewSnapshot(doc.scene, view.snapshot)
+    };
+    const analysis = view.snapshot?.activeAnalysis;
+    const presentationState = {
+      activeMeasurementId: analysis?.kind === 'measurement'
+        && (presentationDoc.scene.measurements || []).some(measurement => measurement.id === analysis.id)
+        ? analysis.id : null,
+      activeSavedSelectionId: null
+    };
+    renderer.setDocument(presentationDoc, { writeCamera: false, presentationState });
+    parsed = renderer.parsed;
+    elements['canvas-message'].hidden = true;
+    return presentationDoc;
+  }
+
+  function closeInspectorForStory() {
+    if (measurementDraft) cancelMeasurement(false);
+    activeInspector = null;
+    elements['inspector'].hidden = true;
+    elements['workspace'].classList.remove('inspector-open');
+    for (const panel of inspectorPanels) panel.hidden = true;
+    for (const button of inspectorButtons) button.setAttribute('aria-pressed', 'false');
+    inspectorReturnFocus = null;
+  }
+
+  function startStory(id) {
     const views = doc.scene.savedViews || [];
     if (!views.length) throw new Error('Capture a saved view before starting a story.');
     const requested = id ? views.findIndex(view => view.id === id) : 0;
+    const targetIndex = requested >= 0 ? requested : 0;
+    const replacing = storyState.active;
+    const interruption = stopStory();
+    if (!replacing) renderer.flushCameraChange();
+    renderer.measurementDraft = [];
+    try {
+      renderStoryView(views[targetIndex]);
+    } catch (error) {
+      renderer.measurementDraft = measurementDraft?.atoms ? [...measurementDraft.atoms] : [];
+      restoreCanonicalAfterFailure(error);
+      if (replacing) elements['molecule-viewer'].focus();
+      else repairStoryFocus(interruption);
+      throw error;
+    }
+    closeInspectorForStory();
     storyState.active = true;
-    storyState.index = requested >= 0 ? requested : 0;
-    if (!elements['inspector'].hidden) closeInspector();
-    applySavedView(views[storyState.index].id, source);
+    storyState.index = targetIndex;
+    storyState.playing = false;
     syncStory();
-    elements['story-next'].focus();
-    return structuredClone(views[storyState.index]);
+    focusInitialStoryControl();
+    return structuredClone(views[targetIndex]);
   }
 
-  function navigateStory(offset, source = 'browser') {
+  function transitionStory(targetIndex, { playing = storyState.playing } = {}) {
     if (!storyState.active) return false;
     const views = doc.scene.savedViews || [];
-    const next = Math.max(0, Math.min(views.length - 1, storyState.index + Number(offset || 0)));
-    if (next === storyState.index) return false;
-    storyState.index = next;
-    applySavedView(views[next].id, source);
+    const target = Math.max(0, Math.min(views.length - 1, Number(targetIndex)));
+    if (!views.length || target === storyState.index) return false;
+    cancelStoryTimer();
+    try {
+      renderStoryView(views[target]);
+    } catch (error) {
+      stopStory();
+      restoreCanonicalAfterFailure(error);
+      elements['molecule-viewer'].focus();
+      throw error;
+    }
+    storyState.index = target;
+    storyState.playing = Boolean(playing) && target < views.length - 1;
+    syncStory();
+    scheduleStoryAdvance();
+    return true;
+  }
+
+  function navigateStory(offset) {
+    if (!storyState.active) return false;
+    const views = doc.scene.savedViews || [];
+    const target = Math.max(0, Math.min(views.length - 1, storyState.index + Number(offset || 0)));
+    return transitionStory(target);
+  }
+
+  function cancelStoryTimer() {
+    if (storyState.timer != null) clearTimeout(storyState.timer);
+    storyState.timer = null;
+  }
+
+  function scheduleStoryAdvance() {
+    cancelStoryTimer();
+    const views = doc.scene.savedViews || [];
+    if (!storyState.active || !storyState.playing || document.hidden || storyState.index >= views.length - 1) return;
+    storyState.timer = setTimeout(() => {
+      storyState.timer = null;
+      const currentViews = doc.scene.savedViews || [];
+      if (!storyState.active || !storyState.playing || document.hidden || storyState.index >= currentViews.length - 1) return;
+      try {
+        transitionStory(storyState.index + 1, { playing: true });
+      } catch (error) {
+        toast(error.message, 'error');
+      }
+    }, STORY_STEP_DURATION_MS);
+  }
+
+  function pauseStory() {
+    if (!storyState.active) return false;
+    cancelStoryTimer();
+    storyState.playing = false;
     syncStory();
     return true;
+  }
+
+  function playStory() {
+    if (!storyState.active) return false;
+    const views = doc.scene.savedViews || [];
+    if (views.length <= 1) return false;
+    if (storyState.index === views.length - 1) {
+      return transitionStory(0, { playing: true });
+    }
+    storyState.playing = true;
+    syncStory();
+    scheduleStoryAdvance();
+    return true;
+  }
+
+  function toggleStoryPlayback() {
+    return storyState.playing ? pauseStory() : playStory();
+  }
+
+  function storyCommandState(views) {
+    if (storyState.playing) return 'playing';
+    if (storyState.index === views.length - 1) return 'complete';
+    return 'paused';
   }
 
   function syncStory() {
@@ -1594,8 +1817,11 @@
       elements['story-overlay'].hidden = true;
       return;
     }
+    const focused = document.activeElement;
     storyState.index = Math.max(0, Math.min(storyState.index, views.length - 1));
     const view = views[storyState.index];
+    const atEnd = storyState.index === views.length - 1;
+    const state = storyCommandState(views);
     elements['story-overlay'].hidden = false;
     elements['story-position'].textContent = `${storyState.index + 1} of ${views.length}`;
     elements['story-title'].textContent = view.title;
@@ -1603,14 +1829,59 @@
     elements['story-narrative'].hidden = !narrative;
     elements['story-narrative'].textContent = narrative;
     elements['story-previous'].disabled = storyState.index === 0;
-    elements['story-next'].disabled = storyState.index === views.length - 1;
+    elements['story-next'].disabled = atEnd;
+    const autoplay = elements['story-autoplay'];
+    autoplay.disabled = views.length <= 1;
+    if (state === 'playing') {
+      autoplay.textContent = 'Pause';
+      autoplay.setAttribute('aria-label', 'Pause autoplay');
+    } else if (state === 'complete') {
+      autoplay.textContent = 'Replay';
+      autoplay.setAttribute('aria-label', 'Replay story from beginning');
+    } else {
+      autoplay.textContent = 'Play';
+      autoplay.setAttribute('aria-label', 'Play autoplay');
+    }
+    const status = `Story view ${storyState.index + 1} of ${views.length}: ${view.title}. Autoplay ${state}.`;
+    if (elements['story-status'].textContent !== status) elements['story-status'].textContent = status;
+    const disabledNavigation = (focused === elements['story-previous'] && elements['story-previous'].disabled)
+      || (focused === elements['story-next'] && elements['story-next'].disabled);
+    if (disabledNavigation || (focused === elements['story-narrative'] && !narrative)) {
+      (autoplay.disabled ? elements['story-exit'] : autoplay).focus();
+    }
+  }
+
+  function focusInitialStoryControl() {
+    if (!elements['story-next'].disabled) elements['story-next'].focus();
+    else if (!elements['story-autoplay'].disabled) elements['story-autoplay'].focus();
+    else elements['story-exit'].focus();
+  }
+
+  function stopStory() {
+    const wasActive = storyState.active;
+    const ownedFocus = wasActive && elements['story-overlay'].contains(document.activeElement);
+    cancelStoryTimer();
+    storyState.playing = false;
+    storyState.active = false;
+    elements['story-overlay'].hidden = true;
+    return { wasActive, ownedFocus };
+  }
+
+  function repairStoryFocus(interruption, destination = elements['molecule-viewer']) {
+    if (interruption?.ownedFocus && destination?.isConnected) destination.focus();
   }
 
   function exitStory(restoreFocus = true) {
     if (!storyState.active) return false;
-    storyState.active = false;
-    elements['story-overlay'].hidden = true;
-    if (restoreFocus) elements['molecule-viewer'].focus();
+    const interruption = stopStory();
+    try {
+      restoreCanonicalRenderer();
+    } catch (error) {
+      reportRestorationError(error);
+    } finally {
+      if (restoreFocus) elements['molecule-viewer'].focus();
+      else repairStoryFocus(interruption);
+    }
     return true;
   }
 
@@ -1984,7 +2255,11 @@
 
   function openInspector(name) {
     if (!inspectorTitles[name]) return;
-    if (storyState.active) exitStory(false);
+    const interruption = stopStory();
+    if (interruption.wasActive) {
+      try { restoreCanonicalRenderer(); }
+      catch (error) { reportRestorationError(error); }
+    }
     if (measurementDraft && name !== 'measurements') cancelMeasurement();
     if (elements['inspector'].hidden && document.activeElement instanceof HTMLElement) {
       inspectorReturnFocus = document.activeElement;
@@ -2000,6 +2275,8 @@
       renderNavigator();
     }
     if (name === 'export') syncExportControls(!exportActivity);
+    const destination = inspectorButtons.find(button => button.dataset.inspectorTarget === name);
+    repairStoryFocus(interruption, destination);
   }
 
   function closeInspector() {
@@ -2063,15 +2340,31 @@
     const parsedCandidate = Core.parseStructure(text, options.format || name);
     const displayName = options.displayName || name.replace(/\.(pdb|ent|cif|mmcif|txt)$/i, '') || 'Imported molecule';
     const metadata = Core.mergeMetadata(parsedCandidate.metadata, options.metadata);
-    resetMeasurementInteraction(false);
-    activeSavedSelectionId = null;
-    exitStory(false);
+    const interruption = stopStory();
+    const previousTransientState = {
+      measurementDraft: measurementDraft ? structuredClone(measurementDraft) : null,
+      activeMeasurementId,
+      activeSavedSelectionId
+    };
     const structure = { id: Core.uid('structure'), name: displayName, format: parsedCandidate.format, data: text, metadata };
     if (options.source) structure.source = structuredClone(options.source);
-    dispatch({ type: 'replace-structure', title: displayName, structure }, { history: false, fit: true });
-    undoStack.length = 0; redoStack.length = 0;
-    toast(`Loaded ${parsedCandidate.atoms.length.toLocaleString()} atoms from ${name}`, 'success');
-    return structuredClone(doc);
+    try {
+      resetMeasurementInteraction(false);
+      activeSavedSelectionId = null;
+      dispatch({ type: 'replace-structure', title: displayName, structure }, { history: false, fit: true });
+      undoStack.length = 0; redoStack.length = 0;
+      syncControls();
+      toast(`Loaded ${parsedCandidate.atoms.length.toLocaleString()} atoms from ${name}`, 'success');
+      return structuredClone(doc);
+    } catch (error) {
+      measurementDraft = previousTransientState.measurementDraft;
+      activeMeasurementId = previousTransientState.activeMeasurementId;
+      activeSavedSelectionId = previousTransientState.activeSavedSelectionId;
+      if (interruption.wasActive) restoreCanonicalAfterFailure(error);
+      throw error;
+    } finally {
+      repairStoryFocus(interruption);
+    }
   }
 
   async function importPDB(name, text, options = {}) {
@@ -2472,8 +2765,18 @@
     try { startStory(); }
     catch (error) { toast(error.message, 'error'); }
   });
-  elements['story-previous'].addEventListener('click', () => navigateStory(-1));
-  elements['story-next'].addEventListener('click', () => navigateStory(1));
+  elements['story-previous'].addEventListener('click', () => {
+    try { navigateStory(-1); }
+    catch (error) { toast(error.message, 'error'); }
+  });
+  elements['story-next'].addEventListener('click', () => {
+    try { navigateStory(1); }
+    catch (error) { toast(error.message, 'error'); }
+  });
+  elements['story-autoplay'].addEventListener('click', () => {
+    try { toggleStoryPlayback(); }
+    catch (error) { toast(error.message, 'error'); }
+  });
   elements['story-exit'].addEventListener('click', () => exitStory());
   elements['open-file-button'].addEventListener('click', () => elements['file-input'].click());
   elements['close-inspector'].addEventListener('click', closeInspector);
@@ -2566,6 +2869,7 @@
   elements['undo-button'].addEventListener('click', undo);
   elements['redo-button'].addEventListener('click', redo);
   elements['fit-button'].addEventListener('click', () => {
+    prepareCanonicalRendererAction();
     renderer.fit(false);
     touchDocument('browser');
     refresh();
@@ -2581,12 +2885,22 @@
     else if (command && event.key.toLowerCase() === 'z' && !event.shiftKey) { event.preventDefault(); undo(); }
     else if ((command && event.key.toLowerCase() === 'y') || (command && event.shiftKey && event.key.toLowerCase() === 'z')) { event.preventDefault(); redo(); }
     else if (storyState.active && event.key === 'Escape') { event.preventDefault(); exitStory(); }
-    else if (storyState.active && !editing && event.key === 'ArrowLeft') { event.preventDefault(); navigateStory(-1); }
-    else if (storyState.active && !editing && event.key === 'ArrowRight') { event.preventDefault(); navigateStory(1); }
+    else if (storyState.active && !editing && event.key === 'ArrowLeft') {
+      event.preventDefault();
+      try { navigateStory(-1); } catch (error) { toast(error.message, 'error'); }
+    }
+    else if (storyState.active && !editing && event.key === 'ArrowRight') {
+      event.preventDefault();
+      try { navigateStory(1); } catch (error) { toast(error.message, 'error'); }
+    }
     else if (event.key === 'Escape' && measurementDraft) cancelMeasurement();
     else if (event.key === 'Escape' && !elements['inspector'].hidden) closeInspector();
     else if (event.key === 'Escape') selectAtom(null);
     else if (event.key.toLowerCase() === 'r' && (document.activeElement === elements['molecule-viewer'] || elements['molecule-viewer'].contains(document.activeElement))) elements['fit-button'].click();
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && storyState.active) pauseStory();
   });
 
   window.molhtml = Object.freeze({
@@ -2652,11 +2966,26 @@
       });
     },
     getSavedViews() { return structuredClone(doc.scene.savedViews); },
-    renderPNG(options = {}) { return exportService.renderPNG(options); },
-    downloadPNG(options = {}) { return exportService.downloadPNG(options); },
-    copyImage(options = {}) { return exportService.copyImage(options); },
-    renderTurntable(options = {}) { return exportService.renderTurntable(options); },
-    downloadTurntable(options = {}) { return exportService.downloadTurntable(options); },
+    renderPNG(options = {}) {
+      prepareCanonicalRendererAction();
+      return exportService.renderPNG(options);
+    },
+    downloadPNG(options = {}) {
+      prepareCanonicalRendererAction();
+      return exportService.downloadPNG(options);
+    },
+    copyImage(options = {}) {
+      prepareCanonicalRendererAction();
+      return exportService.copyImage(options);
+    },
+    renderTurntable(options = {}) {
+      prepareCanonicalRendererAction();
+      return exportService.renderTurntable(options);
+    },
+    downloadTurntable(options = {}) {
+      prepareCanonicalRendererAction();
+      return exportService.downloadTurntable(options);
+    },
     getTurntableCapabilities() { return exportService.getTurntableCapabilities(); },
     serialize() { return persistence.serialize(); },
     async save() { return persistence.save(false); },
@@ -2710,20 +3039,39 @@
     moveSavedView(id, offset) { return moveSavedView(id, offset, 'agent'); },
     duplicateSavedView(id) { return duplicateSavedView(id, 'agent'); },
     removeSavedView(id) { return deleteSavedView(id, 'agent'); },
-    startStory(id) { return startStory(id, 'agent'); },
-    previousStoryView() { return navigateStory(-1, 'agent'); },
-    nextStoryView() { return navigateStory(1, 'agent'); },
+    startStory(id) { return startStory(id); },
+    previousStoryView() { return navigateStory(-1); },
+    nextStoryView() { return navigateStory(1); },
     exitStory() { return exitStory(); },
     loadDocument(value, modifiedBy = 'agent') {
       const next = Core.normalizeDocument(typeof value === 'string' ? JSON.parse(value) : value);
-      exitStory(false);
-      resetMeasurementInteraction(false);
-      activeSavedSelectionId = null;
-      undoStack.push(snapshot()); redoStack.length = 0;
-      doc = next;
-      touchDocument(modifiedBy);
-      refresh({ fit: false });
-      return structuredClone(doc);
+      const interruption = stopStory();
+      const previousDocument = structuredClone(doc);
+      const previousTransientState = {
+        measurementDraft: measurementDraft ? structuredClone(measurementDraft) : null,
+        activeMeasurementId,
+        activeSavedSelectionId
+      };
+      try {
+        resetMeasurementInteraction(false);
+        activeSavedSelectionId = null;
+        const historySnapshot = snapshot();
+        doc = next;
+        touchDocument(modifiedBy);
+        refresh({ fit: false });
+        undoStack.push(historySnapshot); redoStack.length = 0;
+        syncControls();
+        return structuredClone(doc);
+      } catch (error) {
+        doc = previousDocument;
+        measurementDraft = previousTransientState.measurementDraft;
+        activeMeasurementId = previousTransientState.activeMeasurementId;
+        activeSavedSelectionId = previousTransientState.activeSavedSelectionId;
+        if (interruption.wasActive) restoreCanonicalAfterFailure(error);
+        throw error;
+      } finally {
+        repairStoryFocus(interruption);
+      }
     }
   });
 
@@ -2731,9 +3079,13 @@
   persistence.recoveryFor(doc).then(recovered => {
     if (!recovered) return;
     if (confirm(`A newer browser recovery exists for “${doc.title}” (revision ${recovered.revision}). Restore it?`)) {
+      const interruption = stopStory();
+      resetMeasurementInteraction(false);
+      activeSavedSelectionId = null;
       doc = Core.normalizeDocument(recovered);
       syncLiveDataBlock();
       refresh();
+      repairStoryFocus(interruption);
       toast('Recovered newer browser autosave', 'success');
     }
   });

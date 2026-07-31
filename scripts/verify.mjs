@@ -62,6 +62,8 @@ assert(html.includes('data-inspector-target="metadata"') && html.includes('id="q
 assert(html.includes('getMetadata()') && html.includes('getDataQuality()') && html.includes('deriveDataQuality'), 'artifact exposes metadata and locally derived quality APIs');
 assert(html.includes('data-inspector-target="saved-views"') && html.includes('id="saved-view-list"'), 'artifact includes the saved-view ribbon command and inspector');
 assert(html.includes('id="story-overlay"') && html.includes('startStory(id)'), 'artifact includes presentation story controls and API');
+assert(html.includes('id="story-autoplay"') && html.includes('STORY_STEP_DURATION_MS'),
+  'artifact includes five-second story autoplay controls and timer state');
 assert(html.includes('data-inspector-target="export"') && html.includes('id="export-download"'), 'artifact includes the PNG export command and inspector');
 assert(html.includes('renderPNG(options') && html.includes('copyImage(options'), 'artifact exposes PNG render, download, and clipboard APIs');
 assert(html.includes('id="turntable-download"') && html.includes('id="turntable-cancel"')
