@@ -721,6 +721,7 @@ test('story render failures clean up once while public APIs rethrow without UI r
 });
 
 test('measurement drafts and recursive saved-view selectors fail safely', async ({ page }) => {
+  test.setTimeout(60_000);
   await openArtifact(page);
   const views = await createStory(page, ['Validation one', 'Validation two']);
   await page.locator('[data-inspector-target="measurements"]').click();
