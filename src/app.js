@@ -2320,27 +2320,30 @@
     if (!inspectorTitles[name]) return;
     const interruption = stopStory();
     const destination = inspectorButtons.find(button => button.dataset.inspectorTarget === name);
-    if (interruption.wasActive) {
-      try { restoreCanonicalRenderer(); }
-      catch (error) { reportRestorationError(error); }
+    try {
+      if (interruption.wasActive) {
+        try { restoreCanonicalRenderer(); }
+        catch (error) { reportRestorationError(error); }
+      }
+      if (measurementDraft && name !== 'measurements') cancelMeasurement();
+      if (elements['inspector'].hidden) {
+        const returnFocus = interruption.ownedFocus ? destination : document.activeElement;
+        if (returnFocus instanceof HTMLElement) inspectorReturnFocus = returnFocus;
+      }
+      activeInspector = name;
+      elements['inspector-title'].textContent = inspectorTitles[name];
+      elements['inspector'].hidden = false;
+      elements['workspace'].classList.add('inspector-open');
+      for (const panel of inspectorPanels) panel.hidden = panel.dataset.inspectorPanel !== name;
+      for (const button of inspectorButtons) button.setAttribute('aria-pressed', String(button.dataset.inspectorTarget === name));
+      if (name === 'navigator') {
+        revealNavigatorSelection();
+        renderNavigator();
+      }
+      if (name === 'export') syncExportControls(!exportActivity);
+    } finally {
+      repairStoryFocus(interruption, destination);
     }
-    if (measurementDraft && name !== 'measurements') cancelMeasurement();
-    if (elements['inspector'].hidden) {
-      const returnFocus = interruption.ownedFocus ? destination : document.activeElement;
-      if (returnFocus instanceof HTMLElement) inspectorReturnFocus = returnFocus;
-    }
-    activeInspector = name;
-    elements['inspector-title'].textContent = inspectorTitles[name];
-    elements['inspector'].hidden = false;
-    elements['workspace'].classList.add('inspector-open');
-    for (const panel of inspectorPanels) panel.hidden = panel.dataset.inspectorPanel !== name;
-    for (const button of inspectorButtons) button.setAttribute('aria-pressed', String(button.dataset.inspectorTarget === name));
-    if (name === 'navigator') {
-      revealNavigatorSelection();
-      renderNavigator();
-    }
-    if (name === 'export') syncExportControls(!exportActivity);
-    repairStoryFocus(interruption, destination);
   }
 
   function closeInspector() {

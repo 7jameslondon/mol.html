@@ -209,7 +209,7 @@ test('one-view, visibility, replacement, focus, and reflow lifecycle states are 
     return '';
   });
   expect(emptyError).toContain('Capture a saved view');
-  const [only] = await createStory(page, ['Only view']);
+  const [only] = await createStory(page, ['X'.repeat(100)]);
   await page.evaluate(id => window.molhtml.updateSavedView(id, {
     narrative: 'Long narrative content '.repeat(55)
   }), only.id);
@@ -360,6 +360,53 @@ test('camera debounce is flushed before presentation and suppressed during and a
   await page.evaluate(id => window.molhtml.startStory(id), views[0].id);
   expect(await page.evaluate(() => window.molhtml.document.revision)).toBe(afterExpiredDebounce.revision);
   await page.keyboard.press('Escape');
+});
+
+test('a timer-driven render failure stops playback and preserves document history', async ({ page }) => {
+  await page.clock.install();
+  await openArtifact(page);
+  const views = await createStory(page, ['Timer failure one', 'Timer failure two']);
+  await page.evaluate(() => {
+    const representation = document.querySelector('#representation');
+    representation.value = 'surface';
+    representation.dispatchEvent(new Event('change', { bubbles: true }));
+    representation.value = 'lines';
+    representation.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await page.keyboard.press('Control+z');
+  await expect(page.locator('#representation')).toHaveValue('surface');
+  const baseline = await page.evaluate(() => JSON.stringify(window.molhtml.document));
+
+  await page.evaluate(id => window.molhtml.startStory(id), views[0].id);
+  await settleAndPauseClock(page);
+  await page.evaluate(() => {
+    const prototype = window.MoleculeRenderer.prototype;
+    const original = prototype.setDocument;
+    prototype.setDocument = function (nextDocument, options) {
+      prototype.setDocument = original;
+      if (options?.writeCamera === false) throw new Error('planned timer transition failure');
+      return original.call(this, nextDocument, options);
+    };
+  });
+  await page.locator('#story-autoplay').click();
+  await page.clock.runFor(5_000);
+
+  await expect(page.locator('#story-overlay')).toBeHidden();
+  await expect(page.locator('#molecule-viewer')).toBeFocused();
+  await expect(page.locator('#toast-region .toast')).toHaveCount(1);
+  await expect(page.locator('#toast-region .toast')).toContainText('planned timer transition failure');
+  expect(await page.evaluate(() => JSON.stringify(window.molhtml.document))).toBe(baseline);
+  expect(await page.evaluate(() => window.molhtml.nextStoryView())).toBe(false);
+
+  const renderCount = await page.evaluate(() => globalThis.__storyRenders.length);
+  await page.clock.runFor(10_000);
+  expect(await page.evaluate(() => globalThis.__storyRenders.length)).toBe(renderCount);
+  await expect(page.locator('#toast-region .toast')).toHaveCount(0);
+  expect(await page.evaluate(() => JSON.stringify(window.molhtml.document))).toBe(baseline);
+  await page.keyboard.press('Control+y');
+  await expect(page.locator('#representation')).toHaveValue('lines');
+  await page.keyboard.press('Control+z');
+  await expect(page.locator('#representation')).toHaveValue('surface');
 });
 
 test('a valid delayed recovery replaces an active story and cancels its playback', async ({ page }) => {

@@ -423,7 +423,7 @@ input[type="color"] { width: 40px; height: 34px; padding: 2px; border: 1px solid
 .external-banner { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 14px; padding: 8px 9px 8px 13px; border: 1px solid rgba(255, 200, 87, .45); border-radius: 10px; background: rgba(45, 34, 12, .94); color: #ffe6a1; box-shadow: var(--shadow); font-size: 10px; z-index: 5; }
 .story-overlay { position: absolute; left: 18px; bottom: 18px; z-index: 5; width: min(430px, calc(100% - 36px)); max-height: calc(100% - 36px); padding: 17px; overflow: hidden; border: 1px solid rgba(129, 190, 255, .32); border-radius: 13px; background: rgba(8, 20, 34, .91); box-shadow: 0 20px 65px rgba(0, 0, 0, .45); backdrop-filter: blur(18px); }
 .story-progress { display: flex; justify-content: space-between; color: #7da0c2; font-size: 8px; font-weight: 850; letter-spacing: .15em; }
-.story-overlay h2 { margin: 7px 0 0; color: white; font-size: 19px; line-height: 1.2; }
+.story-overlay h2 { margin: 7px 0 0; overflow-wrap: anywhere; color: white; font-size: 19px; line-height: 1.2; }
 .story-overlay #story-narrative { max-height: min(22vh, 160px); overflow: auto; overflow-wrap: anywhere; }
 .story-overlay p { margin: 8px 0 0; color: #b8cbe0; font-size: 11px; line-height: 1.55; white-space: pre-wrap; }
 .story-overlay .story-timing { color: #7da0c2; font-size: 9px; }
@@ -10089,27 +10089,30 @@ var root,factory;root=this,factory=()=>(()=>{var __webpack_modules__={3(e,t,i){v
     if (!inspectorTitles[name]) return;
     const interruption = stopStory();
     const destination = inspectorButtons.find(button => button.dataset.inspectorTarget === name);
-    if (interruption.wasActive) {
-      try { restoreCanonicalRenderer(); }
-      catch (error) { reportRestorationError(error); }
+    try {
+      if (interruption.wasActive) {
+        try { restoreCanonicalRenderer(); }
+        catch (error) { reportRestorationError(error); }
+      }
+      if (measurementDraft && name !== 'measurements') cancelMeasurement();
+      if (elements['inspector'].hidden) {
+        const returnFocus = interruption.ownedFocus ? destination : document.activeElement;
+        if (returnFocus instanceof HTMLElement) inspectorReturnFocus = returnFocus;
+      }
+      activeInspector = name;
+      elements['inspector-title'].textContent = inspectorTitles[name];
+      elements['inspector'].hidden = false;
+      elements['workspace'].classList.add('inspector-open');
+      for (const panel of inspectorPanels) panel.hidden = panel.dataset.inspectorPanel !== name;
+      for (const button of inspectorButtons) button.setAttribute('aria-pressed', String(button.dataset.inspectorTarget === name));
+      if (name === 'navigator') {
+        revealNavigatorSelection();
+        renderNavigator();
+      }
+      if (name === 'export') syncExportControls(!exportActivity);
+    } finally {
+      repairStoryFocus(interruption, destination);
     }
-    if (measurementDraft && name !== 'measurements') cancelMeasurement();
-    if (elements['inspector'].hidden) {
-      const returnFocus = interruption.ownedFocus ? destination : document.activeElement;
-      if (returnFocus instanceof HTMLElement) inspectorReturnFocus = returnFocus;
-    }
-    activeInspector = name;
-    elements['inspector-title'].textContent = inspectorTitles[name];
-    elements['inspector'].hidden = false;
-    elements['workspace'].classList.add('inspector-open');
-    for (const panel of inspectorPanels) panel.hidden = panel.dataset.inspectorPanel !== name;
-    for (const button of inspectorButtons) button.setAttribute('aria-pressed', String(button.dataset.inspectorTarget === name));
-    if (name === 'navigator') {
-      revealNavigatorSelection();
-      renderNavigator();
-    }
-    if (name === 'export') syncExportControls(!exportActivity);
-    repairStoryFocus(interruption, destination);
   }
 
   function closeInspector() {
