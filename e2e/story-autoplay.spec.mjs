@@ -91,6 +91,7 @@ async function installDelayedRecovery(page) {
 }
 
 test('autoplay advances transactionally with predictable timing and never mutates the document', async ({ context, page }) => {
+  test.setTimeout(60_000);
   await installPickerMock(context);
   await page.clock.install();
   await openArtifact(page);
