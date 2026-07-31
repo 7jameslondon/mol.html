@@ -2256,13 +2256,15 @@
   function openInspector(name) {
     if (!inspectorTitles[name]) return;
     const interruption = stopStory();
+    const destination = inspectorButtons.find(button => button.dataset.inspectorTarget === name);
     if (interruption.wasActive) {
       try { restoreCanonicalRenderer(); }
       catch (error) { reportRestorationError(error); }
     }
     if (measurementDraft && name !== 'measurements') cancelMeasurement();
-    if (elements['inspector'].hidden && document.activeElement instanceof HTMLElement) {
-      inspectorReturnFocus = document.activeElement;
+    if (elements['inspector'].hidden) {
+      const returnFocus = interruption.ownedFocus ? destination : document.activeElement;
+      if (returnFocus instanceof HTMLElement) inspectorReturnFocus = returnFocus;
     }
     activeInspector = name;
     elements['inspector-title'].textContent = inspectorTitles[name];
@@ -2275,7 +2277,6 @@
       renderNavigator();
     }
     if (name === 'export') syncExportControls(!exportActivity);
-    const destination = inspectorButtons.find(button => button.dataset.inspectorTarget === name);
     repairStoryFocus(interruption, destination);
   }
 
@@ -3079,14 +3080,37 @@
   persistence.recoveryFor(doc).then(recovered => {
     if (!recovered) return;
     if (confirm(`A newer browser recovery exists for “${doc.title}” (revision ${recovered.revision}). Restore it?`)) {
+      const next = Core.normalizeDocument(recovered);
       const interruption = stopStory();
-      resetMeasurementInteraction(false);
-      activeSavedSelectionId = null;
-      doc = Core.normalizeDocument(recovered);
-      syncLiveDataBlock();
-      refresh();
-      repairStoryFocus(interruption);
+      const previousDocument = doc;
+      const previousTransientState = {
+        measurementDraft: measurementDraft ? structuredClone(measurementDraft) : null,
+        activeMeasurementId,
+        activeSavedSelectionId
+      };
+      try {
+        resetMeasurementInteraction(false);
+        activeSavedSelectionId = null;
+        doc = next;
+        syncLiveDataBlock();
+        refresh();
+      } catch (error) {
+        doc = previousDocument;
+        measurementDraft = previousTransientState.measurementDraft;
+        activeMeasurementId = previousTransientState.activeMeasurementId;
+        activeSavedSelectionId = previousTransientState.activeSavedSelectionId;
+        if (interruption.wasActive) restoreCanonicalAfterFailure(error);
+        try { syncLiveDataBlock(); }
+        catch (restorationError) {
+          toast(`Could not restore embedded document data: ${restorationError.message}`, 'error');
+        }
+        throw error;
+      } finally {
+        repairStoryFocus(interruption);
+      }
       toast('Recovered newer browser autosave', 'success');
     }
+  }).catch(error => {
+    toast(`Could not restore browser autosave: ${error.message}`, 'error');
   });
 })();

@@ -238,6 +238,14 @@ test('one-view, visibility, replacement, focus, and reflow lifecycle states are 
   await expect(page.locator('[data-inspector-target="saved-views"]')).toBeFocused();
 
   await page.evaluate(id => window.molhtml.startStory(id), views[0].id);
+  await page.evaluate(() => window.molhtml.beginMeasurement('distance'));
+  await expect(page.locator('#story-overlay')).toBeHidden();
+  await expect(page.locator('#inspector')).toBeVisible();
+  await page.evaluate(() => window.molhtml.cancelMeasurement());
+  await page.locator('#close-inspector').click();
+  await expect(page.locator('[data-inspector-target="measurements"]')).toBeFocused();
+
+  await page.evaluate(id => window.molhtml.startStory(id), views[0].id);
   await page.evaluate(() => window.molhtml.setInteractions({ enabled: true }));
   await expect(page.locator('#story-overlay')).toBeHidden();
   expect(await page.evaluate(() => window.molhtml.document.scene.interactions.enabled)).toBe(true);
@@ -275,6 +283,43 @@ test('camera debounce is flushed before presentation and suppressed during and a
   await page.evaluate(id => window.molhtml.startStory(id), views[0].id);
   expect(await page.evaluate(() => window.molhtml.document.revision)).toBe(afterExpiredDebounce.revision);
   await page.keyboard.press('Escape');
+});
+
+test('an invalid delayed recovery leaves an active story intact and reports the failure', async ({ page }) => {
+  await page.addInitScript(() => {
+    let resolveRecovery;
+    globalThis.__recoveryPromise = new Promise(resolve => { resolveRecovery = resolve; });
+    globalThis.__resolveRecovery = resolveRecovery;
+    Object.defineProperty(window, 'MolhtmlPersistence', {
+      configurable: true,
+      set(value) {
+        value.PersistenceManager.prototype.recoveryFor = () => globalThis.__recoveryPromise;
+        Object.defineProperty(window, 'MolhtmlPersistence', {
+          configurable: true, writable: true, value
+        });
+      }
+    });
+    window.confirm = message => /newer browser recovery/i.test(message);
+  });
+  await openArtifact(page);
+  const views = await createStory(page, ['Recovery one', 'Recovery two']);
+  const baseline = await page.evaluate(() => JSON.stringify(window.molhtml.document));
+  await page.evaluate(id => window.molhtml.startStory(id), views[0].id);
+  await expect(page.locator('#story-next')).toBeFocused();
+
+  await page.evaluate(() => {
+    globalThis.__resolveRecovery({
+      ...window.molhtml.document,
+      version: 99,
+      revision: window.molhtml.document.revision + 1
+    });
+  });
+
+  await expect(page.locator('#toast-region .toast')).toContainText('Could not restore browser autosave');
+  await expect(page.locator('#story-overlay')).toBeVisible();
+  await expect(page.locator('#story-title')).toHaveText('Recovery one');
+  await expect(page.locator('#story-next')).toBeFocused();
+  expect(await page.evaluate(() => JSON.stringify(window.molhtml.document))).toBe(baseline);
 });
 
 test('story render failures clean up once while public APIs rethrow without UI reporting', async ({ page }) => {
