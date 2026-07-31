@@ -409,6 +409,56 @@ test('a timer-driven render failure stops playback and preserves document histor
   await expect(page.locator('#representation')).toHaveValue('surface');
 });
 
+test('a failed inspector restoration self-heals before recapturing renderer state', async ({ page }) => {
+  await openArtifact(page);
+  const views = await createStory(page, ['Inspector recovery one', 'Inspector recovery two']);
+  const canonical = await page.evaluate(() => {
+    const candidate = window.molhtml.document;
+    candidate.scene.camera = { view: [7, -3, 1, 60, 0, 0, 0, 1] };
+    candidate.scene.representation = 'surface';
+    window.molhtml.loadDocument(candidate, 'inspector-recovery-test');
+    return {
+      camera: structuredClone(window.molhtml.document.scene.camera),
+      representation: window.molhtml.document.scene.representation
+    };
+  });
+  await page.evaluate(id => window.molhtml.startStory(id), views[0].id);
+  await expect(page.locator('#story-next')).toBeFocused();
+
+  await page.evaluate(() => {
+    const prototype = window.MoleculeRenderer.prototype;
+    const original = prototype.setDocument;
+    prototype.setDocument = function () {
+      prototype.setDocument = original;
+      throw new Error('inspector restoration failure');
+    };
+    document.querySelector('[data-inspector-target="saved-views"]').click();
+  });
+  await expect(page.locator('#story-overlay')).toBeHidden();
+  await expect(page.locator('#inspector')).toBeVisible();
+  await expect(page.locator('[data-inspector-target="saved-views"]')).toBeFocused();
+  await expect(page.locator('#toast-region .toast').last()).toContainText('inspector restoration failure');
+
+  const recaptured = await page.evaluate(id => {
+    const prototype = window.MoleculeRenderer.prototype;
+    const original = prototype.setDocument;
+    let canonicalReattachments = 0;
+    prototype.setDocument = function (nextDocument, options) {
+      if (options?.writeCamera === false) canonicalReattachments += 1;
+      return original.call(this, nextDocument, options);
+    };
+    try {
+      const view = window.molhtml.recaptureSavedView(id);
+      return { canonicalReattachments, snapshot: view.snapshot };
+    } finally {
+      prototype.setDocument = original;
+    }
+  }, views[1].id);
+  expect(recaptured.canonicalReattachments).toBe(1);
+  expect(recaptured.snapshot.camera).toEqual(canonical.camera);
+  expect(recaptured.snapshot.representation).toBe(canonical.representation);
+});
+
 test('a valid delayed recovery replaces an active story and cancels its playback', async ({ page }) => {
   await installDelayedRecovery(page);
   await openArtifact(page);
@@ -765,6 +815,47 @@ test('story render failures clean up once while public APIs rethrow without UI r
   await expect(page.locator('#story-overlay')).toBeHidden();
   await expect(page.locator('#molecule-viewer')).toBeFocused();
   await expect(page.locator('#toast-region .toast').last()).toContainText('exit restoration failure');
+
+  const failedExitBaseline = await page.evaluate(() => JSON.stringify(window.molhtml.document));
+  await dispatchWheel(page, 160);
+  await page.waitForTimeout(350);
+  expect(await page.evaluate(() => JSON.stringify(window.molhtml.document))).toBe(failedExitBaseline);
+
+  const fitRecovery = await page.evaluate(() => {
+    const before = window.molhtml.document;
+    const prototype = window.MoleculeRenderer.prototype;
+    const originalSetDocument = prototype.setDocument;
+    const originalFit = prototype.fit;
+    let canonicalReattachments = 0;
+    let fitDocumentRepresentation = null;
+    prototype.setDocument = function (nextDocument, options) {
+      if (options?.writeCamera === false) canonicalReattachments += 1;
+      return originalSetDocument.call(this, nextDocument, options);
+    };
+    prototype.fit = function (...args) {
+      fitDocumentRepresentation = this.doc?.scene?.representation || null;
+      return originalFit.apply(this, args);
+    };
+    try {
+      document.querySelector('#fit-button').click();
+      const after = window.molhtml.document;
+      return {
+        canonicalReattachments,
+        fitDocumentRepresentation,
+        canonicalRepresentation: before.scene.representation,
+        revisionBefore: before.revision,
+        revisionAfter: after.revision,
+        representationAfter: after.scene.representation
+      };
+    } finally {
+      prototype.setDocument = originalSetDocument;
+      prototype.fit = originalFit;
+    }
+  });
+  expect(fitRecovery.canonicalReattachments).toBe(1);
+  expect(fitRecovery.fitDocumentRepresentation).toBe(fitRecovery.canonicalRepresentation);
+  expect(fitRecovery.representationAfter).toBe(fitRecovery.canonicalRepresentation);
+  expect(fitRecovery.revisionAfter).toBe(fitRecovery.revisionBefore + 1);
 });
 
 test('measurement drafts and recursive saved-view selectors fail safely', async ({ page }) => {
@@ -789,6 +880,51 @@ test('measurement drafts and recursive saved-view selectors fail safely', async 
   await expect(page.locator('#inspector')).toBeVisible();
   await expect(page.locator('#cancel-measurement')).toBeEnabled();
   await expect(page.locator('#cancel-measurement')).toBeFocused();
+
+  const restorationFailure = await page.evaluate(id => {
+    const prototype = window.MoleculeRenderer.prototype;
+    const original = prototype.setDocument;
+    let presentationCalls = 0;
+    prototype.setDocument = function (nextDocument, options) {
+      if (options?.writeCamera === false) {
+        presentationCalls += 1;
+        if (presentationCalls === 1) throw new Error('initial double failure');
+        if (presentationCalls === 2) {
+          prototype.setDocument = original;
+          throw new Error('initial canonical restoration failure');
+        }
+      }
+      return original.call(this, nextDocument, options);
+    };
+    try { window.molhtml.startStory(id); } catch (error) { return error.message; }
+    finally { prototype.setDocument = original; }
+    return '';
+  }, views[0].id);
+  expect(restorationFailure).toBe('initial double failure');
+  await expect(page.locator('#inspector')).toBeVisible();
+  await expect(page.locator('#cancel-measurement')).toBeEnabled();
+  await expect(page.locator('#cancel-measurement')).toBeFocused();
+  await expect(page.locator('#toast-region .toast').last()).toContainText('initial canonical restoration failure');
+
+  const cancelRecovery = await page.evaluate(() => {
+    const prototype = window.MoleculeRenderer.prototype;
+    const original = prototype.setDocument;
+    let canonicalReattachments = 0;
+    prototype.setDocument = function (nextDocument, options) {
+      if (options?.writeCamera === false) canonicalReattachments += 1;
+      return original.call(this, nextDocument, options);
+    };
+    try {
+      return { cancelled: window.molhtml.cancelMeasurement(), canonicalReattachments };
+    } finally {
+      prototype.setDocument = original;
+    }
+  });
+  expect(cancelRecovery).toEqual({ cancelled: true, canonicalReattachments: 1 });
+  await expect(page.locator('#measurement-pick-progress')).toBeHidden();
+  await expect(page.locator('#start-measurement')).toBeEnabled();
+  await page.locator('#start-measurement').click();
+  await page.locator('#cancel-measurement').focus();
 
   await page.evaluate(id => {
     const prototype = window.MoleculeRenderer.prototype;

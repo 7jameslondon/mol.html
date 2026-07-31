@@ -80,6 +80,7 @@
   let turntableUnsupportedReason = '';
   let turntableLiveMilestone = 0;
   let completedTurntableSummary = null;
+  let rendererCanonical = false;
   const storyState = { active: false, index: 0, playing: false, timer: null };
   const STORY_STEP_DURATION_MS = 5000;
   const CUSTOM_COLOR_SELECTOR_KINDS = new Set([
@@ -104,7 +105,7 @@
   const renderer = new window.MoleculeRenderer(elements['molecule-viewer'], {
     onPick: atom => handleAtomPick(atom),
     onCamera: camera => {
-      if (storyState.active) return;
+      if (storyState.active || !rendererCanonical) return;
       Core.applyDocumentCommand(doc, { type: 'set-camera', camera });
       touchDocument('browser', false);
     },
@@ -166,7 +167,7 @@
     try {
       change();
       touchDocument(source, false);
-      if (interactionOnly && !interruption.wasActive) {
+      if (interactionOnly && !interruption.wasActive && rendererCanonical) {
         renderer.updateInteractions();
         syncControls();
         syncInteractions();
@@ -242,7 +243,7 @@
     const interruption = stopStory();
     if (!sourceStack.length) {
       try {
-        if (interruption.wasActive) restoreCanonicalRenderer();
+        if (interruption.wasActive || !rendererCanonical) restoreCanonicalRenderer();
       } catch (error) {
         reportRestorationError(error);
       } finally {
@@ -289,6 +290,7 @@
   }
 
   function restoreCanonicalRenderer() {
+    rendererCanonical = false;
     renderer.measurementDraft = measurementDraft?.atoms ? [...measurementDraft.atoms] : [];
     try {
       renderer.setDocument(doc, {
@@ -296,6 +298,7 @@
         presentationState: canonicalDisplayState()
       });
       parsed = renderer.parsed;
+      rendererCanonical = true;
       elements['canvas-message'].hidden = true;
     } finally {
       renderer.setCameraWriteEnabled(true);
@@ -316,7 +319,7 @@
 
   function prepareCanonicalRendererAction(destination = elements['molecule-viewer']) {
     const interruption = stopStory();
-    if (!interruption.wasActive) return false;
+    if (!interruption.wasActive && rendererCanonical) return false;
     try {
       restoreCanonicalRenderer();
       return true;
@@ -326,10 +329,12 @@
   }
 
   function refresh({ fit = false } = {}) {
+    rendererCanonical = false;
     try {
       renderer.measurementDraft = measurementDraft?.atoms ? [...measurementDraft.atoms] : [];
       renderer.setDocument(doc, { fit, presentationState: canonicalDisplayState() });
       parsed = renderer.parsed;
+      rendererCanonical = true;
       syncLiveDataBlock();
       elements['canvas-message'].hidden = true;
     } catch (error) {
@@ -1073,6 +1078,7 @@
 
   function cancelMeasurement(render = true) {
     if (!measurementDraft) return false;
+    if (render) prepareCanonicalRendererAction();
     measurementDraft = null;
     if (render) renderer.setMeasurementDraft([]);
     else renderer.measurementDraft = [];
@@ -1097,6 +1103,7 @@
       selectAtom(atom);
       return;
     }
+    prepareCanonicalRendererAction();
     const duplicate = measurementDraft.atoms.some(candidate =>
       candidate.model === atom.model && candidate.serial === atom.serial
     );
@@ -1751,6 +1758,7 @@
         ? analysis.id : null,
       activeSavedSelectionId: null
     };
+    rendererCanonical = false;
     renderer.setDocument(presentationDoc, { writeCamera: false, presentationState });
     parsed = renderer.parsed;
     elements['canvas-message'].hidden = true;
@@ -1774,7 +1782,10 @@
     const targetIndex = requested >= 0 ? requested : 0;
     const replacing = storyState.active;
     const interruption = stopStory();
-    if (!replacing) renderer.flushCameraChange();
+    if (!replacing) {
+      if (!rendererCanonical) restoreCanonicalRenderer();
+      renderer.flushCameraChange();
+    }
     renderer.measurementDraft = [];
     try {
       renderStoryView(views[targetIndex]);
@@ -2143,6 +2154,7 @@
     let options;
     let signature;
     try {
+      prepareCanonicalRendererAction();
       options = selectedExportOptions();
       signature = exportSelectionSignature();
     } catch (error) {
@@ -2173,6 +2185,7 @@
     let options;
     let signature;
     try {
+      prepareCanonicalRendererAction();
       options = selectedExportOptions();
       signature = exportSelectionSignature();
     } catch (error) {
@@ -2251,6 +2264,7 @@
   async function downloadTurntableVideo() {
     let options;
     try {
+      prepareCanonicalRendererAction();
       options = normalizedSelectedTurntable();
     } catch (error) {
       setExportStatus(error.message, 'error');
@@ -2321,7 +2335,7 @@
     const interruption = stopStory();
     const destination = inspectorButtons.find(button => button.dataset.inspectorTarget === name);
     try {
-      if (interruption.wasActive) {
+      if (interruption.wasActive || !rendererCanonical) {
         try { restoreCanonicalRenderer(); }
         catch (error) { reportRestorationError(error); }
       }
