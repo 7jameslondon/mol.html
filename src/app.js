@@ -155,11 +155,14 @@
       activeMeasurementId,
       activeSavedSelectionId
     };
+    const previousSaveStatus = captureSaveStatus();
+    const previousUndoStack = [...undoStack];
+    const previousRedoStack = [...redoStack];
     const historySnapshot = snapshot();
     const interruption = stopStory();
     try {
       change();
-      touchDocument(source, true);
+      touchDocument(source, false);
       if (interactionOnly && !interruption.wasActive) {
         renderer.updateInteractions();
         syncControls();
@@ -171,12 +174,15 @@
         redoStack.length = 0;
       }
       syncControls();
+      persistence?.schedule();
     } catch (error) {
       doc = previousDocument;
       measurementDraft = previousTransientState.measurementDraft;
       activeMeasurementId = previousTransientState.activeMeasurementId;
       activeSavedSelectionId = previousTransientState.activeSavedSelectionId;
-      if (interruption.wasActive) restoreCanonicalAfterFailure(error);
+      undoStack.splice(0, undoStack.length, ...previousUndoStack);
+      redoStack.splice(0, redoStack.length, ...previousRedoStack);
+      restoreDocumentFailureState(previousSaveStatus, error);
       throw error;
     } finally {
       repairStoryFocus(interruption);
@@ -201,6 +207,24 @@
   function syncLiveDataBlock() {
     const block = document.getElementById('molhtml-doc');
     if (block) block.textContent = '\n' + JSON.stringify(doc, null, 2).replace(/</g, '\\u003c') + '\n';
+  }
+
+  function captureSaveStatus() {
+    return {
+      message: elements['save-status'].textContent,
+      tone: elements['save-status'].dataset.tone || ''
+    };
+  }
+
+  function restoreDocumentFailureState(saveStatus, originalError) {
+    try { syncLiveDataBlock(); }
+    catch (restorationError) {
+      if (restorationError !== originalError) {
+        toast(`Could not restore embedded document data: ${restorationError.message}`, 'error');
+      }
+    }
+    setStatus(saveStatus.message, saveStatus.tone);
+    restoreCanonicalAfterFailure(originalError);
   }
 
   function undo() {
@@ -229,22 +253,28 @@
       activeMeasurementId,
       activeSavedSelectionId
     };
+    const previousSaveStatus = captureSaveStatus();
+    const previousSourceStack = [...sourceStack];
+    const previousDestinationStack = [...destinationStack];
     const currentSnapshot = snapshot();
     const nextSnapshot = sourceStack[sourceStack.length - 1];
     try {
       resetMeasurementInteraction(false);
       restoreSnapshot(nextSnapshot);
-      touchDocument('browser');
+      touchDocument('browser', false);
       refresh();
       sourceStack.pop();
       destinationStack.push(currentSnapshot);
       syncControls();
+      persistence?.schedule();
     } catch (error) {
       doc = previousDocument;
       measurementDraft = previousTransientState.measurementDraft;
       activeMeasurementId = previousTransientState.activeMeasurementId;
       activeSavedSelectionId = previousTransientState.activeSavedSelectionId;
-      if (interruption.wasActive) restoreCanonicalAfterFailure(error);
+      sourceStack.splice(0, sourceStack.length, ...previousSourceStack);
+      destinationStack.splice(0, destinationStack.length, ...previousDestinationStack);
+      restoreDocumentFailureState(previousSaveStatus, error);
       throw error;
     } finally {
       repairStoryFocus(interruption);
@@ -631,10 +661,12 @@
     }
     const match = Core.matchSavedSelection(record, parsed?.atoms || [], doc.structure.id);
     if (!match.valid) throw new Error(match.error);
-    activeSavedSelectionId = record.id;
-    commit(() => Core.applyDocumentCommand(doc, {
-      type: 'set-saved-selections', savedSelections: [...doc.scene.savedSelections, record]
-    }), { source });
+    commit(() => {
+      Core.applyDocumentCommand(doc, {
+        type: 'set-saved-selections', savedSelections: [...doc.scene.savedSelections, record]
+      });
+      activeSavedSelectionId = record.id;
+    }, { source });
     return structuredClone(record);
   }
 
@@ -653,20 +685,22 @@
 
   function removeSavedSelection(id, source = 'browser') {
     if (!doc.scene.savedSelections.some(saved => saved.id === id)) return false;
-    if (activeSavedSelectionId === id) activeSavedSelectionId = null;
-    commit(() => Core.applyDocumentCommand(doc, {
-      type: 'set-saved-selections',
-      savedSelections: doc.scene.savedSelections.filter(saved => saved.id !== id)
-    }), { source });
+    commit(() => {
+      Core.applyDocumentCommand(doc, {
+        type: 'set-saved-selections',
+        savedSelections: doc.scene.savedSelections.filter(saved => saved.id !== id)
+      });
+      if (activeSavedSelectionId === id) activeSavedSelectionId = null;
+    }, { source });
     return true;
   }
 
   function clearSavedSelections(source = 'agent') {
     if (!doc.scene.savedSelections.length) return false;
-    activeSavedSelectionId = null;
-    commit(() => Core.applyDocumentCommand(doc, {
-      type: 'set-saved-selections', savedSelections: []
-    }), { source });
+    commit(() => {
+      Core.applyDocumentCommand(doc, { type: 'set-saved-selections', savedSelections: [] });
+      activeSavedSelectionId = null;
+    }, { source });
     return true;
   }
 
@@ -1078,15 +1112,17 @@
     const type = measurementDraft.type;
     const atoms = [...measurementDraft.atoms];
     const id = Core.uid('measurement');
-    measurementDraft = null;
-    activeMeasurementId = id;
-    commit(() => Core.applyDocumentCommand(doc, {
-      type: 'set-measurements',
-      measurements: [...doc.scene.measurements, {
-        id, type,
-        atoms: atoms.map(atom => Core.selectorForAtom(atom, 'atom', doc.structure.id))
-      }]
-    }));
+    commit(() => {
+      Core.applyDocumentCommand(doc, {
+        type: 'set-measurements',
+        measurements: [...doc.scene.measurements, {
+          id, type,
+          atoms: atoms.map(atom => Core.selectorForAtom(atom, 'atom', doc.structure.id))
+        }]
+      });
+      measurementDraft = null;
+      activeMeasurementId = id;
+    });
     toast(`${measurementTypeName(type)} added`, 'success');
   }
 
@@ -1113,18 +1149,22 @@
 
   function deleteMeasurement(id, source = 'browser') {
     if (!doc.scene.measurements.some(measurement => measurement.id === id)) return false;
-    if (activeMeasurementId === id) activeMeasurementId = null;
-    commit(() => Core.applyDocumentCommand(doc, {
-      type: 'set-measurements',
-      measurements: doc.scene.measurements.filter(measurement => measurement.id !== id)
-    }), { source });
+    commit(() => {
+      Core.applyDocumentCommand(doc, {
+        type: 'set-measurements',
+        measurements: doc.scene.measurements.filter(measurement => measurement.id !== id)
+      });
+      if (activeMeasurementId === id) activeMeasurementId = null;
+    }, { source });
     return true;
   }
 
   function clearMeasurements(source = 'browser') {
     if (!doc.scene.measurements.length) return false;
-    activeMeasurementId = null;
-    commit(() => Core.applyDocumentCommand(doc, { type: 'set-measurements', measurements: [] }), { source });
+    commit(() => {
+      Core.applyDocumentCommand(doc, { type: 'set-measurements', measurements: [] });
+      activeMeasurementId = null;
+    }, { source });
     return true;
   }
 
@@ -1165,10 +1205,12 @@
     };
     if (options.label != null) record.label = String(options.label).slice(0, 80);
     if (options.note != null) record.note = String(options.note).slice(0, 500);
-    activeMeasurementId = record.id;
-    commit(() => Core.applyDocumentCommand(doc, {
-      type: 'set-measurements', measurements: [...doc.scene.measurements, record]
-    }), { source });
+    commit(() => {
+      Core.applyDocumentCommand(doc, {
+        type: 'set-measurements', measurements: [...doc.scene.measurements, record]
+      });
+      activeMeasurementId = record.id;
+    }, { source });
     return structuredClone(record);
   }
 
@@ -2342,27 +2384,18 @@
     const displayName = options.displayName || name.replace(/\.(pdb|ent|cif|mmcif|txt)$/i, '') || 'Imported molecule';
     const metadata = Core.mergeMetadata(parsedCandidate.metadata, options.metadata);
     const interruption = stopStory();
-    const previousTransientState = {
-      measurementDraft: measurementDraft ? structuredClone(measurementDraft) : null,
-      activeMeasurementId,
-      activeSavedSelectionId
-    };
     const structure = { id: Core.uid('structure'), name: displayName, format: parsedCandidate.format, data: text, metadata };
     if (options.source) structure.source = structuredClone(options.source);
     try {
-      resetMeasurementInteraction(false);
-      activeSavedSelectionId = null;
-      dispatch({ type: 'replace-structure', title: displayName, structure }, { history: false, fit: true });
+      commit(() => {
+        resetMeasurementInteraction(false);
+        activeSavedSelectionId = null;
+        Core.applyDocumentCommand(doc, { type: 'replace-structure', title: displayName, structure });
+      }, { history: false, fit: true });
       undoStack.length = 0; redoStack.length = 0;
       syncControls();
       toast(`Loaded ${parsedCandidate.atoms.length.toLocaleString()} atoms from ${name}`, 'success');
       return structuredClone(doc);
-    } catch (error) {
-      measurementDraft = previousTransientState.measurementDraft;
-      activeMeasurementId = previousTransientState.activeMeasurementId;
-      activeSavedSelectionId = previousTransientState.activeSavedSelectionId;
-      if (interruption.wasActive) restoreCanonicalAfterFailure(error);
-      throw error;
     } finally {
       repairStoryFocus(interruption);
     }
@@ -3053,22 +3086,28 @@
         activeMeasurementId,
         activeSavedSelectionId
       };
+      const previousSaveStatus = captureSaveStatus();
+      const previousUndoStack = [...undoStack];
+      const previousRedoStack = [...redoStack];
       try {
         resetMeasurementInteraction(false);
         activeSavedSelectionId = null;
         const historySnapshot = snapshot();
         doc = next;
-        touchDocument(modifiedBy);
+        touchDocument(modifiedBy, false);
         refresh({ fit: false });
         undoStack.push(historySnapshot); redoStack.length = 0;
         syncControls();
+        persistence?.schedule();
         return structuredClone(doc);
       } catch (error) {
         doc = previousDocument;
         measurementDraft = previousTransientState.measurementDraft;
         activeMeasurementId = previousTransientState.activeMeasurementId;
         activeSavedSelectionId = previousTransientState.activeSavedSelectionId;
-        if (interruption.wasActive) restoreCanonicalAfterFailure(error);
+        undoStack.splice(0, undoStack.length, ...previousUndoStack);
+        redoStack.splice(0, redoStack.length, ...previousRedoStack);
+        restoreDocumentFailureState(previousSaveStatus, error);
         throw error;
       } finally {
         repairStoryFocus(interruption);
@@ -3077,9 +3116,15 @@
   });
 
   refresh();
+  const recoveryDocumentId = doc.documentId;
   persistence.recoveryFor(doc).then(recovered => {
-    if (!recovered) return;
-    if (confirm(`A newer browser recovery exists for “${doc.title}” (revision ${recovered.revision}). Restore it?`)) {
+    const recoveredRevision = Number(recovered?.revision);
+    if (!recovered
+      || !Number.isFinite(recoveredRevision)
+      || recovered.documentId !== recoveryDocumentId
+      || doc.documentId !== recoveryDocumentId
+      || recoveredRevision <= Number(doc.revision)) return;
+    if (confirm(`A newer browser recovery exists for “${doc.title}” (revision ${recoveredRevision}). Restore it?`)) {
       const next = Core.normalizeDocument(recovered);
       const interruption = stopStory();
       const previousDocument = doc;
@@ -3088,10 +3133,15 @@
         activeMeasurementId,
         activeSavedSelectionId
       };
+      const previousSaveStatus = captureSaveStatus();
+      const previousUndoStack = [...undoStack];
+      const previousRedoStack = [...redoStack];
       try {
         resetMeasurementInteraction(false);
         activeSavedSelectionId = null;
         doc = next;
+        undoStack.length = 0;
+        redoStack.length = 0;
         syncLiveDataBlock();
         refresh();
       } catch (error) {
@@ -3099,11 +3149,9 @@
         measurementDraft = previousTransientState.measurementDraft;
         activeMeasurementId = previousTransientState.activeMeasurementId;
         activeSavedSelectionId = previousTransientState.activeSavedSelectionId;
-        if (interruption.wasActive) restoreCanonicalAfterFailure(error);
-        try { syncLiveDataBlock(); }
-        catch (restorationError) {
-          toast(`Could not restore embedded document data: ${restorationError.message}`, 'error');
-        }
+        undoStack.splice(0, undoStack.length, ...previousUndoStack);
+        redoStack.splice(0, redoStack.length, ...previousRedoStack);
+        restoreDocumentFailureState(previousSaveStatus, error);
         throw error;
       } finally {
         repairStoryFocus(interruption);

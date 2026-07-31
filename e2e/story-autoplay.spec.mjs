@@ -66,6 +66,30 @@ async function dispatchWheel(page, wheelDelta = 180) {
   }, wheelDelta);
 }
 
+async function installDelayedRecovery(page) {
+  await page.addInitScript(() => {
+    let resolveRecovery;
+    globalThis.__recoveryPromise = new Promise(resolve => { resolveRecovery = resolve; });
+    globalThis.__resolveRecovery = resolveRecovery;
+    globalThis.__recoveryConfirmCount = 0;
+    Object.defineProperty(window, 'MolhtmlPersistence', {
+      configurable: true,
+      set(value) {
+        value.PersistenceManager.prototype.recoveryFor = () => globalThis.__recoveryPromise;
+        Object.defineProperty(window, 'MolhtmlPersistence', {
+          configurable: true, writable: true, value
+        });
+      }
+    });
+    const nativeConfirm = window.confirm.bind(window);
+    window.confirm = message => {
+      if (!/newer browser recovery/i.test(message)) return nativeConfirm(message);
+      globalThis.__recoveryConfirmCount += 1;
+      return true;
+    };
+  });
+}
+
 test('autoplay advances transactionally with predictable timing and never mutates the document', async ({ context, page }) => {
   await installPickerMock(context);
   await page.clock.install();
@@ -160,6 +184,8 @@ test('autoplay advances transactionally with predictable timing and never mutate
   ]);
   expect(await page.evaluate(() => window.molhtml.exitStory())).toBe(true);
   expect(await page.evaluate(() => window.molhtml.exitStory())).toBe(false);
+  expect(await page.evaluate(() => window.molhtml.previousStoryView())).toBe(false);
+  expect(await page.evaluate(() => window.molhtml.nextStoryView())).toBe(false);
   await expect(page.locator('#molecule-viewer')).toBeFocused();
   expect(await page.evaluate(() => ({
     document: JSON.stringify(window.molhtml.document),
@@ -183,20 +209,34 @@ test('one-view, visibility, replacement, focus, and reflow lifecycle states are 
   });
   expect(emptyError).toContain('Capture a saved view');
   const [only] = await createStory(page, ['Only view']);
+  await page.evaluate(id => window.molhtml.updateSavedView(id, {
+    narrative: 'Long narrative content '.repeat(55)
+  }), only.id);
   await page.evaluate(id => window.molhtml.startStory(id), only.id);
   await expect(page.locator('#story-autoplay')).toBeDisabled();
   await expect(page.locator('#story-autoplay')).toHaveText('Replay');
   await expect(page.locator('#story-status')).toContainText(/complete/i);
   await expect(page.locator('#story-exit')).toBeFocused();
-  const reflow = await page.locator('#story-overlay').evaluate(element => ({
-    left: element.getBoundingClientRect().left,
-    right: element.getBoundingClientRect().right,
-    scrollWidth: element.scrollWidth,
-    clientWidth: element.clientWidth
-  }));
+  const reflow = await page.locator('#story-overlay').evaluate(element => {
+    const bounds = element.getBoundingClientRect();
+    const narrative = element.querySelector('#story-narrative');
+    const exit = element.querySelector('#story-exit').getBoundingClientRect();
+    return {
+      left: bounds.left,
+      right: bounds.right,
+      scrollWidth: element.scrollWidth,
+      clientWidth: element.clientWidth,
+      narrativeScrolls: narrative.scrollHeight > narrative.clientHeight,
+      exitContained: exit.top >= bounds.top && exit.bottom <= bounds.bottom
+    };
+  });
   expect(reflow.left).toBeGreaterThanOrEqual(0);
   expect(reflow.right).toBeLessThanOrEqual(320);
   expect(reflow.scrollWidth).toBeLessThanOrEqual(reflow.clientWidth);
+  expect(reflow.narrativeScrolls).toBe(true);
+  expect(reflow.exitContained).toBe(true);
+  await page.locator('#story-narrative').focus();
+  await expect(page.locator('#story-narrative')).toBeFocused();
   await page.locator('#story-exit').click();
   await page.evaluate(id => window.molhtml.removeSavedView(id), only.id);
 
@@ -209,6 +249,7 @@ test('one-view, visibility, replacement, focus, and reflow lifecycle states are 
   await page.evaluate(id => window.molhtml.startStory(id), views[1].id);
   await expect(page.locator('#story-title')).toHaveText('Second replacement');
   await expect(page.locator('#story-autoplay')).toHaveText('Replay');
+  await expect(page.locator('#story-autoplay')).toBeFocused();
   await page.clock.runFor(8_000);
   await expect(page.locator('#story-title')).toHaveText('Second replacement');
 
@@ -257,6 +298,10 @@ test('one-view, visibility, replacement, focus, and reflow lifecycle states are 
   const captured = await page.evaluate(() => window.molhtml.createSavedView({ title: 'Canonical capture' }));
   await expect(page.locator('#story-overlay')).toBeHidden();
   expect(captured.snapshot.camera).toEqual(await page.evaluate(() => window.molhtml.document.scene.camera));
+  await page.evaluate(id => window.molhtml.startStory(id), views[0].id);
+  const recaptured = await page.evaluate(id => window.molhtml.recaptureSavedView(id), captured.id);
+  await expect(page.locator('#story-overlay')).toBeHidden();
+  expect(recaptured.snapshot.camera).toEqual(await page.evaluate(() => window.molhtml.document.scene.camera));
 });
 
 test('camera debounce is flushed before presentation and suppressed during and after it', async ({ page }) => {
@@ -285,22 +330,61 @@ test('camera debounce is flushed before presentation and suppressed during and a
   await page.keyboard.press('Escape');
 });
 
-test('an invalid delayed recovery leaves an active story intact and reports the failure', async ({ page }) => {
-  await page.addInitScript(() => {
-    let resolveRecovery;
-    globalThis.__recoveryPromise = new Promise(resolve => { resolveRecovery = resolve; });
-    globalThis.__resolveRecovery = resolveRecovery;
-    Object.defineProperty(window, 'MolhtmlPersistence', {
-      configurable: true,
-      set(value) {
-        value.PersistenceManager.prototype.recoveryFor = () => globalThis.__recoveryPromise;
-        Object.defineProperty(window, 'MolhtmlPersistence', {
-          configurable: true, writable: true, value
-        });
-      }
-    });
-    window.confirm = message => /newer browser recovery/i.test(message);
+test('a valid delayed recovery replaces an active story and cancels its playback', async ({ page }) => {
+  await installDelayedRecovery(page);
+  await openArtifact(page);
+  const views = await createStory(page, ['Recovery one', 'Recovery two']);
+  const recovered = await page.evaluate(() => {
+    const value = structuredClone(window.molhtml.document);
+    value.title = 'Recovered canonical document';
+    value.revision += 10;
+    value.scene.representation = 'lines';
+    return value;
   });
+  await page.evaluate(id => window.molhtml.startStory(id), views[0].id);
+  await page.locator('#story-autoplay').click();
+
+  await page.evaluate(value => globalThis.__resolveRecovery(value), recovered);
+
+  await expect(page.locator('#toast-region .toast')).toContainText('Recovered newer browser autosave');
+  await expect(page.locator('#story-overlay')).toBeHidden();
+  await expect(page.locator('#molecule-viewer')).toBeFocused();
+  await expect(page.locator('#representation')).toHaveValue('lines');
+  expect(await page.evaluate(() => window.molhtml.document.title)).toBe('Recovered canonical document');
+  const recoveredDocument = await page.evaluate(() => JSON.stringify(window.molhtml.document));
+  await page.keyboard.press('Control+z');
+  await page.keyboard.press('Control+y');
+  expect(await page.evaluate(() => JSON.stringify(window.molhtml.document))).toBe(recoveredDocument);
+  await page.waitForTimeout(5_200);
+  expect(await page.evaluate(() => window.molhtml.document.title)).toBe('Recovered canonical document');
+});
+
+test('a delayed recovery cannot replace a different document loaded in the meantime', async ({ page }) => {
+  await installDelayedRecovery(page);
+  await openArtifact(page);
+  const staleRecovery = await page.evaluate(() => {
+    const value = structuredClone(window.molhtml.document);
+    value.revision += 100;
+    value.title = 'Stale recovery';
+    return value;
+  });
+  const replacementId = await page.evaluate(() => {
+    const value = structuredClone(window.molhtml.document);
+    value.documentId = 'replacement-document';
+    value.title = 'Replacement document';
+    return window.molhtml.loadDocument(value, 'browser-test').documentId;
+  });
+
+  await page.evaluate(value => globalThis.__resolveRecovery(value), staleRecovery);
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+
+  expect(await page.evaluate(() => globalThis.__recoveryConfirmCount)).toBe(0);
+  expect(await page.evaluate(() => window.molhtml.document.documentId)).toBe(replacementId);
+  expect(await page.evaluate(() => window.molhtml.document.title)).toBe('Replacement document');
+});
+
+test('an invalid delayed recovery leaves an active story intact and reports the failure', async ({ page }) => {
+  await installDelayedRecovery(page);
   await openArtifact(page);
   const views = await createStory(page, ['Recovery one', 'Recovery two']);
   const baseline = await page.evaluate(() => JSON.stringify(window.molhtml.document));
@@ -320,6 +404,201 @@ test('an invalid delayed recovery leaves an active story intact and reports the 
   await expect(page.locator('#story-title')).toHaveText('Recovery one');
   await expect(page.locator('#story-next')).toBeFocused();
   expect(await page.evaluate(() => JSON.stringify(window.molhtml.document))).toBe(baseline);
+});
+
+test('failed document commands restore canonical transient highlights and focus', async ({ page }) => {
+  await openArtifact(page);
+  const measurement = await page.evaluate(() => window.molhtml.addMeasurement('distance', [1, 2]));
+  const views = await createStory(page, ['Rollback one', 'Rollback two']);
+  const baseline = await page.evaluate(() => JSON.stringify(window.molhtml.document));
+  await page.evaluate(id => window.molhtml.startStory(id), views[0].id);
+  await expect(page.locator('#story-next')).toBeFocused();
+
+  const failure = await page.evaluate(id => {
+    const original = window.MolhtmlCore.applyDocumentCommand;
+    window.MolhtmlCore.applyDocumentCommand = function (target, command) {
+      if (command?.type === 'set-measurements') {
+        target.scene.measurements = [];
+        throw new Error('planned partial measurement failure');
+      }
+      return original.call(this, target, command);
+    };
+    try {
+      window.molhtml.removeMeasurement(id);
+      return '';
+    } catch (error) {
+      return error.message;
+    } finally {
+      window.MolhtmlCore.applyDocumentCommand = original;
+    }
+  }, measurement.id);
+
+  expect(failure).toBe('planned partial measurement failure');
+  await expect(page.locator('#story-overlay')).toBeHidden();
+  await expect(page.locator('#molecule-viewer')).toBeFocused();
+  expect(await page.evaluate(() => JSON.stringify(window.molhtml.document))).toBe(baseline);
+  const captured = await page.evaluate(() => window.molhtml.createSavedView({ title: 'Rollback capture' }));
+  expect(captured.snapshot.activeAnalysis).toEqual({ kind: 'measurement', id: measurement.id });
+
+  const nonStoryBaseline = await page.evaluate(() => JSON.stringify(window.molhtml.document));
+  const nonStoryFailure = await page.evaluate(id => {
+    const core = window.MolhtmlCore;
+    const rendererPrototype = window.MoleculeRenderer.prototype;
+    const originalCommand = core.applyDocumentCommand;
+    const originalSetDocument = rendererPrototype.setDocument;
+    let canonicalReattachments = 0;
+    core.applyDocumentCommand = function (target, command) {
+      if (command?.type === 'set-measurements') {
+        target.scene.measurements = [];
+        throw new Error('planned non-story command failure');
+      }
+      return originalCommand.call(this, target, command);
+    };
+    rendererPrototype.setDocument = function (nextDocument, options) {
+      if (options?.writeCamera === false) canonicalReattachments += 1;
+      return originalSetDocument.call(this, nextDocument, options);
+    };
+    let message = '';
+    try { window.molhtml.removeMeasurement(id); }
+    catch (error) { message = error.message; }
+    finally {
+      core.applyDocumentCommand = originalCommand;
+      rendererPrototype.setDocument = originalSetDocument;
+    }
+    return { message, canonicalReattachments };
+  }, measurement.id);
+  expect(nonStoryFailure).toEqual({
+    message: 'planned non-story command failure', canonicalReattachments: 1
+  });
+  expect(await page.evaluate(() => JSON.stringify(window.molhtml.document))).toBe(nonStoryBaseline);
+
+  const observableBaseline = await page.evaluate(() => ({
+    document: JSON.stringify(window.molhtml.document),
+    dataBlock: document.querySelector('#molhtml-doc').textContent,
+    status: document.querySelector('#save-status').textContent,
+    tone: document.querySelector('#save-status').dataset.tone
+  }));
+  const postTouchFailure = await page.evaluate(() => {
+    const prototype = window.MoleculeRenderer.prototype;
+    const originalUpdateInteractions = prototype.updateInteractions;
+    const originalSetDocument = prototype.setDocument;
+    let canonicalReattachments = 0;
+    prototype.updateInteractions = function () {
+      throw new Error('planned post-touch renderer failure');
+    };
+    prototype.setDocument = function (nextDocument, options) {
+      if (options?.writeCamera === false) canonicalReattachments += 1;
+      return originalSetDocument.call(this, nextDocument, options);
+    };
+    let message = '';
+    try {
+      window.molhtml.setInteractions({ enabled: !window.molhtml.document.scene.interactions.enabled });
+    } catch (error) {
+      message = error.message;
+    } finally {
+      prototype.updateInteractions = originalUpdateInteractions;
+      prototype.setDocument = originalSetDocument;
+    }
+    return {
+      message,
+      canonicalReattachments,
+      document: JSON.stringify(window.molhtml.document),
+      dataBlock: document.querySelector('#molhtml-doc').textContent,
+      status: document.querySelector('#save-status').textContent,
+      tone: document.querySelector('#save-status').dataset.tone
+    };
+  });
+  expect(postTouchFailure).toEqual({
+    message: 'planned post-touch renderer failure',
+    canonicalReattachments: 1,
+    ...observableBaseline
+  });
+});
+
+test('story measurement highlights remain view-scoped and Exit restores the canonical highlight', async ({ page }) => {
+  await openArtifact(page);
+  const state = await page.evaluate(() => {
+    const measurement = window.molhtml.addMeasurement('distance', [1, 2]);
+    const first = window.molhtml.createSavedView({ title: 'Highlighted measurement' });
+    const second = window.molhtml.createSavedView({ title: 'No measurement highlight' });
+    window.molhtml.updateSavedView(second.id, {
+      snapshot: { ...second.snapshot, activeAnalysis: null }
+    });
+    globalThis.__measurementHighlightStates = [];
+    const prototype = window.MoleculeRenderer.prototype;
+    const original = prototype.setDocument;
+    prototype.setDocument = function (nextDocument, options) {
+      const result = original.call(this, nextDocument, options);
+      globalThis.__measurementHighlightStates.push({
+        requested: options?.presentationState?.activeMeasurementId || null,
+        applied: this.activeMeasurementId
+      });
+      return result;
+    };
+    return { measurement, first, second };
+  });
+
+  await page.evaluate(id => window.molhtml.startStory(id), state.first.id);
+  expect(await page.evaluate(() => globalThis.__measurementHighlightStates.at(-1))).toEqual({
+    requested: state.measurement.id, applied: state.measurement.id
+  });
+  await page.evaluate(() => window.molhtml.nextStoryView());
+  expect(await page.evaluate(() => globalThis.__measurementHighlightStates.at(-1))).toEqual({
+    requested: null, applied: null
+  });
+  await page.evaluate(() => window.molhtml.exitStory());
+  expect(await page.evaluate(() => globalThis.__measurementHighlightStates.at(-1))).toEqual({
+    requested: state.measurement.id, applied: state.measurement.id
+  });
+});
+
+test('version 1 and 2 documents preserve additive fields through presentation and serialization', async ({ page }) => {
+  await openArtifact(page);
+  for (const version of [1, 2]) {
+    const viewId = await page.evaluate(documentVersion => {
+      const candidate = structuredClone(window.molhtml.document);
+      candidate.version = documentVersion;
+      candidate.documentId = `story-compat-v${documentVersion}`;
+      candidate.futureDocumentField = { version: documentVersion };
+      candidate.scene.representation = 'ball-and-stick';
+      candidate.scene.colorMode = 'element';
+      candidate.scene.selection = null;
+      candidate.scene.customColors = [];
+      candidate.scene.measurements = [];
+      candidate.scene.savedSelections = [];
+      candidate.scene.futureSceneField = { version: documentVersion };
+      const id = `compat-view-v${documentVersion}`;
+      candidate.scene.savedViews = [{
+        id,
+        title: `Compatibility ${documentVersion}`,
+        narrative: 'Compatibility narrative',
+        order: 0,
+        structureId: candidate.structure.id,
+        futureSavedViewField: { version: documentVersion },
+        snapshot: {
+          camera: structuredClone(candidate.scene.camera),
+          representation: 'sticks',
+          futureSnapshotField: { version: documentVersion }
+        }
+      }];
+      window.molhtml.loadDocument(candidate, 'compatibility-test');
+      window.molhtml.startStory(id);
+      window.molhtml.exitStory();
+      return id;
+    }, version);
+
+    await page.evaluate(id => window.molhtml.applySavedView(id), viewId);
+    await expect(page.locator('#representation')).toHaveValue('sticks');
+    await page.keyboard.press('Control+z');
+    await expect(page.locator('#representation')).toHaveValue('ball-and-stick');
+    const serialized = documentFromHtml(await page.evaluate(() => window.molhtml.serialize()));
+    const savedView = serialized.scene.savedViews.find(view => view.id === viewId);
+    expect(serialized.version).toBe(version);
+    expect(serialized.futureDocumentField).toEqual({ version });
+    expect(serialized.scene.futureSceneField).toEqual({ version });
+    expect(savedView.futureSavedViewField).toEqual({ version });
+    expect(savedView.snapshot.futureSnapshotField).toEqual({ version });
+  }
 });
 
 test('story render failures clean up once while public APIs rethrow without UI reporting', async ({ page }) => {
@@ -363,6 +642,50 @@ test('story render failures clean up once while public APIs rethrow without UI r
 
   await dispatchWheel(page, 200);
   await expect.poll(() => page.evaluate(() => window.molhtml.document.revision)).toBe(JSON.parse(baseline).revision + 1);
+
+  const restorationBaseline = await page.evaluate(() => JSON.stringify(window.molhtml.document));
+  await page.evaluate(id => window.molhtml.startStory(id), views[0].id);
+  const restorationFailure = await page.evaluate(() => {
+    const prototype = window.MoleculeRenderer.prototype;
+    const original = prototype.setDocument;
+    let presentationCalls = 0;
+    prototype.setDocument = function (nextDocument, options) {
+      if (options?.writeCamera === false) {
+        presentationCalls += 1;
+        if (presentationCalls === 1) throw new Error('public transition original failure');
+        if (presentationCalls === 2) {
+          prototype.setDocument = original;
+          throw new Error('canonical restoration failure');
+        }
+      }
+      return original.call(this, nextDocument, options);
+    };
+    try { window.molhtml.nextStoryView(); }
+    catch (error) { return error.message; }
+    finally { prototype.setDocument = original; }
+    return '';
+  });
+  expect(restorationFailure).toBe('public transition original failure');
+  await expect(page.locator('#story-overlay')).toBeHidden();
+  await expect(page.locator('#molecule-viewer')).toBeFocused();
+  await expect(page.locator('#toast-region .toast').last()).toContainText('canonical restoration failure');
+  expect(await page.evaluate(() => JSON.stringify(window.molhtml.document))).toBe(restorationBaseline);
+
+  await page.evaluate(id => window.molhtml.startStory(id), views[0].id);
+  const exitResult = await page.evaluate(() => {
+    const prototype = window.MoleculeRenderer.prototype;
+    const original = prototype.setDocument;
+    prototype.setDocument = function () {
+      prototype.setDocument = original;
+      throw new Error('exit restoration failure');
+    };
+    try { return window.molhtml.exitStory(); }
+    finally { prototype.setDocument = original; }
+  });
+  expect(exitResult).toBe(true);
+  await expect(page.locator('#story-overlay')).toBeHidden();
+  await expect(page.locator('#molecule-viewer')).toBeFocused();
+  await expect(page.locator('#toast-region .toast').last()).toContainText('exit restoration failure');
 });
 
 test('measurement drafts and recursive saved-view selectors fail safely', async ({ page }) => {
