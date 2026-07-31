@@ -82,6 +82,9 @@
   let completedTurntableSummary = null;
   const storyState = { active: false, index: 0, playing: false, timer: null };
   const STORY_STEP_DURATION_MS = 5000;
+  const CUSTOM_COLOR_SELECTOR_KINDS = new Set([
+    'atom', 'residue', 'chain', 'instance', 'entity', 'role', 'connected-component'
+  ]);
   const navigatorState = {
     structureKey: '', chains: [], residueByKey: new Map(),
     expandedChains: new Set(), expandedResidues: new Set(), query: ''
@@ -1608,26 +1611,44 @@
     if (view.structureId !== doc.structure.id) {
       throw new Error('This saved view belongs to a different structure.');
     }
-    const selectors = [];
+    const atoms = parsed?.atoms || [];
+    const validateSelector = (label, selector) => {
+      const match = Core.matchSavedSelection(selector, atoms, doc.structure.id);
+      if (!match.valid) throw new Error(`This saved view has an invalid ${label} selector: ${match.error}`);
+    };
     if (view.snapshot?.selection != null) {
       if (!view.snapshot.selection?.selector) {
         throw new Error('This saved view contains a malformed selection selector.');
       }
-      selectors.push(['selection', {
-        ...view.snapshot.selection.selector,
-        kind: view.snapshot.selection.selector.kind || view.snapshot.selection.kind || 'atom'
-      }]);
+      const selector = view.snapshot.selection.selector;
+      const selectionKind = String(view.snapshot.selection.kind || 'atom').toLowerCase();
+      const selectorKind = String(selector.kind || selectionKind).toLowerCase();
+      validateSelector('selection', {
+        ...selector,
+        kind: selectorKind
+      });
+      if (selectionKind !== 'atom' || !['', 'atom'].includes(String(selector.kind || '').toLowerCase())) {
+        throw new Error('This saved view has an unsupported selection selector kind.');
+      }
+      const resolution = Core.resolveUniqueAtomSelector(selector, atoms, doc.structure.id);
+      if (!resolution.valid) {
+        throw new Error(`This saved view has an invalid selection selector: ${resolution.error}`);
+      }
     }
     for (const [index, rule] of (view.snapshot?.customColors || []).entries()) {
       if (!rule?.selector) throw new Error(`This saved view contains a malformed custom color selector ${index + 1}.`);
-      selectors.push([`custom color ${index + 1}`, {
+      const scope = String(rule.scope || '').toLowerCase();
+      const kind = String(rule.selector.kind || scope).toLowerCase();
+      validateSelector(`custom color ${index + 1}`, {
         ...rule.selector,
-        kind: rule.selector.kind || rule.scope
-      }]);
-    }
-    for (const [label, selector] of selectors) {
-      const match = Core.matchSavedSelection(selector, parsed?.atoms || [], doc.structure.id);
-      if (!match.valid) throw new Error(`This saved view has an invalid ${label} selector: ${match.error}`);
+        kind
+      });
+      if (!CUSTOM_COLOR_SELECTOR_KINDS.has(scope) || !CUSTOM_COLOR_SELECTOR_KINDS.has(kind)) {
+        throw new Error(`This saved view has an unsupported custom color selector kind at rule ${index + 1}.`);
+      }
+      if (rule.selector.kind && kind !== scope) {
+        throw new Error(`This saved view has a custom color selector kind that does not match rule ${index + 1}'s scope.`);
+      }
     }
     return view;
   }
@@ -2688,12 +2709,14 @@
   elements['show-hydrogens'].addEventListener('change', event => dispatch({ type: 'set-scene-field', field: 'showHydrogens', value: event.target.checked }));
   elements['show-water'].addEventListener('change', event => dispatch({ type: 'set-scene-field', field: 'showWater', value: event.target.checked }));
   elements['background-color'].addEventListener('input', event => {
+    prepareCanonicalRendererAction();
     Core.applyDocumentCommand(doc, { type: 'set-scene-field', field: 'background', value: event.target.value });
     elements['background-value'].textContent = event.target.value;
     renderer.render();
   });
   elements['background-color'].addEventListener('focus', () => { backgroundBeforeEdit = doc.scene.background; });
   elements['background-color'].addEventListener('change', event => {
+    prepareCanonicalRendererAction();
     const next = event.target.value;
     Core.applyDocumentCommand(doc, { type: 'set-scene-field', field: 'background', value: backgroundBeforeEdit });
     dispatch({ type: 'set-scene-field', field: 'background', value: next });

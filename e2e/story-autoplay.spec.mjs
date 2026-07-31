@@ -296,6 +296,37 @@ test('one-view, visibility, replacement, focus, and reflow lifecycle states are 
   await expect(page.locator('#story-overlay')).toBeHidden();
 
   await page.evaluate(id => window.molhtml.startStory(id), views[0].id);
+  const backgroundPreview = await page.evaluate(() => {
+    const input = document.querySelector('#background-color');
+    const prototype = window.MoleculeRenderer.prototype;
+    const originalRender = prototype.render;
+    let renderedBackground = null;
+    prototype.render = function () {
+      renderedBackground = this.doc?.scene?.background || null;
+      return originalRender.call(this);
+    };
+    let result;
+    try {
+      input.value = '#123456';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      result = {
+        renderedBackground,
+        documentBackground: window.molhtml.document.scene.background,
+        overlayHiddenAfterInput: document.querySelector('#story-overlay').hidden
+      };
+    } finally {
+      prototype.render = originalRender;
+    }
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    return result;
+  });
+  expect(backgroundPreview).toEqual({
+    renderedBackground: '#123456',
+    documentBackground: '#123456',
+    overlayHiddenAfterInput: true
+  });
+
+  await page.evaluate(id => window.molhtml.startStory(id), views[0].id);
   const captured = await page.evaluate(() => window.molhtml.createSavedView({ title: 'Canonical capture' }));
   await expect(page.locator('#story-overlay')).toBeHidden();
   expect(captured.snapshot.camera).toEqual(await page.evaluate(() => window.molhtml.document.scene.camera));
@@ -732,35 +763,142 @@ test('measurement drafts and recursive saved-view selectors fail safely', async 
   expect(recapture.refreshed.snapshot.futureSnapshotField).toEqual({ kept: true });
   expect(recapture.replaced.snapshot.futureSnapshotField).toBeUndefined();
 
-  await page.evaluate(id => {
+  const validationCases = await page.evaluate(id => {
     const documentValue = window.molhtml.document;
     const view = window.molhtml.getSavedViews().find(candidate => candidate.id === id);
-    window.molhtml.updateSavedView(id, {
-      snapshot: {
-        ...view.snapshot,
-        selection: {
-          kind: 'atom',
-          selector: {
-            kind: 'within', structureId: documentValue.structure.id, cutoff: 4,
-            target: { kind: 'atom', model: 1, chain: 'A', resi: 1, atom: 'P' }
+    const structureId = documentValue.structure.id;
+    const cases = [
+      {
+        name: 'unbound compound target',
+        expected: 'missing structureId',
+        snapshot: {
+          ...view.snapshot,
+          selection: {
+            kind: 'atom',
+            selector: {
+              kind: 'within', structureId, cutoff: 4,
+              target: { kind: 'atom', model: 1, chain: 'A', resi: 1, atom: 'P' }
+            }
           }
         }
+      },
+      {
+        name: 'wrong compound target binding',
+        expected: 'different structure',
+        snapshot: {
+          ...view.snapshot,
+          selection: {
+            kind: 'atom',
+            selector: {
+              kind: 'within', structureId, cutoff: 4,
+              target: {
+                kind: 'atom', structureId: 'another-structure',
+                model: 1, chain: 'A', resi: 1, atom: 'P'
+              }
+            }
+          }
+        }
+      },
+      {
+        name: 'unsupported compound custom color',
+        expected: 'unsupported custom color selector kind',
+        snapshot: {
+          ...view.snapshot,
+          selection: null,
+          customColors: [{
+            id: 'compound-color-target', scope: 'atom', color: '#ff0000',
+            selector: {
+              kind: 'within', structureId, cutoff: 4,
+              target: { kind: 'atom', structureId, model: 1, chain: 'A', resi: 1, atom: "O5'" }
+            }
+          }]
+        }
+      },
+      {
+        name: 'ambiguous current selection',
+        expected: 'ambiguous',
+        snapshot: {
+          ...view.snapshot,
+          selection: {
+            kind: 'atom',
+            selector: { structureId, sourceIdentity: { modelNumber: 1 } }
+          }
+        }
+      },
+      {
+        name: 'mismatched custom color scope',
+        expected: 'does not match',
+        snapshot: {
+          ...view.snapshot,
+          selection: null,
+          customColors: [{
+            id: 'mismatched-color-target', scope: 'atom', color: '#ff0000',
+            selector: { kind: 'residue', structureId, model: 1, chain: 'A', resi: 1 }
+          }]
+        }
+      },
+      {
+        name: 'mismatched current selection kind',
+        expected: 'unsupported selection selector kind',
+        snapshot: {
+          ...view.snapshot,
+          selection: {
+            kind: 'residue',
+            selector: { structureId, model: 1, chain: 'A', resi: 1 }
+          }
+        }
+      },
+      {
+        name: 'unresolved custom color',
+        expected: 'did not resolve',
+        snapshot: {
+          ...view.snapshot,
+          selection: null,
+          customColors: [{
+            id: 'missing-color-target', scope: 'atom', color: '#ff0000',
+            selector: { kind: 'atom', structureId, model: 1, chain: 'Z', resi: 999, atom: 'XX' }
+          }]
+        }
+      },
+      {
+        name: 'malformed custom color',
+        expected: 'missing model',
+        snapshot: {
+          ...view.snapshot,
+          selection: null,
+          customColors: [{
+            id: 'malformed-color-target', scope: 'atom', color: '#ff0000',
+            selector: { kind: 'atom', structureId }
+          }]
+        }
       }
+    ];
+    return cases.map(testCase => {
+      window.molhtml.updateSavedView(id, { snapshot: testCase.snapshot });
+      const baseline = JSON.stringify(window.molhtml.document);
+      const errors = [];
+      for (const action of [
+        () => window.molhtml.applySavedView(id),
+        () => window.molhtml.startStory(id)
+      ]) {
+        try { action(); }
+        catch (error) { errors.push(error.message); }
+        finally { window.molhtml.exitStory(); }
+      }
+      return {
+        name: testCase.name,
+        expected: testCase.expected,
+        errors,
+        unchanged: JSON.stringify(window.molhtml.document) === baseline
+      };
     });
   }, views[0].id);
-  const baseline = await page.evaluate(() => JSON.stringify(window.molhtml.document));
-  const errors = await page.evaluate(id => {
-    const result = [];
-    for (const action of [
-      () => window.molhtml.applySavedView(id),
-      () => window.molhtml.startStory(id)
-    ]) {
-      try { action(); } catch (error) { result.push(error.message); }
-    }
-    return result;
-  }, views[0].id);
-  expect(errors).toHaveLength(2);
-  expect(errors.every(message => /missing structureId/i.test(message))).toBe(true);
-  expect(await page.evaluate(() => JSON.stringify(window.molhtml.document))).toBe(baseline);
+  for (const testCase of validationCases) {
+    expect(testCase.errors, testCase.name).toEqual([
+      expect.stringContaining(testCase.expected),
+      expect.stringContaining(testCase.expected)
+    ]);
+    expect(testCase.unchanged, testCase.name).toBe(true);
+  }
   await expect(page.locator('#story-overlay')).toBeHidden();
 });
